@@ -1,0 +1,17 @@
+export const art = {
+  wave: require('@/assets/figma/img-wave.png'),
+  idle: require('@/assets/figma/img-idle.png'),
+  island: require('@/assets/figma/img-island.png'),
+  egg: require('@/assets/figma/img-egg.png'),
+  pebble: require('@/assets/figma/img-pebble.png'),
+  canola: require('@/assets/figma/img-canola.png'),
+  jump: require('@/assets/figma/img-jump.png'),
+  walk: require('@/assets/figma/img-walk.png'),
+  map: require('@/assets/figma/img-map.png'),
+  trash: require('@/assets/figma/img-trash.png'),
+  store: require('@/assets/figma/img-store.png'),
+  camellia: require('@/assets/figma/img-camellia.png'),
+  smile: require('@/assets/figma/drop-smile.png'),
+  dropJump: require('@/assets/figma/drop-jump.png'),
+  wink: require('@/assets/figma/drop-wink.png'),
+};

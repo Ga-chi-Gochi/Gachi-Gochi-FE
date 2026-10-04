@@ -87,3 +87,22 @@ npx eas-cli submit --platform android --profile production
 
 - iOS: App Store Connect에 올라가고, 처리가 끝나면 TestFlight에서 설치할 수 있습니다. 스토어 공개는 App Store Connect에서 심사 제출을 따로 합니다.
 - Android: Play Console 트랙으로 올라갑니다. 첫 앱은 Play Console에서 스토어 등록 정보와 콘텐츠 등급을 채운 뒤 출시합니다.
+
+## 개발 기록
+
+### 2026-09-28
+
+- 저장소를 처음 만들었습니다.
+
+### 2026-10-01
+
+- Expo SDK 57로 앱을 열었습니다. 앱 이름은 Gachi Gochi, 번들 ID는 `com.gachigochi.app`입니다.
+- 맥과 윈도우에서 같이 작업하도록 Node 22.23.3, npm, LF 줄바꿈, `.gitignore`를 맞췄습니다.
+- 휴대폰 너비에 따라 글자와 간격이 비율로 조정되게 했습니다.
+- Expo Go 실행 방법과 iOS·Android 배포 방법을 README에 정리했습니다.
+
+### 2026-10-03
+
+- 피그마 와이어프레임을 기준으로 기초 화면을 만들었습니다.
+- 앱은 띠롱이의 섬 홈에서 시작합니다. 가입 화면은 넣지 않았습니다.
+- 홈에서 걷기, 쓰레기 줍기, 로컬 상점으로 이어지고, 아래에는 홈·지도·도감·마이 탭이 있습니다.

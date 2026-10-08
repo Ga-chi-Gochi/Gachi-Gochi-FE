@@ -11,12 +11,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
+import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
+import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
 
 export default function CameraScreen() {
   const { scale } = useResponsive();
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
   const askedForPermission = useRef(false);
+  const askedForLocation = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [readyFacing, setReadyFacing] = useState<CameraType | null>(null);
@@ -38,6 +41,14 @@ export default function CameraScreen() {
     void requestPermission();
   }, [isFocused, permission, requestPermission]);
 
+  useEffect(() => {
+    if (!isFocused || askedForLocation.current) {
+      return;
+    }
+    askedForLocation.current = true;
+    void requestLocationPermissionIfNeeded();
+  }, [isFocused]);
+
   async function allowCamera() {
     if (permission && !permission.canAskAgain) {
       await Linking.openSettings();
@@ -58,9 +69,9 @@ export default function CameraScreen() {
     setBusy(true);
     setNotice(null);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, exif: true });
       if (photo?.uri) {
-        router.push('/recognize');
+        await certifyPhoto({ uri: photo.uri, exif: photo.exif, fileName: 'bongging.jpg' });
       }
     } catch {
       setNotice('사진을 찍지 못했어요. 다시 시도해 주세요.');
@@ -79,14 +90,39 @@ export default function CameraScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.7,
+        exif: true,
       });
-      if (!result.canceled && result.assets[0]?.uri) {
-        router.push('/recognize');
+      const asset = result.canceled ? null : result.assets[0];
+      if (asset?.uri) {
+        await certifyPhoto({ uri: asset.uri, exif: asset.exif, fileName: asset.fileName });
       }
     } catch {
       setNotice('갤러리에서 사진을 불러오지 못했어요.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function certifyPhoto(photo: { uri: string; exif?: unknown; fileName?: string | null }) {
+    setNotice('위치를 확인하고 있어요');
+    try {
+      const location = await resolveBonggingLocation(photo.exif);
+      if (location.status === 'cancelled') {
+        setNotice(null);
+        return;
+      }
+
+      const submission = createBonggingSubmission({
+        imageUri: photo.uri,
+        fileName: photo.fileName,
+        latitude: location.status === 'coordinates' ? location.latitude : null,
+        longitude: location.status === 'coordinates' ? location.longitude : null,
+        locationSource: location.status === 'coordinates' ? location.source : 'none',
+      });
+      await submitBonggingCertification(submission);
+      router.push('/recognize');
+    } catch {
+      setNotice('인증 정보를 만들지 못했어요. 다시 시도해 주세요.');
     }
   }
 

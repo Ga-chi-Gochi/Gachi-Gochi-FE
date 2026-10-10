@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { FigScreen } from '@/components/fig-screen';
+import { usePlayState } from '@/components/play-state';
 import { TabBar } from '@/components/tab-bar';
 import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
@@ -19,6 +20,7 @@ const actions = [
 
 export default function HomeScreen() {
   const { scale } = useResponsive();
+  const { xp, growthStacks } = usePlayState();
   const [open, setOpen] = useState(false);
   const openAction = (href: (typeof actions)[number]['href']) => {
     setOpen(false);
@@ -40,8 +42,16 @@ export default function HomeScreen() {
           <Text style={{ color: palette.muted, fontSize: scale(14) }}>좋은 아침이에요, 승현님</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), marginTop: scale(4) }}>
             <Text style={{ fontSize: scale(30), fontWeight: '800', color: palette.ink }}>띠롱이의 섬</Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: scale(8), marginTop: scale(8) }}>
             <View style={{ backgroundColor: palette.leafSoft, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4) }}>
               <Text style={{ color: palette.leafDeep, fontSize: scale(12), fontWeight: '800' }}>Lv.1 · 알</Text>
+            </View>
+            <View style={{ backgroundColor: palette.canolaSoft, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4) }}>
+              <Text style={{ color: palette.ink, fontSize: scale(12), fontWeight: '800' }}>경험치 {xp}</Text>
+            </View>
+            <View style={{ backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4) }}>
+              <Text style={{ color: palette.ink, fontSize: scale(12), fontWeight: '800' }}>섬 성장 {growthStacks}</Text>
             </View>
           </View>
         </View>

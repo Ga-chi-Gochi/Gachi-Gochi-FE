@@ -16,16 +16,21 @@ import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
-import { localSuccessVerification } from '@/lib/bongging-reward';
+import { localFailureVerification, localSuccessVerification, type BonggingVerification } from '@/lib/bongging-reward';
 
 const result = localSuccessVerification;
+
+function resolveVerification(): BonggingVerification {
+  return localSuccessVerification;
+}
 
 export default function RecognizeScreen() {
   const { scale, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { certificationPhotoUri, xp, growthStacks, pendingCertification, finishBonggingCertification, cancelBonggingCertification } = usePlayState();
-  const photo = certificationPhotoUri ? { uri: toImageUri(certificationPhotoUri) } : art.trash;
-  const [phase, setPhase] = useState<'analysis' | 'fanfare' | 'result'>('analysis');
+  const photoUri = certificationPhotoUri ?? pendingCertification?.imageUri ?? null;
+  const photo = photoUri ? { uri: toImageUri(photoUri) } : art.trash;
+  const [phase, setPhase] = useState<'analysis' | 'fanfare' | 'result' | 'failure'>('analysis');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [photoHeight, setPhotoHeight] = useState(0);
   const finishFanfare = useCallback(() => setPhase('result'), []);
@@ -33,7 +38,16 @@ export default function RecognizeScreen() {
     cancelBonggingCertification();
     router.back();
   }, [cancelBonggingCertification]);
+  const retryCapture = useCallback(() => {
+    cancelBonggingCertification();
+    router.replace('/camera');
+  }, [cancelBonggingCertification]);
   const completeAnalysis = useCallback(async () => {
+    const verification = resolveVerification();
+    if (verification.status === 'failure') {
+      setPhase('failure');
+      return;
+    }
     if (!pendingCertification) {
       setPhase('result');
       return;
@@ -47,7 +61,7 @@ export default function RecognizeScreen() {
         locationSource: pendingCertification.locationSource,
       });
       await submitBonggingCertification(submission);
-      finishBonggingCertification({ xp: result.xp, growthStacks: result.growthStacks });
+      finishBonggingCertification({ xp: verification.xp, growthStacks: verification.growthStacks });
       setAnalysisError(null);
       setPhase('fanfare');
     } catch {
@@ -70,6 +84,8 @@ export default function RecognizeScreen() {
       />
       {phase === 'analysis' ? (
         <AnalysisSkeleton error={analysisError} onCancel={cancelAnalysis} onDone={() => void completeAnalysis()} onRetry={() => void completeAnalysis()} />
+      ) : phase === 'failure' ? (
+        <AnalysisFailure message={localFailureVerification.message} onClose={cancelAnalysis} onRetry={retryCapture} />
       ) : phase === 'fanfare' ? (
         <RewardFanfare fromXp={toXp - result.xp} toXp={toXp} fromGrowth={toGrowth - result.growthStacks} toGrowth={toGrowth} onDone={finishFanfare} />
       ) : (
@@ -132,6 +148,55 @@ export default function RecognizeScreen() {
         </Animated.View>
       </Animated.View>
       )}
+    </View>
+  );
+}
+
+function AnalysisFailure({ message, onClose, onRetry }: { message: string; onClose: () => void; onRetry: () => void }) {
+  const { scale } = useResponsive();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={{ flex: 1, paddingTop: insets.top }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: scale(16), marginTop: scale(8) }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="닫기"
+          onPress={onClose}
+          style={{ width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
+          <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
+        </Pressable>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(12), paddingVertical: scale(8) }}>
+            <MaterialIcons name="delete-outline" size={scale(16)} color={palette.ink} />
+            <Text style={{ color: palette.ink, fontWeight: '800' }}>인증 결과</Text>
+          </View>
+        </View>
+        <View style={{ width: scale(42) }} />
+      </View>
+      <View style={{ flex: 1 }} />
+      <View
+        style={{
+          backgroundColor: palette.white,
+          borderTopLeftRadius: scale(28),
+          borderTopRightRadius: scale(28),
+          paddingTop: scale(18),
+          paddingHorizontal: scale(20),
+          paddingBottom: Math.max(insets.bottom, scale(12)) + scale(8),
+          gap: scale(12),
+        }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(8) }}>
+          <Text style={{ flex: 1, fontSize: scale(22), fontWeight: '800', color: palette.ink, lineHeight: scale(28) }}>쓰레기를 확인하지 못했어요</Text>
+          <View style={{ backgroundColor: palette.blush, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4), marginTop: scale(2) }}>
+            <Text style={{ color: palette.tangerineDeep, fontWeight: '800', fontSize: scale(12) }}>실패</Text>
+          </View>
+        </View>
+        <Text style={{ color: palette.muted, fontSize: scale(14), lineHeight: scale(20) }}>{message}</Text>
+        <View style={{ flexDirection: 'row', gap: scale(10) }}>
+          <FigButton label="닫기" tone="white" onPress={onClose} />
+          <FigButton label="다시 찍기" onPress={onRetry} />
+        </View>
+      </View>
     </View>
   );
 }

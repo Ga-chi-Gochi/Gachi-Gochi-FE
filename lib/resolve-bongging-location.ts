@@ -26,6 +26,9 @@ export async function resolveBonggingLocation(exif: unknown): Promise<ResolvedBo
 
   const current = await Location.getForegroundPermissionsAsync();
   if (current.granted) {
+    if (!(await locationServicesEnabled())) {
+      return resolveWithServicesOff();
+    }
     return readDeviceLocation();
   }
 
@@ -65,6 +68,9 @@ export async function resolveBonggingLocation(exif: unknown): Promise<ResolvedBo
     return next === 'photo' ? { status: 'photo-only' } : { status: 'cancelled' };
   }
 
+  if (!(await locationServicesEnabled())) {
+    return resolveWithServicesOff();
+  }
   return readDeviceLocation();
 }
 
@@ -78,8 +84,33 @@ async function readDeviceLocation(): Promise<ResolvedBonggingLocation> {
       source: 'device',
     };
   } catch {
+    if (!(await locationServicesEnabled())) {
+      return resolveWithServicesOff();
+    }
     return confirmPhotoOnly('현재 위치를 가져오지 못했어요. 위치 없이 인증하면 장소 확인이 빠지고, 나중에 위치 기반 보너스를 받지 못할 수 있어요.');
   }
+}
+
+async function locationServicesEnabled() {
+  try {
+    return await Location.hasServicesEnabledAsync();
+  } catch {
+    return true;
+  }
+}
+
+function resolveWithServicesOff(): Promise<ResolvedBonggingLocation> {
+  return ask('위치 서비스가 꺼져 있어요', '기기의 위치 서비스가 꺼져 있어 지금 위치를 확인할 수 없어요. 사진만 인증하면 장소 확인이 빠지고, 나중에 위치 기반 보너스를 받지 못할 수 있어요.', [
+    { id: 'cancel', text: '취소', style: 'cancel' },
+    { id: 'settings', text: '설정 열기' },
+    { id: 'photo', text: '사진만 인증' },
+  ]).then(async (choice) => {
+    if (choice === 'settings') {
+      await Linking.openSettings();
+      return { status: 'cancelled' };
+    }
+    return choice === 'photo' ? { status: 'photo-only' } : { status: 'cancelled' };
+  });
 }
 
 function confirmPhotoOnly(message = PHOTO_ONLY_WARNING): Promise<ResolvedBonggingLocation> {

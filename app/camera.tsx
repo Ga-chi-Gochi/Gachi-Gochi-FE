@@ -13,6 +13,7 @@ import { usePlayState } from '@/components/play-state';
 import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
+import { confirmOfflineCertification } from '@/lib/confirm-offline-certification';
 import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
 
 export default function CameraScreen() {
@@ -120,6 +121,12 @@ export default function CameraScreen() {
     try {
       const location = await resolveBonggingLocation(photo.exif);
       if (location.status === 'cancelled') {
+        setNotice(null);
+        return;
+      }
+
+      const proceedOffline = await confirmOfflineCertification();
+      if (!proceedOffline) {
         setNotice(null);
         return;
       }

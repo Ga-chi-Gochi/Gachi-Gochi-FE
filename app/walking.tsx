@@ -55,8 +55,8 @@ export default function WalkingScreen() {
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
 function WalkingContent({ devTools }: { devTools: ReactNode }) {
   const { scale } = useResponsive();
-  const { steps, distanceMeters, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure } = useTodaySteps();
-  const { claimedSteps, drops, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward(steps);
+  const { steps, distanceMeters, source, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure } = useTodaySteps();
+  const { claimedSteps, drops, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source });
   const [introStep, setIntroStep] = useState<number | null>(null);
   const [introChecked, setIntroChecked] = useState(false);
 

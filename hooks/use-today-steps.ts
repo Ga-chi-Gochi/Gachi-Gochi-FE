@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import type { WalkingDataSource } from '@/lib/walking-api';
+
 const MOCK_STEP_INCREMENT = 500;
 // 걸음 수로 거리를 어림하는 임시 보폭(m).
 const STEP_LENGTH_METERS = 0.7;
@@ -87,5 +89,8 @@ export function useTodaySteps() {
 
   const distanceMeters = estimateDistanceMeters(steps);
 
-  return { steps, distanceMeters, isAvailable, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure };
+  // [TODO: 실제 연동] 실제 데이터로 바꾸면 기기에 따라 'healthkit'(iOS) / 'healthconnect'(Android)를 돌려준다.
+  const source: WalkingDataSource = 'mock';
+
+  return { steps, distanceMeters, source, isAvailable, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure };
 }

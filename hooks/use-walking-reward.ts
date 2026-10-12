@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { WalkingDrops } from '@/constants/walking-reward';
+import { sendWalkingRecord, type WalkingDataSource } from '@/lib/walking-api';
 import {
   applyWalkingRewardToGrowth,
   claimWalkingRewards,
   isMockWalkingSaveFailure,
   resetTodayWalkingClaims,
   setMockWalkingSaveFailure,
+  todayKey,
 } from '@/lib/walking-reward';
 
-// 오늘 걸음 수를 받아서 걷기 보상을 지급하고, 기기에 저장된 방울 수를 돌려준다.
-export function useWalkingReward(steps: number) {
+type UseWalkingRewardInput = {
+  steps: number;
+  distanceMeters: number;
+  source: WalkingDataSource;
+};
+
+// 오늘 걸음 기록을 받아서 걷기 보상을 지급하고, 기기에 저장된 방울 수를 돌려준다.
+export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRewardInput) {
   // 오늘 이미 보상을 받은 단계의 걸음 수 기준값.
   const [claimedSteps, setClaimedSteps] = useState<number[]>([]);
   // 지금까지 모은 방울 수.
@@ -40,6 +48,16 @@ export function useWalkingReward(steps: number) {
       })
       .catch(() => setSaveError(true));
   }, [steps, attempt]);
+
+  // 걸음 기록을 서버로 보낸다. 서버 주소가 없으면 아무것도 보내지 않고, 실패해도 오류를 던지지 않는다.
+  // [TODO: 백엔드 연동] 지금은 응답을 쓰지 않고 위의 기기 저장 방식으로만 지급한다.
+  // 서버가 생기면 응답의 reward·claimedSteps를 기준으로 삼고, 기기 저장 방식은 서버에 닿지 않을 때만 쓰도록 바꾼다.
+  useEffect(() => {
+    if (steps <= 0) {
+      return;
+    }
+    void sendWalkingRecord({ date: todayKey(), steps, distanceMeters, source });
+  }, [steps, distanceMeters, source]);
 
   const dismissReward = useCallback(() => setReward(null), []);
 

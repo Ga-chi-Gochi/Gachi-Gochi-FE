@@ -35,7 +35,8 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return next;
 }
 
-function todayKey(now = new Date()): string {
+// 기기 기준 오늘 날짜(YYYY-MM-DD).
+export function todayKey(now = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;

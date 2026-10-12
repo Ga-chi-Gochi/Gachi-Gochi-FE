@@ -1,7 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { FigButton } from '@/components/fig-button';
@@ -55,8 +55,8 @@ export default function WalkingScreen() {
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
 function WalkingContent({ devTools }: { devTools: ReactNode }) {
   const { scale } = useResponsive();
-  const { steps, distanceMeters, addMockSteps, resetMockSteps } = useTodaySteps();
-  const { claimedSteps, drops, reward, dismissReward, resetTodayClaims } = useWalkingReward(steps);
+  const { steps, distanceMeters, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure } = useTodaySteps();
+  const { claimedSteps, drops, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward(steps);
   const [introStep, setIntroStep] = useState<number | null>(null);
   const [introChecked, setIntroChecked] = useState(false);
 
@@ -84,9 +84,11 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
   }, [introStep]);
 
   const resetToday = useCallback(() => {
-    void resetTodayClaims()
-      .then(resetMockSteps)
-      .catch(() => undefined);
+    void resetTodayClaims().then((done) => {
+      if (done) {
+        resetMockSteps();
+      }
+    });
   }, [resetMockSteps, resetTodayClaims]);
 
   const nextTier = nextWalkingTier(steps);
@@ -96,6 +98,32 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
     <>
       <TopBar title="걷기" />
       <ScrollView contentContainerStyle={{ paddingHorizontal: scale(24), paddingBottom: scale(16), gap: scale(14) }}>
+        {error ? (
+          <NoticeCard
+            icon="sync-problem"
+            warning
+            title="걸음 수를 불러오지 못했어요"
+            message="건강 앱이 켜져 있는지 확인한 뒤 아래 버튼을 눌러 주세요."
+            actionLabel="다시 시도"
+            onAction={() => void refresh()}
+          />
+        ) : isLoaded && steps === 0 ? (
+          <NoticeCard
+            icon="directions-walk"
+            title="아직 오늘 걸은 기록이 없어요"
+            message={`조금만 걸어도 여기에 걸음 수가 나타나요. ${formatNumber(WALKING_REWARD_TIERS[0].steps)}보부터 방울을 받을 수 있어요.`}
+          />
+        ) : null}
+        {saveError ? (
+          <NoticeCard
+            icon="cloud-off"
+            warning
+            title="방울을 기록하지 못했어요"
+            message="받을 방울은 사라지지 않아요. 아래 버튼을 눌러 다시 기록해 주세요."
+            actionLabel="다시 시도"
+            onAction={retrySave}
+          />
+        ) : null}
         <View style={{ backgroundColor: palette.white, borderRadius: scale(24), padding: scale(18), gap: scale(12) }}>
           <Text style={{ color: palette.muted, fontSize: scale(14), fontWeight: '700' }}>오늘의 걷기 가치</Text>
           <Text style={{ fontSize: scale(36), fontWeight: '800', color: palette.sea }}>
@@ -129,6 +157,12 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
               );
             })}
           </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(6) }}>
+            <MaterialIcons name="schedule" size={scale(14)} color={palette.muted} style={{ marginTop: scale(2) }} />
+            <Text style={{ flex: 1, color: palette.muted, fontSize: scale(12), lineHeight: scale(18) }}>
+              건강 앱에 기록되기까지 시간이 걸릴 수 있어요. 방금 걸은 걸음이 안 보이면 잠시 뒤에 다시 들어와 주세요.
+            </Text>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: scale(8) }}>
           <DropPill label={WALKING_REWARD_LABELS.oxygen} value={drops.oxygen} backgroundColor={palette.leafSoft} />
@@ -153,6 +187,10 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
               <FigButton label="+500보" tone="white" onPress={addMockSteps} />
               <FigButton label="오늘 기록 초기화" tone="white" onPress={resetToday} />
             </View>
+            <View style={{ flexDirection: 'row', gap: scale(10) }}>
+              <FigButton label={`불러오기 실패로 테스트: ${mockReadFailure ? '켜짐' : '꺼짐'}`} tone="white" onPress={() => setMockReadFailure(!mockReadFailure)} />
+              <FigButton label={`저장 실패로 테스트: ${mockSaveFailure ? '켜짐' : '꺼짐'}`} tone="white" onPress={() => setMockSaveFailure(!mockSaveFailure)} />
+            </View>
           </View>
         ) : null}
         {devTools}
@@ -166,6 +204,42 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         <WalkingRewardPopup distanceMeters={distanceMeters} reward={reward} onClose={dismissReward} />
       ) : null}
     </>
+  );
+}
+
+// 걷기 화면 위쪽에 띄우는 안내 카드. warning이면 문제 상황 색으로 보여 주고, onAction을 넘기면 버튼이 생긴다.
+function NoticeCard({
+  icon,
+  title,
+  message,
+  warning = false,
+  actionLabel,
+  onAction,
+}: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  title: string;
+  message: string;
+  warning?: boolean;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const { scale } = useResponsive();
+
+  return (
+    <View accessibilityRole={warning ? 'alert' : undefined} style={{ backgroundColor: warning ? palette.blush : palette.seaSoft, borderRadius: scale(24), padding: scale(18), gap: scale(12) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(10) }}>
+        <MaterialIcons name={icon} size={scale(22)} color={warning ? palette.tangerineDeep : palette.sea} />
+        <View style={{ flex: 1, gap: scale(4) }}>
+          <Text style={{ color: palette.ink, fontSize: scale(16), fontWeight: '800' }}>{title}</Text>
+          <Text style={{ color: palette.body, fontSize: scale(13), lineHeight: scale(19) }}>{message}</Text>
+        </View>
+      </View>
+      {actionLabel && onAction ? (
+        <View style={{ flexDirection: 'row' }}>
+          <FigButton label={actionLabel} onPress={onAction} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 

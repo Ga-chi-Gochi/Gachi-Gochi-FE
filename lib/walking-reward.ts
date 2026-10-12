@@ -60,7 +60,22 @@ async function readRecord(): Promise<WalkingRewardRecord> {
   }
 }
 
+// 개발용: 켜 두면 방울 기록 저장이 일부러 실패한다. 저장 실패 안내를 눌러 보기 위한 것이다.
+let mockSaveFails = false;
+
+export function setMockWalkingSaveFailure(fails: boolean): void {
+  if (!__DEV__) return;
+  mockSaveFails = fails;
+}
+
+export function isMockWalkingSaveFailure(): boolean {
+  return mockSaveFails;
+}
+
 function writeRecord(record: WalkingRewardRecord): Promise<void> {
+  if (mockSaveFails) {
+    return Promise.reject(new Error('개발용: 방울 기록 저장 실패'));
+  }
   return AsyncStorage.setItem(WALKING_REWARD_KEY, JSON.stringify(record));
 }
 

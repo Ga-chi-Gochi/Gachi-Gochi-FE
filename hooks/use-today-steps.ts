@@ -7,12 +7,17 @@ const STEP_LENGTH_METERS = 0.7;
 // [TODO: 실제 연동] 아래 mock 저장소와 readTodaySteps()를 iOS HealthKit / Android Health Connect 호출로 교체한다.
 // Expo Go에서는 건강 데이터 네이티브 모듈을 쓸 수 없어서, 지금은 앱이 켜져 있는 동안만 유지되는 가짜 값을 쓴다.
 let mockTodaySteps = 0;
+// 개발용: 켜 두면 걸음 수 불러오기가 일부러 실패한다. 불러오기 실패 안내를 눌러 보기 위한 것이다.
+let mockReadFails = false;
 
 // 오늘 0시부터 지금까지 누적 걸음 수를 읽는다.
 async function readTodaySteps(): Promise<number> {
   // [TODO: 실제 연동] 권한 요청 후 오늘 0시 ~ 현재 구간의 걸음 수 합계를 조회한다.
   // - iOS: HealthKit stepCount
   // - Android: Health Connect Steps 레코드
+  if (mockReadFails) {
+    throw new Error('개발용: 걸음 수 불러오기 실패');
+  }
   return mockTodaySteps;
 }
 
@@ -29,13 +34,19 @@ export function useTodaySteps() {
   // [TODO: 실제 연동] 기기 지원 여부와 권한 허용 여부로 판단한다. mock은 항상 읽을 수 있다.
   const [isAvailable] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  // 첫 불러오기가 (성공이든 실패든) 끝났는지. 끝나기 전에는 0보를 '기록 없음'으로 보지 않는다.
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [mockReadFailure, setMockReadFailureState] = useState(mockReadFails);
 
+  // 실패하면 마지막으로 불러온 걸음 수는 그대로 두고 error만 채운다.
   const refresh = useCallback(async () => {
     try {
       setSteps(await readTodaySteps());
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e : new Error(String(e)));
+    } finally {
+      setIsLoaded(true);
     }
   }, []);
 
@@ -59,7 +70,22 @@ export function useTodaySteps() {
     refresh();
   }, [refresh]);
 
+  // 개발 중에만 '불러오기 실패' 상황을 켜고 끈다. 켜는 순간 바로 다시 불러와서 실패 안내가 보이게 한다.
+  // 끌 때는 다시 불러오지 않으므로, 화면의 '다시 시도'를 눌러 복구되는지 확인할 수 있다.
+  // [TODO: 실제 연동] addMockSteps와 함께 제거한다.
+  const setMockReadFailure = useCallback(
+    (fails: boolean) => {
+      if (!__DEV__) return;
+      mockReadFails = fails;
+      setMockReadFailureState(fails);
+      if (fails) {
+        refresh();
+      }
+    },
+    [refresh],
+  );
+
   const distanceMeters = estimateDistanceMeters(steps);
 
-  return { steps, distanceMeters, isAvailable, error, refresh, addMockSteps, resetMockSteps };
+  return { steps, distanceMeters, isAvailable, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure };
 }

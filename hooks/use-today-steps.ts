@@ -51,7 +51,15 @@ export function useTodaySteps() {
     refresh();
   }, [refresh]);
 
+  // 개발 중에만 오늘 걸음 수를 0으로 되돌린다.
+  // [TODO: 실제 연동] addMockSteps와 함께 제거한다.
+  const resetMockSteps = useCallback(() => {
+    if (!__DEV__) return;
+    mockTodaySteps = 0;
+    refresh();
+  }, [refresh]);
+
   const distanceMeters = estimateDistanceMeters(steps);
 
-  return { steps, distanceMeters, isAvailable, error, refresh, addMockSteps };
+  return { steps, distanceMeters, isAvailable, error, refresh, addMockSteps, resetMockSteps };
 }

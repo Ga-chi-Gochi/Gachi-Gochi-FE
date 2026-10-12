@@ -107,6 +107,12 @@ export function markWalkingIntroSeen(): Promise<void> {
   return AsyncStorage.setItem(WALKING_INTRO_KEY, 'true');
 }
 
+// [TODO: 성장 연결] 걷기 보상이 지급될 때마다 불린다. 나중에 산소방울(탄소 제거)·물방울(가치고치 성장)을
+// 캐릭터·섬 성장 규칙으로 이어 붙일 자리다. 성장 규칙은 기획 확정 전이라 지금은 아무 일도 하지 않는다.
+export function applyWalkingRewardToGrowth(reward: WalkingDrops): void {
+  void reward;
+}
+
 // 다음에 받을 보상 단계. 모든 단계를 넘었으면 null.
 export function nextWalkingTier(steps: number): WalkingRewardTier | null {
   return WALKING_REWARD_TIERS.find((tier) => steps < tier.steps) ?? null;

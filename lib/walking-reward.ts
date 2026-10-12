@@ -64,13 +64,6 @@ function writeRecord(record: WalkingRewardRecord): Promise<void> {
   return AsyncStorage.setItem(WALKING_REWARD_KEY, JSON.stringify(record));
 }
 
-export function loadWalkingReward(): Promise<WalkingRewardSnapshot> {
-  return enqueue(async () => {
-    const { claimedSteps, drops } = await readRecord();
-    return { claimedSteps, drops };
-  });
-}
-
 // 오늘 걸음 수로 새로 달성한 단계가 있으면 지급하고 기록한다. 같은 날 같은 단계는 한 번만 지급한다.
 export function claimWalkingRewards(steps: number): Promise<WalkingRewardClaim> {
   return enqueue(async () => {

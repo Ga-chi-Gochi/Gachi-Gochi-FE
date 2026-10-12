@@ -1,8 +1,7 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { type ComponentProps, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { PopupButton, RewardLine } from '@/components/certification-popup';
 import { palette } from '@/constants/palette';
 import { WALKING_REWARD_LABELS, type WalkingDrops } from '@/constants/walking-reward';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -52,13 +51,32 @@ export function WalkingIntroPopup({ step, onNext }: WalkingIntroPopupProps) {
   );
 }
 
-// 봉그깅 인증 팝업(CertificationPopup)과 같은 모양의 틀.
-function PopupShell({ icon, title, message, children }: { icon: ComponentProps<typeof MaterialIcons>['name']; title: string; message: string; children: ReactNode }) {
+// 봉그깅 인증 팝업(CertificationPopup)과 비슷한 모양으로 맞춘 틀. 그 파일을 가져다 쓰지 않고 여기서 직접 그린다.
+// onBack을 넘기면 팝업 맨 위에 '뒤로가기' 버튼이 생긴다.
+export function PopupShell({
+  icon,
+  title,
+  message,
+  onBack,
+  children,
+}: {
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+  title: string;
+  message: string;
+  onBack?: () => void;
+  children: ReactNode;
+}) {
   const { scale } = useResponsive();
 
   return (
     <View accessibilityViewIsModal style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: palette.dim, justifyContent: 'center', paddingHorizontal: scale(24) }}>
       <View style={{ backgroundColor: palette.white, borderRadius: scale(24), padding: scale(20), gap: scale(12) }}>
+        {onBack ? (
+          <Pressable accessibilityRole="button" onPress={onBack} hitSlop={8} style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: scale(4) }}>
+            <MaterialIcons name="arrow-back" size={scale(18)} color={palette.muted} />
+            <Text style={{ color: palette.muted, fontSize: scale(14), fontWeight: '700' }}>뒤로가기</Text>
+          </Pressable>
+        ) : null}
         <View style={{ width: scale(48), height: scale(48), borderRadius: scale(24), backgroundColor: palette.leafSoft, alignItems: 'center', justifyContent: 'center' }}>
           <MaterialIcons name={icon} size={scale(26)} color={palette.leafDeep} />
         </View>
@@ -67,5 +85,30 @@ function PopupShell({ icon, title, message, children }: { icon: ComponentProps<t
         {children}
       </View>
     </View>
+  );
+}
+
+function RewardLine({ label, value }: { label: string; value: string }) {
+  const { scale } = useResponsive();
+
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: palette.mist, borderRadius: scale(14), paddingHorizontal: scale(14), paddingVertical: scale(10) }}>
+      <Text style={{ color: palette.body, fontWeight: '700', fontSize: scale(14) }}>{label}</Text>
+      <Text style={{ color: palette.ink, fontWeight: '800', fontSize: scale(16) }}>{value}</Text>
+    </View>
+  );
+}
+
+export function PopupButton({ label, onPress, tone = 'orange' }: { label: string; onPress: () => void; tone?: 'orange' | 'white' }) {
+  const { scale } = useResponsive();
+  const white = tone === 'white';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={{ alignSelf: 'stretch', minHeight: scale(52), borderRadius: scale(16), backgroundColor: white ? palette.white : palette.tangerine, alignItems: 'center', justifyContent: 'center', borderWidth: white ? 1 : 0, borderColor: palette.line }}>
+      <Text style={{ color: white ? palette.ink : palette.white, fontSize: scale(16), fontWeight: '800' }}>{label}</Text>
+    </Pressable>
   );
 }

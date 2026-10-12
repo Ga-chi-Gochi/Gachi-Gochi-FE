@@ -42,7 +42,7 @@ export function CertificationPopup({ result, onClose, onRetry }: CertificationPo
   );
 }
 
-export function RewardLine({ label, value }: { label: string; value: string }) {
+function RewardLine({ label, value }: { label: string; value: string }) {
   const { scale } = useResponsive();
 
   return (
@@ -53,7 +53,7 @@ export function RewardLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function PopupButton({ label, onPress, tone = 'orange' }: { label: string; onPress: () => void; tone?: 'orange' | 'white' }) {
+function PopupButton({ label, onPress, tone = 'orange' }: { label: string; onPress: () => void; tone?: 'orange' | 'white' }) {
   const { scale } = useResponsive();
   const white = tone === 'white';
 

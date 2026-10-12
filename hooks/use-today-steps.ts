@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
 const MOCK_STEP_INCREMENT = 500;
+// 걸음 수로 거리를 어림하는 임시 보폭(m).
+const STEP_LENGTH_METERS = 0.7;
 
 // [TODO: 실제 연동] 아래 mock 저장소와 readTodaySteps()를 iOS HealthKit / Android Health Connect 호출로 교체한다.
 // Expo Go에서는 건강 데이터 네이티브 모듈을 쓸 수 없어서, 지금은 앱이 켜져 있는 동안만 유지되는 가짜 값을 쓴다.
@@ -12,6 +14,14 @@ async function readTodaySteps(): Promise<number> {
   // - iOS: HealthKit stepCount
   // - Android: Health Connect Steps 레코드
   return mockTodaySteps;
+}
+
+// 오늘 걸은 거리(m)를 구한다. 지금은 걸음 수 × 보폭으로 어림한다.
+function estimateDistanceMeters(steps: number): number {
+  // [TODO: 실제 연동] 어림값 대신 건강 데이터의 실제 이동 거리를 조회한다.
+  // - iOS: HealthKit distanceWalkingRunning
+  // - Android: Health Connect DistanceRecord
+  return Math.round(steps * STEP_LENGTH_METERS);
 }
 
 export function useTodaySteps() {
@@ -41,5 +51,7 @@ export function useTodaySteps() {
     refresh();
   }, [refresh]);
 
-  return { steps, isAvailable, error, refresh, addMockSteps };
+  const distanceMeters = estimateDistanceMeters(steps);
+
+  return { steps, distanceMeters, isAvailable, error, refresh, addMockSteps };
 }

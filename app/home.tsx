@@ -12,7 +12,7 @@ import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const actions = [
-  { label: '걷기', href: '/walk' as const, icon: 'directions-walk' as const },
+  { label: '걷기', href: '/walking' as const, icon: 'directions-walk' as const },
   { label: '고치 산책', href: '/stroll' as const, icon: 'pets' as const },
   { label: '쓰레기 줍기', href: '/camera' as const, icon: 'delete-outline' as const },
   { label: '로컬 상점', href: '/store' as const, icon: 'storefront' as const },

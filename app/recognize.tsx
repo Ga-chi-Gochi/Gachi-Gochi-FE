@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,22 +16,43 @@ import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
-import { localFailureVerification, localSuccessVerification, type BonggingVerification } from '@/lib/bongging-reward';
+import { recognitionErrorMessage, recognizeTrash } from '@/lib/bongging-recognition';
+import { countTrash, localFailureVerification, toBonggingVerification, type BonggingVerification } from '@/lib/bongging-reward';
 
-const result = localSuccessVerification;
+type Recognition = { verification: BonggingVerification } | { error: unknown };
 
-function resolveVerification(): BonggingVerification {
-  return localSuccessVerification;
+// 실패도 값으로 돌려준다. 분석 화면 애니메이션이 끝날 때까지 기다렸다 꺼내 쓰기 때문이다.
+function startRecognition(imageUri: string): Promise<Recognition> {
+  return recognizeTrash(imageUri).then(
+    (items) => ({ verification: toBonggingVerification(items) }),
+    (error: unknown) => ({ error }),
+  );
 }
 
 export default function RecognizeScreen() {
   const { scale, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { certificationPhotoUri, xp, growthStacks, pendingCertification, finishBonggingCertification, cancelBonggingCertification } = usePlayState();
-  const photoUri = certificationPhotoUri ?? pendingCertification?.imageUri ?? null;
+  const pendingImageUri = pendingCertification?.imageUri ?? null;
+  // 분석 중인 사진을 기억해 둔다. 인증에 실패해도, 닫으면서 대기 사진이 지워져도 방금 찍은 사진이 보인다.
+  const [photoUri, setPhotoUri] = useState(pendingImageUri ?? certificationPhotoUri);
+  if (pendingImageUri && pendingImageUri !== photoUri) {
+    setPhotoUri(pendingImageUri);
+  }
   const photo = photoUri ? { uri: toImageUri(photoUri) } : art.trash;
   const [phase, setPhase] = useState<'analysis' | 'fanfare' | 'result' | 'failure'>('analysis');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [verification, setVerification] = useState<BonggingVerification | null>(null);
+  const recognition = useRef<Promise<Recognition> | null>(null);
+  const result = verification ?? localFailureVerification;
+
+  // 화면에 들어오자마자 분석을 시작해서, 애니메이션이 도는 동안 판별 응답을 기다린다.
+  useEffect(() => {
+    if (pendingImageUri && !recognition.current) {
+      recognition.current = startRecognition(pendingImageUri);
+    }
+  }, [pendingImageUri]);
+
   const [photoHeight, setPhotoHeight] = useState(0);
   const finishFanfare = useCallback(() => setPhase('result'), []);
   const cancelAnalysis = useCallback(() => {
@@ -43,13 +64,22 @@ export default function RecognizeScreen() {
     router.replace('/camera');
   }, [cancelBonggingCertification]);
   const completeAnalysis = useCallback(async () => {
-    const verification = resolveVerification();
-    if (verification.status === 'failure') {
+    if (!pendingCertification) {
       setPhase('failure');
       return;
     }
-    if (!pendingCertification) {
-      setPhase('result');
+    setAnalysisError(null);
+    recognition.current ??= startRecognition(pendingCertification.imageUri);
+    const outcome = await recognition.current;
+    if ('error' in outcome) {
+      // 다시 시도하면 새로 분석하도록 비운다.
+      recognition.current = null;
+      setAnalysisError(recognitionErrorMessage(outcome.error));
+      return;
+    }
+    const verification = outcome.verification;
+    if (verification.status === 'failure') {
+      setPhase('failure');
       return;
     }
     try {
@@ -62,6 +92,7 @@ export default function RecognizeScreen() {
       });
       await submitBonggingCertification(submission);
       finishBonggingCertification({ xp: verification.xp, growthStacks: verification.growthStacks });
+      setVerification(verification);
       setAnalysisError(null);
       setPhase('fanfare');
     } catch {
@@ -113,7 +144,8 @@ export default function RecognizeScreen() {
             <View key={item.name} style={{ backgroundColor: index === 0 ? palette.canola : palette.white, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(6), flexDirection: 'row', gap: scale(4), alignItems: 'center' }}>
               <MaterialIcons name="check" size={scale(16)} color={palette.ink} />
               <Text style={{ fontWeight: '800', color: palette.ink, fontSize: scale(12) }}>
-                {item.name} · {item.confidence}%
+                {item.name}
+                {item.count > 1 ? ` ${item.count}개` : ''} · {item.confidence}%
               </Text>
             </View>
           ))}
@@ -131,7 +163,7 @@ export default function RecognizeScreen() {
             gap: scale(12),
           }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(8) }}>
-            <Text style={{ flex: 1, fontSize: scale(22), fontWeight: '800', color: palette.ink, lineHeight: scale(28) }}>쓰레기 {result.items.length}개를 인증했어요</Text>
+            <Text style={{ flex: 1, fontSize: scale(22), fontWeight: '800', color: palette.ink, lineHeight: scale(28) }}>쓰레기 {countTrash(result.items)}개를 인증했어요</Text>
             <View style={{ backgroundColor: palette.leafSoft, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4), marginTop: scale(2) }}>
               <Text style={{ color: palette.leafDeep, fontWeight: '800', fontSize: scale(12) }}>성공</Text>
             </View>

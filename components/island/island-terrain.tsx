@@ -74,16 +74,13 @@ function LandCell({
         width: sizeW,
         height: sizeH,
         backgroundColor: checker ? pixel.grassDeep : pixel.grass,
-        opacity: appearing
-          ? appear.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
-          : 1,
-        transform: appearing
-          ? [
-              {
-                scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
-              },
-            ]
-          : undefined,
+        // Fabric는 transform이 null/undefined면 크래시하므로 항상 배열로 둔다.
+        opacity: appear,
+        transform: [
+          {
+            scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+          },
+        ],
       }}>
       {/* 얕은 줄무늬 */}
       {checker ? (

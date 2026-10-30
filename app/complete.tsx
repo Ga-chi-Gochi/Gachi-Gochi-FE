@@ -1,45 +1,64 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View } from 'react-native';
 
-import { FigButton } from '@/components/fig-button';
-import { FigScreen } from '@/components/fig-screen';
-import { art } from '@/constants/art';
-import { palette } from '@/constants/palette';
+import { PixelSprite } from '@/components/pixel/pixel-sprite';
+import { PixelButton, PixelPanel, PixelScreen, PixelText } from '@/components/pixel/pixel-ui';
+import { usePlayState } from '@/components/play-state';
+import { ISLAND_HOME } from '@/constants/routes';
+import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
 
 export default function CompleteScreen() {
   const { scale } = useResponsive();
+  const { claimLocalShopReward } = usePlayState();
+  const claimed = useRef(false);
+
+  useEffect(() => {
+    if (claimed.current) {
+      return;
+    }
+    claimed.current = true;
+    claimLocalShopReward();
+  }, [claimLocalShopReward]);
 
   return (
-    <FigScreen colors={['#FFF5D1', '#FFF9F1']}>
-      <View style={{ flex: 1, paddingHorizontal: scale(20), paddingBottom: scale(16) }}>
-        <View style={{ alignSelf: 'center', marginTop: scale(24), backgroundColor: palette.leafSoft, borderRadius: scale(999), paddingHorizontal: scale(12), paddingVertical: scale(5) }}>
-          <Text style={{ color: palette.leafDeep, fontWeight: '800' }}>10분 함께 놀기 완료!</Text>
-        </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Image source={art.camellia} style={{ position: 'absolute', left: scale(8), bottom: scale(40), width: scale(84), height: scale(64) }} contentFit="contain" />
-          <Image source={art.pebble} style={{ position: 'absolute', right: scale(8), bottom: scale(30), width: scale(76), height: scale(60) }} contentFit="contain" />
-          <Image source={art.canola} style={{ position: 'absolute', right: scale(16), top: scale(20), width: scale(58), height: scale(54) }} contentFit="contain" />
-          <View style={{ position: 'absolute', right: scale(20), top: scale(8), backgroundColor: palette.white, borderRadius: scale(16), paddingHorizontal: scale(10), paddingVertical: scale(6) }}>
-            <Text style={{ fontWeight: '700' }}>기분이 좋아졌다!</Text>
+    <PixelScreen>
+      <View style={{ flex: 1, paddingHorizontal: scale(16), paddingBottom: scale(16), justifyContent: 'space-between' }}>
+        <View style={{ alignItems: 'center', marginTop: scale(20), gap: scale(10) }}>
+          <View
+            style={{
+              backgroundColor: pixel.grass,
+              borderWidth: scale(2),
+              borderColor: pixel.ink,
+              paddingHorizontal: scale(12),
+              paddingVertical: scale(6),
+            }}>
+            <PixelText size={13}>10분 함께 놀기 완료!</PixelText>
           </View>
-          <View style={{ position: 'absolute', left: scale(8), top: scale(70), backgroundColor: palette.white, borderRadius: scale(16), paddingHorizontal: scale(10), paddingVertical: scale(6) }}>
-            <Text style={{ fontWeight: '700' }}>행복해!</Text>
+          <PixelSprite id="buddy" size={scale(96)} />
+          <PixelText size={18} center>
+            로컬 상점 방문 성공
+          </PixelText>
+        </View>
+
+        <PixelPanel style={{ gap: scale(8) }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
+              <PixelSprite id="tangerine" size={scale(24)} />
+              <PixelText size={22} color={pixel.tangerine}>
+                +50 귤
+              </PixelText>
+            </View>
+            <PixelText size={14}>단골 +1</PixelText>
           </View>
-          <Image source={art.jump} style={{ width: scale(190), height: scale(190) }} contentFit="contain" />
-        </View>
-        <View style={{ backgroundColor: palette.white, borderRadius: scale(20), padding: scale(16), gap: scale(8), marginBottom: scale(16) }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ fontSize: scale(24), fontWeight: '800', color: palette.tangerineDeep }}>+50p</Text>
-            <Text style={{ fontSize: scale(24), fontWeight: '800', color: palette.ink }}>행복 방울 3개</Text>
-          </View>
-          <Text style={{ color: palette.muted, fontSize: scale(14) }}>가치고치를 성장하게 하는 행복 방울이 생겼어요</Text>
-        </View>
-        <View style={{ flexDirection: 'row' }}>
-          <FigButton label="섬에 행복 방울 심기" onPress={() => router.replace('/home')} />
-        </View>
+          <PixelText size={12} color={pixel.muted}>
+            받은 귤로 상점에서 치장 아이템을 사고 섬에 심어 보세요.
+          </PixelText>
+        </PixelPanel>
+
+        <PixelButton label="섬으로 돌아가기" onPress={() => router.replace(ISLAND_HOME)} />
       </View>
-    </FigScreen>
+    </PixelScreen>
   );
 }

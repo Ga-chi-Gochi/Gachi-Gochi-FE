@@ -46,7 +46,7 @@ export default function WalkingScreen() {
       ) : status === 'ready' ? (
         <WalkingContent devTools={devTools} />
       ) : (
-        <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/home')} devTools={devTools} />
+        <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
       )}
     </FigScreen>
   );
@@ -196,7 +196,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         {devTools}
       </ScrollView>
       <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
-        <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/home')} />
+        <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
       </View>
       {introStep != null ? (
         <WalkingIntroPopup step={introStep} onNext={nextIntro} />

@@ -26,7 +26,6 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/with-ios-scene.js",
       "expo-router",
       [
         "expo-splash-screen",

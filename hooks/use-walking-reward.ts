@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { usePlayState } from '@/components/play-state';
 import type { WalkingDrops } from '@/constants/walking-reward';
 import { sendWalkingRecord, type WalkingDataSource } from '@/lib/walking-api';
 import {
-  applyWalkingRewardToGrowth,
   claimWalkingRewards,
   isMockWalkingSaveFailure,
   resetTodayWalkingClaims,
@@ -19,6 +19,7 @@ type UseWalkingRewardInput = {
 
 // 오늘 걸음 기록을 받아서 걷기 보상을 지급하고, 기기에 저장된 방울 수를 돌려준다.
 export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRewardInput) {
+  const { syncWalkingDrops } = usePlayState();
   // 오늘 이미 보상을 받은 단계의 걸음 수 기준값.
   const [claimedSteps, setClaimedSteps] = useState<number[]>([]);
   // 지금까지 모은 방울 수.
@@ -39,15 +40,15 @@ export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRe
         setSaveError(false);
         setClaimedSteps(claim.claimedSteps);
         setDrops(claim.drops);
+        syncWalkingDrops(claim.drops);
         const gained = claim.reward;
         if (!gained) {
           return;
         }
-        applyWalkingRewardToGrowth(gained);
         setReward((current) => (current ? { oxygen: current.oxygen + gained.oxygen, water: current.water + gained.water } : gained));
       })
       .catch(() => setSaveError(true));
-  }, [steps, attempt]);
+  }, [steps, attempt, syncWalkingDrops]);
 
   // 걸음 기록을 서버로 보낸다. 서버 주소가 없으면 아무것도 보내지 않고, 실패해도 오류를 던지지 않는다.
   // [TODO: 백엔드 연동] 지금은 응답을 쓰지 않고 위의 기기 저장 방식으로만 지급한다.
@@ -69,13 +70,14 @@ export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRe
       const snapshot = await resetTodayWalkingClaims();
       setClaimedSteps(snapshot.claimedSteps);
       setDrops(snapshot.drops);
+      syncWalkingDrops(snapshot.drops);
       setReward(null);
       return true;
     } catch {
       setSaveError(true);
       return false;
     }
-  }, []);
+  }, [syncWalkingDrops]);
 
   // 개발 중에만 '저장 실패' 상황을 켜고 끈다.
   const setMockSaveFailure = useCallback((fails: boolean) => {

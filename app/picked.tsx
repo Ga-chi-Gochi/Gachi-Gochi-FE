@@ -35,7 +35,7 @@ export default function PickedScreen() {
         </View>
         <View style={{ flexDirection: 'row', gap: scale(10) }}>
           <FigButton label="하나 더 줍기" tone="white" onPress={() => router.replace('/camera')} />
-          <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/home')} />
+          <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
         </View>
       </View>
     </FigScreen>

@@ -46,7 +46,7 @@ export default function StepsScreen() {
         </View>
         <Text style={{ textAlign: 'center', fontSize: scale(36), fontWeight: '800', color: palette.tangerineDeep }}>+300p</Text>
         <View style={{ flexDirection: 'row', marginBottom: scale(8) }}>
-          <FigButton label="섬에 반영하기" onPress={() => router.replace('/home')} />
+          <FigButton label="섬에 반영하기" onPress={() => router.replace('/(tabs)')} />
         </View>
       </View>
     </FigScreen>

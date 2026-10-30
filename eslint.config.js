@@ -7,4 +7,11 @@ module.exports = defineConfig([
   {
     ignores: ['dist/*'],
   },
+  {
+    // Reanimated shared values are intentionally mutated (.value = …)
+    files: ['components/island/island-map.tsx'],
+    rules: {
+      'react-hooks/immutability': 'off',
+    },
+  },
 ]);

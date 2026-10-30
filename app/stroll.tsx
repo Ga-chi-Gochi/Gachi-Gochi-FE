@@ -53,7 +53,7 @@ export default function StrollScreen() {
             ))}
           </View>
           <View style={{ flexDirection: 'row' }}>
-            <FigButton label="같이 산책하기" tone="green" onPress={() => router.replace('/home')} />
+            <FigButton label="같이 산책하기" tone="green" onPress={() => router.replace('/(tabs)')} />
           </View>
         </View>
       </View>

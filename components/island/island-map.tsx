@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -18,6 +19,7 @@ import { getShopItem } from '@/constants/content';
 import { zoneHitRect, walkPointsFromLand, ISLAND_GRID_W, ISLAND_GRID_H } from '@/constants/island-terrain';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const MIN_ZOOM = 1;
@@ -56,6 +58,11 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
     acknowledgeLastPlaced,
     zoneUnlockReveal,
     acknowledgeZoneUnlock,
+    exploreForestUnlocked,
+    isExploring,
+    exploreRemainLabel,
+    exploreRemaining,
+    exploreDailyLimit,
   } = usePlayState();
 
   const mapW = rs(320);
@@ -265,6 +272,16 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
               </View>
             ))}
 
+            {/* 서쪽 숲 탐험 입구 — 다마고치형 탐험 보내기 */}
+            {exploreForestUnlocked && !placing && !expanding && !showFocusUI ? (
+              <ForestExploreMarker
+                left={4.4 * cellW - rs(22)}
+                top={6.2 * cellH - rs(22)}
+                exploring={isExploring}
+                onPress={() => router.push(EXPLORE_ROUTE)}
+              />
+            ) : null}
+
             {/* 배치한 아이템 */}
             {ISLAND_ZONES.map((zone) => {
               const hit = zoneHitRect(zone.id, mapW, mapH);
@@ -337,8 +354,35 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
           </View>
         ) : null}
 
+        {/* 탐험 버튼 — 섬(다마고치) 뷰 오른쪽 구석 */}
+        {exploreForestUnlocked && !placing && !expanding && !showFocusUI ? (
+          <View style={{ position: 'absolute', right: rs(8), bottom: rs(8) }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isExploring ? '탐험 현황 보기' : '탐험 보내기'}
+              onPress={() => router.push(EXPLORE_ROUTE)}
+              style={{
+                minWidth: rs(72),
+                paddingHorizontal: rs(10),
+                paddingVertical: rs(8),
+                borderWidth: rs(2),
+                borderColor: pixel.ink,
+                backgroundColor: isExploring ? pixel.sand : pixel.tangerine,
+                alignItems: 'center',
+                gap: rs(2),
+              }}>
+              <PixelText size={11} color={pixel.ink}>
+                {isExploring ? '탐험중' : '🌲 탐험'}
+              </PixelText>
+              <PixelText size={9} color={pixel.ink}>
+                {isExploring ? exploreRemainLabel : `${exploreRemaining}/${exploreDailyLimit}`}
+              </PixelText>
+            </Pressable>
+          </View>
+        ) : null}
+
         {!showFocusUI && !placing && !expanding ? (
-          <View style={{ position: 'absolute', left: rs(8), bottom: rs(8) }}>
+          <View style={{ position: 'absolute', left: rs(8), bottom: rs(8), maxWidth: '58%' }}>
             <PixelChip label="캐릭터를 탭 · 두 손가락으로 확대" bg={pixel.white} />
           </View>
         ) : null}
@@ -497,6 +541,60 @@ function ZoomBtn({ label, onPress }: { label: string; onPress: () => void }) {
         justifyContent: 'center',
       }}>
       <PixelText size={16}>{label}</PixelText>
+    </Pressable>
+  );
+}
+
+function ForestExploreMarker({
+  left,
+  top,
+  exploring,
+  onPress,
+}: {
+  left: number;
+  top: number;
+  exploring: boolean;
+  onPress: () => void;
+}) {
+  const { scale } = useResponsive();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={exploring ? '탐험 중인 서쪽 숲' : '서쪽 숲 탐험'}
+      onPress={onPress}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: scale(44),
+        height: scale(44),
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <View
+        style={{
+          width: scale(40),
+          height: scale(40),
+          borderWidth: scale(2),
+          borderColor: pixel.ink,
+          backgroundColor: exploring ? pixel.sand : pixel.grass,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <PixelSprite id="tree" size={scale(28)} />
+      </View>
+      <View
+        style={{
+          position: 'absolute',
+          bottom: -scale(10),
+          paddingHorizontal: scale(4),
+          paddingVertical: scale(2),
+          backgroundColor: pixel.ink,
+        }}>
+        <PixelText size={8} color={pixel.white}>
+          {exploring ? '탐험중' : '탐험'}
+        </PixelText>
+      </View>
     </Pressable>
   );
 }

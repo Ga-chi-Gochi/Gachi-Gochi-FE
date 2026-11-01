@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const LOCAL_STORAGE_KEYS = [
   'creature/state',
   'island/state',
+  'explore/state',
   'walking/reward',
   'walking/intro-seen',
   'walking/privacy-consent',

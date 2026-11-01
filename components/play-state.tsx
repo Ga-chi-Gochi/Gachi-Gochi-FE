@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { PET_XP_REWARD } from '@/constants/creature-interaction';
+import { EXPLORE_DAILY_LIMIT, EXPLORE_FOREST_ZONE, formatExploreRemain } from '@/constants/explore';
 import { getGrowthStage, type GrowthStage } from '@/constants/growth';
 import {
   canExpandIsland,
@@ -13,6 +14,11 @@ import type { WalkingDrops } from '@/constants/walking-reward';
 import type { BonggingLocationSource } from '@/lib/bongging-certification';
 import { clearLocalGameData } from '@/lib/clear-local-data';
 import { addCreatureXp, markGrowthLevelSeen, readCreatureState } from '@/lib/creature-state';
+import {
+  clearExploreTripIfDone,
+  readExploreState,
+  startExploreTrip,
+} from '@/lib/explore-state';
 import { readIslandState, updateIslandState, type PlacedDecor } from '@/lib/island-state';
 import { readWalkingDrops } from '@/lib/walking-reward';
 
@@ -84,6 +90,15 @@ type PlayState = {
   syncWalkingDrops: (drops: WalkingDrops) => void;
   /** 로컬 저장 데이터 전부 초기화 */
   resetLocalData: () => Promise<void>;
+  /** 서쪽 숲 해금 여부 — 탐험 진입점 */
+  exploreForestUnlocked: boolean;
+  exploreRemaining: number;
+  exploreDailyLimit: number;
+  exploreEndsAt: number | null;
+  isExploring: boolean;
+  canStartExplore: boolean;
+  exploreRemainLabel: string;
+  startExplore: () => Promise<boolean>;
 };
 
 const PlayStateContext = createContext<PlayState | null>(null);
@@ -103,6 +118,9 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const [zoneUnlockReveal, setZoneUnlockReveal] = useState<ZoneUnlockReveal | null>(null);
   const [pendingPlaceItemId, setPendingPlaceItemId] = useState<string | null>(null);
   const [lastPlaced, setLastPlaced] = useState<{ itemId: string; zoneId: IslandZoneId } | null>(null);
+  const [exploreRemaining, setExploreRemaining] = useState(EXPLORE_DAILY_LIMIT);
+  const [exploreEndsAt, setExploreEndsAt] = useState<number | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const lastSeenLevelRef = useRef(1);
   const seenZoneUnlocksRef = useRef<IslandZoneId[]>(['core']);
   const xpRef = useRef(0);
@@ -115,6 +133,12 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     () => canExpandIsland(unlockedZones, xp, growthStage.level) && !zoneUnlockReveal,
     [unlockedZones, xp, growthStage.level, zoneUnlockReveal],
   );
+  const exploreForestUnlocked = unlockedZones.includes(EXPLORE_FOREST_ZONE);
+  const isExploring = exploreEndsAt != null && exploreEndsAt > nowTick;
+  const canStartExplore = exploreForestUnlocked && !isExploring && exploreRemaining > 0;
+  const exploreRemainLabel = isExploring && exploreEndsAt
+    ? formatExploreRemain(exploreEndsAt - nowTick)
+    : '00:00';
 
   useEffect(() => {
     xpRef.current = xp;
@@ -144,7 +168,12 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [creature, drops, island] = await Promise.all([readCreatureState(), readWalkingDrops(), readIslandState()]);
+      const [creature, drops, island, explore] = await Promise.all([
+        readCreatureState(),
+        readWalkingDrops(),
+        readIslandState(),
+        readExploreState(),
+      ]);
       if (cancelled) {
         return;
       }
@@ -160,6 +189,8 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       waterRef.current = drops.water;
       lastSeenLevelRef.current = creature.lastSeenGrowthLevel;
       seenZoneUnlocksRef.current = island.seenZoneUnlocks;
+      setExploreRemaining(explore.remaining);
+      setExploreEndsAt(explore.exploringUntil);
 
       const stage = getGrowthStage(drops.water, creature.xp);
       if (stage.level > creature.lastSeenGrowthLevel) {
@@ -173,6 +204,24 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  /** 탐험 타이머 틱 + 만료 정리 */
+  useEffect(() => {
+    if (!exploreEndsAt) {
+      return;
+    }
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setNowTick(now);
+      if (exploreEndsAt <= now) {
+        void clearExploreTripIfDone().then((record) => {
+          setExploreEndsAt(record.exploringUntil);
+          setExploreRemaining(record.remaining);
+        });
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [exploreEndsAt]);
 
   const applyXpGain = useCallback(
     async (amount: number) => {
@@ -257,11 +306,27 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setZoneUnlockReveal(null);
     setPendingPlaceItemId(null);
     setLastPlaced(null);
+    setExploreRemaining(EXPLORE_DAILY_LIMIT);
+    setExploreEndsAt(null);
     lastSeenLevelRef.current = 1;
     seenZoneUnlocksRef.current = ['core'];
     xpRef.current = 0;
     waterRef.current = 0;
     unlockedRef.current = ['core'];
+  }, []);
+
+  const startExplore = useCallback(async () => {
+    if (!unlockedRef.current.includes(EXPLORE_FOREST_ZONE)) {
+      return false;
+    }
+    const next = await startExploreTrip();
+    if (!next) {
+      return false;
+    }
+    setExploreRemaining(next.remaining);
+    setExploreEndsAt(next.exploringUntil);
+    setNowTick(Date.now());
+    return true;
   }, []);
 
   const value = useMemo<PlayState>(
@@ -284,6 +349,14 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       unlockedZones,
       pendingPlaceItemId,
       lastPlaced,
+      exploreForestUnlocked,
+      exploreRemaining,
+      exploreDailyLimit: EXPLORE_DAILY_LIMIT,
+      exploreEndsAt,
+      isExploring,
+      canStartExplore,
+      exploreRemainLabel,
+      startExplore,
       buy: (id, price) => {
         if (owned.includes(id) || coins < price) {
           return false;
@@ -391,6 +464,13 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       applyXpGain,
       maybeRevealGrowth,
       resetLocalData,
+      exploreForestUnlocked,
+      exploreRemaining,
+      exploreEndsAt,
+      isExploring,
+      canStartExplore,
+      exploreRemainLabel,
+      startExplore,
     ],
   );
 

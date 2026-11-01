@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
 import { PetCreature } from '@/components/island/pet-creature';
 import {
   PlaceSuccessToast,
@@ -11,11 +12,13 @@ import {
   PlacedDecorDrop,
 } from '@/components/island/place-mode';
 import { IslandTerrain, type ExpandPhase } from '@/components/island/island-terrain';
+import { WestForestGrove } from '@/components/island/west-forest-grove';
 import { WanderingCreature } from '@/components/island/wandering-creature';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
+import { EXPLORE_FOREST_ZONE } from '@/constants/explore';
 import { zoneHitRect, walkPointsFromLand, ISLAND_GRID_W, ISLAND_GRID_H } from '@/constants/island-terrain';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
@@ -36,8 +39,6 @@ const STATIC_DECOR: {
   { zone: 'core', id: 'house', gx: 9.2, gy: 6.4, size: 26, minStage: 1 },
   { zone: 'core', id: 'tree', gx: 5.5, gy: 7.6, size: 20, minStage: 1 },
   { zone: 'core', id: 'canola', gx: 10.2, gy: 8.4, size: 14, minStage: 1 },
-  { zone: 'west', id: 'tree', gx: 3.8, gy: 6.6, size: 22, minStage: 3 },
-  { zone: 'west', id: 'tree', gx: 5.0, gy: 8.0, size: 16, minStage: 3 },
   { zone: 'east', id: 'pebble', gx: 12.2, gy: 7.8, size: 12, minStage: 2 },
   { zone: 'east', id: 'tree', gx: 12.8, gy: 6.2, size: 18, minStage: 2 },
   { zone: 'south', id: 'canola', gx: 7.0, gy: 10.4, size: 16, minStage: 5 },
@@ -60,9 +61,11 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
     acknowledgeZoneUnlock,
     exploreForestUnlocked,
     isExploring,
+    hasExploreReward,
     exploreRemainLabel,
     exploreRemaining,
     exploreDailyLimit,
+    exploringGochiId,
   } = usePlayState();
 
   const mapW = rs(320);
@@ -75,6 +78,9 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
   const [petting, setPetting] = useState(false);
   const [expandPhase, setExpandPhase] = useState<ExpandPhase>('idle');
   const [toastZone, setToastZone] = useState<{ name: string; id: IslandZoneId } | null>(null);
+  /** 서쪽 해금 연출 직후에만 나무 성장 (재입장·재실행 시에는 풀숲 고정) */
+  const [forestGrowPlay, setForestGrowPlay] = useState(false);
+  const [forestGrowKey, setForestGrowKey] = useState(0);
 
   const placing = Boolean(pendingPlaceItemId);
   const pendingItem = pendingPlaceItemId ? getShopItem(pendingPlaceItemId) : null;
@@ -99,6 +105,7 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
   );
 
   const showFocusUI = focusMode && !placing && !expanding;
+  const westHit = useMemo(() => zoneHitRect(EXPLORE_FOREST_ZONE, mapW, mapH), [mapH, mapW]);
 
   useEffect(() => {
     locked.value = showFocusUI || petting || placing || expanding;
@@ -114,7 +121,7 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
 
   const terrainPhase: ExpandPhase = zoneUnlockReveal ? expandPhase : 'idle';
 
-  /** 섬 안 화산 연출 시퀀스 — 팝업 없음 (setState는 타이머에서만) */
+  /** 섬 안 화산 연출 시퀀스 — 서쪽이면 이어서 풀숲 성장 */
   useEffect(() => {
     if (!zoneUnlockReveal) {
       return;
@@ -128,8 +135,13 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
         setExpandPhase('done');
         setToastZone({ id: reveal.zoneId, name: reveal.zoneName });
         acknowledgeZoneUnlock();
+        if (reveal.zoneId === EXPLORE_FOREST_ZONE) {
+          setForestGrowPlay(true);
+          setForestGrowKey((key) => key + 1);
+        }
       }, 2600),
       setTimeout(() => setToastZone(null), 4200),
+      setTimeout(() => setForestGrowPlay(false), 4600),
     ];
     return () => {
       timers.forEach(clearTimeout);
@@ -272,14 +284,30 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
               </View>
             ))}
 
-            {/* 서쪽 숲 탐험 입구 — 다마고치형 탐험 보내기 */}
-            {exploreForestUnlocked && !placing && !expanding && !showFocusUI ? (
-              <ForestExploreMarker
-                left={4.4 * cellW - rs(22)}
-                top={6.2 * cellH - rs(22)}
-                exploring={isExploring}
-                onPress={() => router.push(EXPLORE_ROUTE)}
+            {/* 서쪽 풀숲 — 입장 시 나무가 자라남 */}
+            {exploreForestUnlocked ? (
+              <WestForestGrove
+                key={`grove-${forestGrowKey}`}
+                mapW={mapW}
+                mapH={mapH}
+                cellW={cellW}
+                cellH={cellH}
+                playGrow={forestGrowPlay}
+                sizePx={(size) => rs(size)}
               />
+            ) : null}
+
+            {/* 탐험 중: 서쪽 풀숲 수색 미니 연출 */}
+            {exploreForestUnlocked && isExploring && !placing && !expanding && !showFocusUI ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: westHit.left + westHit.width * 0.12,
+                  top: westHit.top + westHit.height * 0.18,
+                }}>
+                <ExploreWaitingAnim gochiId={exploringGochiId} variant="map" />
+              </View>
             ) : null}
 
             {/* 배치한 아이템 */}
@@ -354,12 +382,14 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
           </View>
         ) : null}
 
-        {/* 탐험 버튼 — 섬(다마고치) 뷰 오른쪽 구석 */}
+        {/* 탐험 버튼 — 맵 오른쪽 아래 구석만 */}
         {exploreForestUnlocked && !placing && !expanding && !showFocusUI ? (
           <View style={{ position: 'absolute', right: rs(8), bottom: rs(8) }}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={isExploring ? '탐험 현황 보기' : '탐험 보내기'}
+              accessibilityLabel={
+                hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'
+              }
               onPress={() => router.push(EXPLORE_ROUTE)}
               style={{
                 minWidth: rs(72),
@@ -367,15 +397,23 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
                 paddingVertical: rs(8),
                 borderWidth: rs(2),
                 borderColor: pixel.ink,
-                backgroundColor: isExploring ? pixel.sand : pixel.tangerine,
+                backgroundColor: hasExploreReward
+                  ? pixel.lava
+                  : isExploring
+                    ? pixel.sand
+                    : pixel.tangerine,
                 alignItems: 'center',
                 gap: rs(2),
               }}>
-              <PixelText size={11} color={pixel.ink}>
-                {isExploring ? '탐험중' : '🌲 탐험'}
+              <PixelText size={11} color={hasExploreReward ? pixel.white : pixel.ink}>
+                {hasExploreReward ? '보상!' : isExploring ? '탐험중' : '🌲 탐험'}
               </PixelText>
-              <PixelText size={9} color={pixel.ink}>
-                {isExploring ? exploreRemainLabel : `${exploreRemaining}/${exploreDailyLimit}`}
+              <PixelText size={9} color={hasExploreReward ? pixel.white : pixel.ink}>
+                {hasExploreReward
+                  ? '받기'
+                  : isExploring
+                    ? exploreRemainLabel
+                    : `${exploreRemaining}/${exploreDailyLimit}`}
               </PixelText>
             </Pressable>
           </View>
@@ -545,56 +583,3 @@ function ZoomBtn({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
-function ForestExploreMarker({
-  left,
-  top,
-  exploring,
-  onPress,
-}: {
-  left: number;
-  top: number;
-  exploring: boolean;
-  onPress: () => void;
-}) {
-  const { scale } = useResponsive();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={exploring ? '탐험 중인 서쪽 숲' : '서쪽 숲 탐험'}
-      onPress={onPress}
-      style={{
-        position: 'absolute',
-        left,
-        top,
-        width: scale(44),
-        height: scale(44),
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-      <View
-        style={{
-          width: scale(40),
-          height: scale(40),
-          borderWidth: scale(2),
-          borderColor: pixel.ink,
-          backgroundColor: exploring ? pixel.sand : pixel.grass,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        <PixelSprite id="tree" size={scale(28)} />
-      </View>
-      <View
-        style={{
-          position: 'absolute',
-          bottom: -scale(10),
-          paddingHorizontal: scale(4),
-          paddingVertical: scale(2),
-          backgroundColor: pixel.ink,
-        }}>
-        <PixelText size={8} color={pixel.white}>
-          {exploring ? '탐험중' : '탐험'}
-        </PixelText>
-      </View>
-    </Pressable>
-  );
-}

@@ -1,7 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { PET_XP_REWARD } from '@/constants/creature-interaction';
-import { EXPLORE_DAILY_LIMIT, EXPLORE_FOREST_ZONE, formatExploreRemain } from '@/constants/explore';
+import {
+  EXPLORE_DAILY_LIMIT,
+  EXPLORE_DURATION_MS,
+  EXPLORE_FOREST_ZONE,
+  exploreProgress,
+  formatExploreRemain,
+} from '@/constants/explore';
 import { getGrowthStage, type GrowthStage } from '@/constants/growth';
 import {
   canExpandIsland,
@@ -14,13 +21,24 @@ import type { WalkingDrops } from '@/constants/walking-reward';
 import type { BonggingLocationSource } from '@/lib/bongging-certification';
 import { clearLocalGameData } from '@/lib/clear-local-data';
 import { addCreatureXp, markGrowthLevelSeen, readCreatureState } from '@/lib/creature-state';
+import { dispatchExploreTrip } from '@/lib/explore-api';
 import {
-  clearExploreTripIfDone,
+  claimExploreReward,
+  completeExploreTripIfDone,
+  markGochiEggSeen,
   readExploreState,
   startExploreTrip,
+  type ExploreStateRecord,
 } from '@/lib/explore-state';
 import { readIslandState, updateIslandState, type PlacedDecor } from '@/lib/island-state';
 import { readWalkingDrops } from '@/lib/walking-reward';
+
+export type ExploreEggReveal = {
+  eggCount: number;
+  gochiId: string;
+  eggId: string;
+  isNewType: boolean;
+};
 
 export type PendingBonggingCertification = {
   imageUri: string;
@@ -95,10 +113,27 @@ type PlayState = {
   exploreRemaining: number;
   exploreDailyLimit: number;
   exploreEndsAt: number | null;
+  exploreStartedAt: number | null;
+  exploreProgress: number;
+  exploringGochiId: string | null;
   isExploring: boolean;
+  /** 타이머 끝, 보상 수령 대기 */
+  hasExploreReward: boolean;
+  pendingExploreGochiId: string | null;
+  exploreEggCount: number;
+  /** 종류별 보유 수 (도감·인벤 공용) */
+  gochiEggs: Record<string, number>;
+  /** NEW 뱃지용 */
+  newGochiEggIds: string[];
+  exploreEggReveal: ExploreEggReveal | null;
   canStartExplore: boolean;
   exploreRemainLabel: string;
-  startExplore: () => Promise<boolean>;
+  startExplore: (input: { gochiId: string }) => Promise<boolean>;
+  claimExploreEgg: () => Promise<boolean>;
+  acknowledgeExploreEggReveal: () => void;
+  markGochiEggDetailSeen: (eggId: string) => Promise<void>;
+  /** 앱 복귀·화면 포커스 시 탐험 상태 재동기화 */
+  syncExplore: () => Promise<void>;
 };
 
 const PlayStateContext = createContext<PlayState | null>(null);
@@ -120,6 +155,13 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const [lastPlaced, setLastPlaced] = useState<{ itemId: string; zoneId: IslandZoneId } | null>(null);
   const [exploreRemaining, setExploreRemaining] = useState(EXPLORE_DAILY_LIMIT);
   const [exploreEndsAt, setExploreEndsAt] = useState<number | null>(null);
+  const [exploreStartedAt, setExploreStartedAt] = useState<number | null>(null);
+  const [exploringGochiId, setExploringGochiId] = useState<string | null>(null);
+  const [pendingExploreGochiId, setPendingExploreGochiId] = useState<string | null>(null);
+  const [exploreEggCount, setExploreEggCount] = useState(0);
+  const [gochiEggs, setGochiEggs] = useState<Record<string, number>>({});
+  const [newGochiEggIds, setNewGochiEggIds] = useState<string[]>([]);
+  const [exploreEggReveal, setExploreEggReveal] = useState<ExploreEggReveal | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const lastSeenLevelRef = useRef(1);
   const seenZoneUnlocksRef = useRef<IslandZoneId[]>(['core']);
@@ -135,10 +177,15 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   );
   const exploreForestUnlocked = unlockedZones.includes(EXPLORE_FOREST_ZONE);
   const isExploring = exploreEndsAt != null && exploreEndsAt > nowTick;
-  const canStartExplore = exploreForestUnlocked && !isExploring && exploreRemaining > 0;
+  const hasExploreReward = Boolean(pendingExploreGochiId);
+  const canStartExplore =
+    exploreForestUnlocked && !isExploring && !hasExploreReward && exploreRemaining > 0;
   const exploreRemainLabel = isExploring && exploreEndsAt
     ? formatExploreRemain(exploreEndsAt - nowTick)
     : '00:00';
+  const exploreProgressValue = isExploring
+    ? exploreProgress(exploreStartedAt, exploreEndsAt, nowTick)
+    : 0;
 
   useEffect(() => {
     xpRef.current = xp;
@@ -165,6 +212,24 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     void markGrowthLevelSeen(to.level);
   }, []);
 
+  const applyExploreRecord = useCallback((explore: ExploreStateRecord) => {
+    setExploreRemaining(explore.remaining);
+    setExploreEndsAt(explore.exploringUntil);
+    setExploreStartedAt(explore.exploringStartedAt);
+    setExploringGochiId(explore.dispatchedGochiId);
+    setPendingExploreGochiId(explore.pendingRewardGochiId);
+    setExploreEggCount(explore.eggCount);
+    setGochiEggs(explore.eggs);
+    setNewGochiEggIds(explore.newEggIds);
+    setNowTick(Date.now());
+  }, []);
+
+  /** 저장소 기준으로 재동기화 — 백그라운드 중 만료되면 수령 대기로 전환 */
+  const syncExplore = useCallback(async () => {
+    const record = await completeExploreTripIfDone();
+    applyExploreRecord(record);
+  }, [applyExploreRecord]);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -189,8 +254,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       waterRef.current = drops.water;
       lastSeenLevelRef.current = creature.lastSeenGrowthLevel;
       seenZoneUnlocksRef.current = island.seenZoneUnlocks;
-      setExploreRemaining(explore.remaining);
-      setExploreEndsAt(explore.exploringUntil);
+      applyExploreRecord(explore);
 
       const stage = getGrowthStage(drops.water, creature.xp);
       if (stage.level > creature.lastSeenGrowthLevel) {
@@ -203,25 +267,42 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyExploreRecord]);
 
-  /** 탐험 타이머 틱 + 만료 정리 */
+  /** 앱 복귀 시 즉시 재동기화 */
+  useEffect(() => {
+    const onChange = (next: AppStateStatus) => {
+      if (next === 'active') {
+        void syncExplore();
+      }
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    return () => sub.remove();
+  }, [syncExplore]);
+
+  /** 남은 시간·프로그레스 UI 틱 (섬·탐험 화면 공통) */
+  useEffect(() => {
+    const tickMs = exploreEndsAt ? 200 : 1000;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setNowTick(now);
+      if (exploreEndsAt && exploreEndsAt <= now) {
+        void syncExplore();
+      }
+    }, tickMs);
+    return () => clearInterval(timer);
+  }, [exploreEndsAt, syncExplore]);
+
+  /** 탐험 진행 중 1초마다 저장소 재동기화 (이탈·복귀·백그라운드 보정) */
   useEffect(() => {
     if (!exploreEndsAt) {
       return;
     }
-    const timer = setInterval(() => {
-      const now = Date.now();
-      setNowTick(now);
-      if (exploreEndsAt <= now) {
-        void clearExploreTripIfDone().then((record) => {
-          setExploreEndsAt(record.exploringUntil);
-          setExploreRemaining(record.remaining);
-        });
-      }
+    const poll = setInterval(() => {
+      void syncExplore();
     }, 1000);
-    return () => clearInterval(timer);
-  }, [exploreEndsAt]);
+    return () => clearInterval(poll);
+  }, [exploreEndsAt, syncExplore]);
 
   const applyXpGain = useCallback(
     async (amount: number) => {
@@ -308,6 +389,13 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setLastPlaced(null);
     setExploreRemaining(EXPLORE_DAILY_LIMIT);
     setExploreEndsAt(null);
+    setExploreStartedAt(null);
+    setExploringGochiId(null);
+    setPendingExploreGochiId(null);
+    setExploreEggCount(0);
+    setGochiEggs({});
+    setNewGochiEggIds([]);
+    setExploreEggReveal(null);
     lastSeenLevelRef.current = 1;
     seenZoneUnlocksRef.current = ['core'];
     xpRef.current = 0;
@@ -315,18 +403,51 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     unlockedRef.current = ['core'];
   }, []);
 
-  const startExplore = useCallback(async () => {
+  const startExplore = useCallback(async (input: { gochiId: string }) => {
     if (!unlockedRef.current.includes(EXPLORE_FOREST_ZONE)) {
       return false;
     }
-    const next = await startExploreTrip();
+    // 서버 주소가 없으면 local — 실패해도 로컬 파견은 진행
+    await dispatchExploreTrip({
+      gochiId: input.gochiId,
+      durationMs: EXPLORE_DURATION_MS,
+    });
+    const next = await startExploreTrip(input);
     if (!next) {
       return false;
     }
-    setExploreRemaining(next.remaining);
-    setExploreEndsAt(next.exploringUntil);
-    setNowTick(Date.now());
+    applyExploreRecord(next);
     return true;
+  }, [applyExploreRecord]);
+
+  const claimExploreEgg = useCallback(async () => {
+    const result = await claimExploreReward();
+    if (!result) {
+      return false;
+    }
+    setPendingExploreGochiId(null);
+    const synced = await readExploreState();
+    setGochiEggs(synced.eggs);
+    setNewGochiEggIds(synced.newEggIds);
+    setExploreEggCount(synced.eggCount);
+    setExploreEggReveal({
+      eggCount: result.eggCount,
+      gochiId: result.gochiId,
+      eggId: result.eggId,
+      isNewType: result.isNewType,
+    });
+    return true;
+  }, []);
+
+  const acknowledgeExploreEggReveal = useCallback(() => {
+    setExploreEggReveal(null);
+  }, []);
+
+  const markGochiEggDetailSeen = useCallback(async (eggId: string) => {
+    const next = await markGochiEggSeen(eggId);
+    setNewGochiEggIds(next.newEggIds);
+    setGochiEggs(next.eggs);
+    setExploreEggCount(next.eggCount);
   }, []);
 
   const value = useMemo<PlayState>(
@@ -353,10 +474,23 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       exploreRemaining,
       exploreDailyLimit: EXPLORE_DAILY_LIMIT,
       exploreEndsAt,
+      exploreStartedAt,
+      exploreProgress: exploreProgressValue,
+      exploringGochiId,
       isExploring,
+      hasExploreReward,
+      pendingExploreGochiId,
+      exploreEggCount,
+      gochiEggs,
+      newGochiEggIds,
+      exploreEggReveal,
       canStartExplore,
       exploreRemainLabel,
       startExplore,
+      claimExploreEgg,
+      acknowledgeExploreEggReveal,
+      markGochiEggDetailSeen,
+      syncExplore,
       buy: (id, price) => {
         if (owned.includes(id) || coins < price) {
           return false;
@@ -467,10 +601,23 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       exploreForestUnlocked,
       exploreRemaining,
       exploreEndsAt,
+      exploreStartedAt,
+      exploreProgressValue,
+      exploringGochiId,
       isExploring,
+      hasExploreReward,
+      pendingExploreGochiId,
+      exploreEggCount,
+      gochiEggs,
+      newGochiEggIds,
+      exploreEggReveal,
       canStartExplore,
       exploreRemainLabel,
       startExplore,
+      claimExploreEgg,
+      acknowledgeExploreEggReveal,
+      markGochiEggDetailSeen,
+      syncExplore,
     ],
   );
 

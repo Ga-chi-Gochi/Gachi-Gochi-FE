@@ -3,6 +3,8 @@ export const art = {
   idle: require('@/assets/figma/img-idle.png'),
   island: require('@/assets/figma/img-island.png'),
   egg: require('@/assets/figma/img-egg.png'),
+  /** 탐험 보상 고치 알 */
+  gochiEgg: require('@/assets/figma/egg.png'),
   pebble: require('@/assets/figma/img-pebble.png'),
   canola: require('@/assets/figma/img-canola.png'),
   jump: require('@/assets/figma/img-jump.png'),

@@ -1,5 +1,6 @@
 import { Alert, Pressable, View } from 'react-native';
 
+import { CollectionButton } from '@/components/collection-button';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
@@ -57,6 +58,7 @@ export function ResourceHeader() {
             }}>
             <PixelText size={11}>초기화</PixelText>
           </Pressable>
+          <CollectionButton />
         </View>
       </View>
 

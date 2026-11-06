@@ -1,0 +1,21 @@
+/** 2D 픽셀(도트) 톤. 기디 에셋 교체 전까지 코드 스프라이트와 함께 사용. */
+export const pixel = {
+  ink: '#1A1520',
+  paper: '#F7F0E3',
+  sky: '#7EC8E8',
+  skyDeep: '#4FA3C8',
+  grass: '#5BBF6A',
+  grassDeep: '#2F8A45',
+  sand: '#E8C878',
+  soil: '#8B5A2B',
+  lava: '#FF4D2E',
+  lavaDeep: '#B51F0E',
+  ash: '#5C5566',
+  tangerine: '#FF8A3D',
+  leaf: '#3FB57A',
+  sea: '#2E9BD6',
+  white: '#FFFDF8',
+  muted: '#6E6875',
+  panel: '#FFF8EC',
+  border: 3,
+};

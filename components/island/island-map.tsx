@@ -46,7 +46,20 @@ const STATIC_DECOR: {
   { zone: 'north', id: 'pebble', gx: 6.2, gy: 5.2, size: 12, minStage: 4 },
 ];
 
-export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId | null }) {
+export function IslandMap({
+  highlightZoneId,
+  framed = true,
+  compact = false,
+  hint = true,
+}: {
+  highlightZoneId?: IslandZoneId | null;
+  /** 해변 위에 올릴 때는 하늘색 프레임을 뺀다 */
+  framed?: boolean;
+  /** 해변 초원에 올릴 때 높이를 줄인다 */
+  compact?: boolean;
+  /** 하단 안내 칩. 해변 모래 위 캐릭터를 가릴 때는 끈다 */
+  hint?: boolean;
+}) {
   const { scale: rs } = useResponsive();
   const {
     growthStage,
@@ -68,9 +81,9 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
     exploringGochiId,
   } = usePlayState();
 
-  const mapW = rs(320);
-  const mapH = rs(300);
-  const viewportH = rs(300);
+  const mapW = rs(compact ? 240 : 320);
+  const mapH = rs(compact ? 190 : 300);
+  const viewportH = rs(compact ? 190 : 300);
   const cellW = mapW / ISLAND_GRID_W;
   const cellH = mapH / ISLAND_GRID_H;
 
@@ -249,8 +262,8 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
       <View
         style={{
           flex: 1,
-          backgroundColor: pixel.sky,
-          borderWidth: rs(pixel.border),
+          backgroundColor: framed ? pixel.sky : 'transparent',
+          borderWidth: framed ? rs(pixel.border) : 0,
           borderColor: pixel.ink,
           overflow: 'hidden',
         }}>
@@ -419,7 +432,7 @@ export function IslandMap({ highlightZoneId }: { highlightZoneId?: IslandZoneId 
           </View>
         ) : null}
 
-        {!showFocusUI && !placing && !expanding ? (
+        {!showFocusUI && !placing && !expanding && !compact && hint ? (
           <View style={{ position: 'absolute', left: rs(8), bottom: rs(8), maxWidth: '58%' }}>
             <PixelChip label="캐릭터를 탭 · 두 손가락으로 확대" bg={pixel.white} />
           </View>

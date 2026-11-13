@@ -59,11 +59,14 @@ export function PixelText({
   size = 14,
   color = pixel.ink,
   center,
+  weight = '800',
 }: {
   children: ReactNode;
   size?: number;
   color?: string;
   center?: boolean;
+  /** 숫자·버튼은 800, 설명 문장은 500 */
+  weight?: '800' | '500';
 }) {
   const { scale } = useResponsive();
   return (
@@ -71,7 +74,7 @@ export function PixelText({
       style={{
         color,
         fontSize: scale(size),
-        fontWeight: '800',
+        fontWeight: weight,
         letterSpacing: 0.4,
         textAlign: center ? 'center' : 'left',
       }}>

@@ -6,7 +6,7 @@ export const pixel = {
   skyDeep: '#4FA3C8',
   grass: '#5BBF6A',
   grassDeep: '#2F8A45',
-  sand: '#E8C878',
+  sand: '#E6D1A1',
   soil: '#8B5A2B',
   lava: '#FF4D2E',
   lavaDeep: '#B51F0E',

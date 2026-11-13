@@ -24,5 +24,8 @@ export type PixelSpriteId =
   | 'seed';
 
 export const PIXEL_ASSETS: Partial<Record<PixelSpriteId, ImageSource>> = {
-  // 교체 슬롯 (비워 두면 절차적 도트 사용)
+  egg: require('@/assets/pixel/gyulsae-egg.png'),
+  sprout: require('@/assets/pixel/gyulsae-juvenile.png'),
+  buddy: require('@/assets/pixel/gyulsae-juvenile.png'),
+  gachi: require('@/assets/pixel/gyulsae-adult.png'),
 };

@@ -1,78 +1,67 @@
-import { Alert, Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
-import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
-import { usePlayState } from '@/components/play-state';
-import { pixel } from '@/constants/pixel-theme';
+import { HomeMenuSheet } from '@/components/island/home-menu-sheet';
 import { useResponsive } from '@/hooks/use-responsive';
 
-export function ResourceHeader() {
-  const { scale } = useResponsive();
-  const { iconsInset, iconsHeight } = useHomeTopLayout();
-  const { xp, growthStacks, oxygen, water, growthStage, unlockedZones, resetLocalData } = usePlayState();
+type ResourceHeaderProps = {
+  soundOn: boolean;
+  onToggleSound: () => void;
+  onProfile: () => void;
+  onSettings: () => void;
+  onShop: () => void;
+  onCodex: () => void;
+};
 
-  const onReset = () => {
-    Alert.alert('데이터 초기화', '이 기기에 저장된 섬·경험치·걷기 기록을 모두 지울까요?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '초기화',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            await resetLocalData();
-            Alert.alert('완료', '로컬 데이터를 초기화했어요.');
-          })();
-        },
-      },
-    ]);
-  };
+export function ResourceHeader({ soundOn, onToggleSound, onProfile, onSettings }: ResourceHeaderProps) {
+  const { scale } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const { iconsInset } = useHomeTopLayout();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <View
-      style={{
-        paddingLeft: scale(16),
-        paddingRight: scale(16) + iconsInset,
-        paddingTop: scale(8),
-        gap: scale(8),
-        minHeight: scale(8) + iconsHeight,
-      }}>
-      <HomeTopBar
-        coinRowExtra={
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6) }}>
-            <PixelChip label={`구역 ${unlockedZones.length}`} bg={pixel.sand} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="로컬 데이터 초기화"
-              onPress={onReset}
-              style={{
-                paddingHorizontal: scale(8),
-                paddingVertical: scale(6),
-                borderWidth: scale(2),
-                borderColor: pixel.ink,
-                backgroundColor: pixel.white,
-              }}>
-              <PixelText size={11}>초기화</PixelText>
-            </Pressable>
-          </View>
-        }
+    <>
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 20,
+        }}>
+        <View
+          pointerEvents="box-none"
+          style={{
+            marginTop: insets.top + scale(8),
+            marginLeft: scale(14),
+            marginRight: scale(14) + iconsInset,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+          }}>
+          <HomeTopBar />
+        </View>
+
+        <HomeTopIcons top={insets.top + scale(8)} side={scale(14)} spread onMenuPress={() => setMenuOpen(true)} />
+      </View>
+
+      <HomeMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        soundOn={soundOn}
+        onToggleSound={onToggleSound}
+        onProfile={() => {
+          setMenuOpen(false);
+          onProfile();
+        }}
+        onSettings={() => {
+          setMenuOpen(false);
+          onSettings();
+        }}
       />
-
-      <View>
-        <PixelText size={12} color={pixel.muted}>
-          좋은 아침이에요
-        </PixelText>
-        <PixelText size={24}>띠롱이의 섬</PixelText>
-      </View>
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(6) }}>
-        <PixelChip label={`Lv.${growthStage.level} ${growthStage.label}`} bg={pixel.grass} />
-        <PixelChip label={`산소 ${oxygen}`} bg={pixel.sky} />
-        <PixelChip label={`물방울 ${water}`} bg={pixel.sea} color={pixel.white} />
-        <PixelChip label={`XP ${xp}`} bg={pixel.sand} />
-        <PixelChip label={`섬+ ${growthStacks}`} bg={pixel.white} />
-      </View>
-
-      <HomeTopIcons top={scale(8)} side={scale(16)} />
-    </View>
+    </>
   );
 }

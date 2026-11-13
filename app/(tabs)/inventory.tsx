@@ -1,6 +1,7 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 
 import { GochiEggSection } from '@/components/inventory/gochi-egg-section';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
@@ -9,6 +10,7 @@ import { usePlayState } from '@/components/play-state';
 import { shopItems } from '@/constants/content';
 import { ISLAND_ZONES } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { ISLAND_HOME } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
 
 export default function InventoryScreen() {
@@ -29,7 +31,28 @@ export default function InventoryScreen() {
   return (
     <PixelScreen sky={false}>
       <View style={{ paddingHorizontal: scale(16), paddingTop: scale(8), paddingBottom: scale(10), gap: scale(6) }}>
-        <PixelText size={26}>인벤토리</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="뒤로 가기"
+            hitSlop={scale(8)}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+              router.navigate(ISLAND_HOME);
+            }}
+            style={{
+              borderWidth: scale(2),
+              borderColor: pixel.ink,
+              backgroundColor: pixel.white,
+              padding: scale(4),
+            }}>
+            <MaterialIcons name="arrow-back" size={scale(20)} color={pixel.ink} />
+          </Pressable>
+          <PixelText size={26}>인벤토리</PixelText>
+        </View>
         <PixelText size={13} color={pixel.muted}>
           고치 알과 섬 꾸미기 아이템을 보관해요.
         </PixelText>

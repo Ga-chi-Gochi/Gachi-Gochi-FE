@@ -181,23 +181,24 @@ export default function CameraScreen() {
         style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: scale(210) + insets.bottom, pointerEvents: 'none' }}
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(16), marginTop: scale(8) }}>
+        <View style={{ marginTop: scale(8), minHeight: scale(46), justifyContent: 'center' }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="닫기"
             onPress={() => router.back()}
-            style={{ width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
+            style={{ position: 'absolute', left: Math.max(insets.left, scale(16)), top: '50%', marginTop: -scale(21), width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
             <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
           </Pressable>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(12), paddingVertical: scale(8) }}>
-            <MaterialIcons name="delete-outline" size={scale(16)} color={palette.ink} />
-            <Text style={{ color: palette.ink, fontWeight: '700' }}>쓰레기 줍기</Text>
+          <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(16), paddingVertical: scale(10) }}>
+              <MaterialIcons name="delete-outline" size={scale(20)} color={palette.ink} />
+              <Text style={{ color: palette.ink, fontWeight: '700', fontSize: scale(16) }}>봉그깅</Text>
+            </View>
           </View>
-          <View style={{ width: scale(42) }} />
         </View>
         <View style={{ marginTop: scale(16), marginHorizontal: scale(48), backgroundColor: palette.white, borderRadius: scale(18), padding: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-          <Image source={art.idle} style={{ width: scale(36), height: scale(41) }} contentFit="contain" />
-          <Text style={{ flex: 1, color: palette.ink, fontWeight: '700', fontSize: scale(14) }}>카메라를 켜고 쓰레기를 주워줘!</Text>
+          <Image source={art.egg} style={{ width: scale(28), height: scale(32) }} contentFit="contain" />
+          <Text style={{ flex: 1, color: palette.ink, fontWeight: '700', fontSize: scale(14) }}>카메라를 켜고 쓰레기를 봉가줍서!</Text>
         </View>
         <View
           onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}
@@ -229,7 +230,7 @@ export default function CameraScreen() {
           )}
         </View>
         <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(14), marginBottom: scale(8) }}>
-          {notice ?? (granted ? '쓰레기가 화면 가운데 오게 맞춰주세요' : '갤러리 사진으로도 인증을 시작할 수 있어요')}
+          {notice ?? '위치를 확인하고 있어요'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: Math.max(insets.bottom, scale(12)) }}>
           <Pressable

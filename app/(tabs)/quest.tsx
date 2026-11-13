@@ -1,9 +1,11 @@
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { PixelPanel, PixelScreen, PixelText } from '@/components/pixel/pixel-ui';
 import { dailyQuests } from '@/constants/quests';
 import { pixel } from '@/constants/pixel-theme';
+import { ISLAND_HOME } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
 
 export default function QuestScreen() {
@@ -12,7 +14,28 @@ export default function QuestScreen() {
   return (
     <PixelScreen sky={false}>
       <View style={{ paddingHorizontal: scale(16), paddingTop: scale(8), paddingBottom: scale(10), gap: scale(6) }}>
-        <PixelText size={26}>퀘스트</PixelText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10) }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="뒤로 가기"
+            hitSlop={scale(8)}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+              router.navigate(ISLAND_HOME);
+            }}
+            style={{
+              borderWidth: scale(2),
+              borderColor: pixel.ink,
+              backgroundColor: pixel.white,
+              padding: scale(4),
+            }}>
+            <MaterialIcons name="arrow-back" size={scale(20)} color={pixel.ink} />
+          </Pressable>
+          <PixelText size={26}>퀘스트</PixelText>
+        </View>
         <PixelText size={13} color={pixel.muted}>
           가치 있는 일을 하고 귤·경험치·섬 확장을 노려요.
         </PixelText>

@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
-import { Alert, Pressable, View } from 'react-native';
+import { PixelRatio, Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { PixelText } from '@/components/pixel/pixel-ui';
+import { usePixelNotice } from '@/components/pixel-notice';
 import { StoreModeToggle } from '@/components/store-mode-toggle';
 import { art } from '@/constants/art';
 import { pixel } from '@/constants/pixel-theme';
@@ -12,11 +13,24 @@ import { useResponsive } from '@/hooks/use-responsive';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
+const GYULSAE_ART_PIXELS = 32;
+const GYULSAE_CONTENT_SHIFT = 0.14;
 
-function StoreCharacterView({ size }: { size: number }) {
+function getCrispSize(target: number) {
+  const ratio = PixelRatio.get();
+  const multiple = Math.max(1, Math.round((target * ratio) / GYULSAE_ART_PIXELS));
+  return (multiple * GYULSAE_ART_PIXELS) / ratio;
+}
+
+function StoreCharacterView({ size, bottomInset }: { size: number; bottomInset: number }) {
+  const crispSize = getCrispSize(size);
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Image source={art.idle} style={{ width: size, height: size }} contentFit="contain" />
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: bottomInset }}>
+      <Image
+        source={require('@/assets/pixel/gyulsae-juvenile.png')}
+        style={{ width: crispSize, height: crispSize, transform: [{ translateY: -crispSize * GYULSAE_CONTENT_SHIFT }] }}
+        contentFit="fill"
+      />
     </View>
   );
 }
@@ -81,6 +95,7 @@ export function StorePreview({
   onToggleMode: () => void;
 }) {
   const { scale, width } = useResponsive();
+  const notice = usePixelNotice();
   const previewWidth = width - scale(32) - scale(pixel.border) * 2;
   const previewHeight = scale(210);
 
@@ -96,7 +111,7 @@ export function StorePreview({
       {tab === 'island' ? (
         <StoreIslandView width={previewWidth} height={previewHeight} />
       ) : (
-        <StoreCharacterView size={scale(150)} />
+        <StoreCharacterView size={scale(200)} bottomInset={scale(34)} />
       )}
 
       <View
@@ -118,7 +133,7 @@ export function StorePreview({
         {tab === 'character' ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() => Alert.alert('준비 중', '캐릭터 바꾸기는 준비 중이에요.')}
+            onPress={() => notice.show({ title: '준비 중', message: '캐릭터 바꾸기는 준비 중이에요.' })}
             style={{
               paddingHorizontal: scale(10),
               paddingVertical: scale(6),
@@ -130,6 +145,7 @@ export function StorePreview({
           </Pressable>
         ) : null}
       </View>
+      {notice.element}
     </View>
   );
 }

@@ -153,7 +153,7 @@ export function ResourceHeader({
 
       <View
         pointerEvents="box-none"
-        style={{ position: 'absolute', right: scale(18), top: '31%', alignItems: 'flex-end', gap: scale(12) }}>
+        style={{ position: 'absolute', right: scale(16), top: '36%', alignItems: 'flex-end', gap: scale(4) }}>
         <ShopSign onPress={onShop} />
         <CodexSign onPress={onCodex} />
       </View>
@@ -179,7 +179,7 @@ export function ResourceHeader({
 
 function ShopSign({ onPress }: { onPress: () => void }) {
   const { scale } = useResponsive();
-  const stripes = ['#E24B4B', pixel.white, '#E24B4B', pixel.white, '#E24B4B'];
+  const stripes = ['#E24B4B', pixel.white, '#E24B4B', pixel.white, '#E24B4B', pixel.white];
 
   return (
     <Pressable
@@ -187,28 +187,28 @@ function ShopSign({ onPress }: { onPress: () => void }) {
       accessibilityLabel="상점"
       onPress={onPress}
       style={({ pressed }) => ({ alignItems: 'center', opacity: pressed ? 0.85 : 1, minWidth: scale(44), minHeight: scale(44) })}>
-      <View style={{ flexDirection: 'row', width: scale(56), height: scale(12) }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          width: scale(62),
+          height: scale(16),
+          borderWidth: scale(2),
+          borderColor: pixel.ink,
+          borderBottomWidth: 0,
+          overflow: 'hidden',
+        }}>
         {stripes.map((color, index) => (
-          <View
-            key={index}
-            style={{
-              flex: 1,
-              backgroundColor: color,
-              borderTopWidth: scale(2),
-              borderLeftWidth: index === 0 ? scale(2) : 0,
-              borderRightWidth: index === stripes.length - 1 ? scale(2) : 0,
-              borderColor: pixel.ink,
-            }}
-          />
+          <View key={index} style={{ flex: 1, backgroundColor: color }} />
         ))}
       </View>
       <View
         style={{
-          backgroundColor: '#C4A574',
+          width: scale(54),
+          backgroundColor: '#C49A6C',
           borderWidth: scale(2),
           borderColor: pixel.ink,
-          paddingHorizontal: scale(8),
-          paddingVertical: scale(2),
+          paddingVertical: scale(3),
+          alignItems: 'center',
         }}>
         <PixelText size={11}>SHOP</PixelText>
       </View>
@@ -225,19 +225,25 @@ function CodexSign({ onPress }: { onPress: () => void }) {
       accessibilityLabel="도감"
       onPress={onPress}
       style={({ pressed }) => ({
-        width: scale(44),
-        height: scale(52),
-        backgroundColor: '#8B3A2F',
+        width: scale(40),
+        height: scale(48),
+        backgroundColor: '#7A3E2E',
         borderWidth: scale(3),
         borderColor: pixel.ink,
+        justifyContent: 'flex-end',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: scale(4),
         opacity: pressed ? 0.85 : 1,
       })}>
-      <View style={{ width: scale(22), height: scale(2), backgroundColor: pixel.paper }} />
-      <View style={{ width: scale(22), height: scale(2), backgroundColor: pixel.paper }} />
-      <View style={{ width: scale(22), height: scale(2), backgroundColor: pixel.paper }} />
+      <View
+        style={{
+          width: scale(28),
+          height: scale(8),
+          marginBottom: scale(4),
+          backgroundColor: '#F4E4C4',
+          borderWidth: scale(2),
+          borderColor: pixel.ink,
+        }}
+      />
     </Pressable>
   );
 }

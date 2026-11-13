@@ -1,4 +1,4 @@
-import type { WalkingDrops } from '@/constants/walking-reward';
+import type { WalkingReward } from '@/constants/walking-reward';
 
 // [TODO: 백엔드 연동] 서버 주소가 정해지면 여기에 넣는다. 예: 'https://api.example.com'
 // 비어 있으면 서버로 아무것도 보내지 않고, 지금처럼 기기 저장 방식(lib/walking-reward.ts)으로만 동작한다.
@@ -28,7 +28,7 @@ export type WalkingDataSource = 'mock' | 'healthkit' | 'healthconnect';
 //
 // 응답 본문 (200)
 // {
-//   "reward": { "oxygen": 8, "water": 5 },   // 이번 요청으로 새로 지급된 보상. 없으면 null
+//   "reward": { "coins": 10, "xp": 5 },   // 이번 요청으로 새로 지급된 보상. 없으면 null
 //   "claimedSteps": [1000, 3000]             // 그날 이미 보상을 받은 단계(걸음 수 기준값) 전체 목록
 // }
 //
@@ -39,7 +39,6 @@ export type WalkingDataSource = 'mock' | 'healthkit' | 'healthconnect';
 // 아직 정해지지 않은 것
 // - 사용자 구분 방법(로그인·토큰). 지금 앱에는 로그인이 없어서 요청에 사용자 정보를 싣지 않는다.
 // - 단계 기준(1,000/3,000/5,000보)과 보상 개수를 서버와 앱 중 어디서 관리할지.
-// - 지금까지 모은 방울 총합도 응답에 넣을지.
 // ────────────────────────────────────────────────────────────────
 
 export type WalkingRecordRequest = {
@@ -51,7 +50,7 @@ export type WalkingRecordRequest = {
 };
 
 export type WalkingRecordResponse = {
-  reward: WalkingDrops | null;
+  reward: WalkingReward | null;
   claimedSteps: number[];
 };
 
@@ -103,9 +102,9 @@ function parseResponse(value: unknown): WalkingRecordResponse | null {
   if (reward == null) {
     return { reward: null, claimedSteps };
   }
-  const { oxygen, water } = reward as { oxygen?: unknown; water?: unknown };
-  if (typeof oxygen !== 'number' || typeof water !== 'number') {
+  const { coins, xp } = reward as { coins?: unknown; xp?: unknown };
+  if (typeof coins !== 'number' || typeof xp !== 'number') {
     return null;
   }
-  return { reward: { oxygen, water }, claimedSteps };
+  return { reward: { coins, xp }, claimedSteps };
 }

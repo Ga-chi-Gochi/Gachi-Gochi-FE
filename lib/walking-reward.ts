@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { WALKING_REWARD_TIERS, type WalkingDrops, type WalkingRewardTier } from '@/constants/walking-reward';
+import { WALKING_REWARD_TIERS, type WalkingDrops, type WalkingReward, type WalkingRewardTier } from '@/constants/walking-reward';
 
 const WALKING_REWARD_KEY = 'walking/reward';
 const WALKING_INTRO_KEY = 'walking/intro-seen';
@@ -12,18 +12,16 @@ type WalkingRewardRecord = {
   date: string;
   // 그날 이미 보상을 받은 단계의 걸음 수 기준값.
   claimedSteps: number[];
-  // 지금까지 모은 방울 수.
   drops: WalkingDrops;
 };
 
 export type WalkingRewardSnapshot = {
   claimedSteps: number[];
-  drops: WalkingDrops;
 };
 
 export type WalkingRewardClaim = WalkingRewardSnapshot & {
   // 이번에 새로 지급된 보상. 없으면 null.
-  reward: WalkingDrops | null;
+  reward: WalkingReward | null;
 };
 
 // 저장소 읽기·쓰기를 한 줄로 세워서, 같은 단계가 동시에 두 번 지급되지 않게 한다.
@@ -61,7 +59,7 @@ async function readRecord(): Promise<WalkingRewardRecord> {
   }
 }
 
-// 개발용: 켜 두면 방울 기록 저장이 일부러 실패한다. 저장 실패 안내를 눌러 보기 위한 것이다.
+// 개발용: 켜 두면 보상 기록 저장이 일부러 실패한다. 저장 실패 안내를 눌러 보기 위한 것이다.
 let mockSaveFails = false;
 
 export function setMockWalkingSaveFailure(fails: boolean): void {
@@ -75,7 +73,7 @@ export function isMockWalkingSaveFailure(): boolean {
 
 function writeRecord(record: WalkingRewardRecord): Promise<void> {
   if (mockSaveFails) {
-    return Promise.reject(new Error('개발용: 방울 기록 저장 실패'));
+    return Promise.reject(new Error('개발용: 보상 기록 저장 실패'));
   }
   return AsyncStorage.setItem(WALKING_REWARD_KEY, JSON.stringify(record));
 }
@@ -86,25 +84,25 @@ export function claimWalkingRewards(steps: number): Promise<WalkingRewardClaim> 
     const record = await readRecord();
     const earned = WALKING_REWARD_TIERS.filter((tier) => steps >= tier.steps && !record.claimedSteps.includes(tier.steps));
     if (earned.length === 0) {
-      return { claimedSteps: record.claimedSteps, drops: record.drops, reward: null };
+      return { claimedSteps: record.claimedSteps, reward: null };
     }
-    const reward = sumDrops(earned);
+    const reward = sumReward(earned);
     const next: WalkingRewardRecord = {
       date: record.date,
       claimedSteps: [...record.claimedSteps, ...earned.map((tier) => tier.steps)],
-      drops: { oxygen: record.drops.oxygen + reward.oxygen, water: record.drops.water + reward.water },
+      drops: record.drops,
     };
     await writeRecord(next);
-    return { claimedSteps: next.claimedSteps, drops: next.drops, reward };
+    return { claimedSteps: next.claimedSteps, reward };
   });
 }
 
-// 개발용: 오늘 받은 단계 기록만 지운다. 이미 모은 방울 수는 그대로 둔다.
+// 개발용: 오늘 받은 단계 기록만 지운다.
 export function resetTodayWalkingClaims(): Promise<WalkingRewardSnapshot> {
   return enqueue(async () => {
     const record = await readRecord();
     await writeRecord({ ...record, claimedSteps: [] });
-    return { claimedSteps: [], drops: record.drops };
+    return { claimedSteps: [] };
   });
 }
 
@@ -126,6 +124,6 @@ export function nextWalkingTier(steps: number): WalkingRewardTier | null {
   return WALKING_REWARD_TIERS.find((tier) => steps < tier.steps) ?? null;
 }
 
-function sumDrops(tiers: WalkingRewardTier[]): WalkingDrops {
-  return tiers.reduce<WalkingDrops>((sum, tier) => ({ oxygen: sum.oxygen + tier.oxygen, water: sum.water + tier.water }), { oxygen: 0, water: 0 });
+function sumReward(tiers: WalkingRewardTier[]): WalkingReward {
+  return tiers.reduce<WalkingReward>((sum, tier) => ({ coins: sum.coins + tier.coins, xp: sum.xp + tier.xp }), { coins: 0, xp: 0 });
 }

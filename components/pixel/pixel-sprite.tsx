@@ -1,9 +1,13 @@
 import { Image } from 'expo-image';
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { PIXEL_ASSETS, type PixelSpriteId } from '@/constants/pixel-assets';
 import { pixel } from '@/constants/pixel-theme';
+
+/** 웹에서 귤새 이미지를 확대할 때 픽셀이 흐려지지 않게 */
+const pixelImageStyle =
+  Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
 const COLOR: Record<string, string> = {
   '.': 'transparent',
@@ -263,7 +267,13 @@ export function PixelSprite({ id, size = 48 }: PixelSpriteProps) {
   const rows = PATTERNS[id];
 
   if (asset) {
-    return <Image source={asset} style={{ width: size, height: size }} contentFit="contain" />;
+    return (
+      <Image
+        source={asset}
+        style={{ width: size, height: size, ...pixelImageStyle }}
+        contentFit="contain"
+      />
+    );
   }
 
   return <DotGrid rows={rows} size={size} />;
@@ -295,7 +305,7 @@ export function GrowthCreatureSprite({
   return (
     <View style={{ transform: [{ scaleX: facing === 'left' ? -1 : 1 }] }}>
       {asset ? (
-        <Image source={asset} style={{ width: size, height: size }} contentFit="contain" />
+        <Image source={asset} style={{ width: size, height: size, ...pixelImageStyle }} contentFit="contain" />
       ) : (
         <DotGrid rows={rows} size={size} />
       )}

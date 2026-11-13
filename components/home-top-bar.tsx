@@ -10,7 +10,6 @@ import { getGrowthProgress, getGrowthStage } from "@/constants/growth";
 import { pixel } from "@/constants/pixel-theme";
 import { useResponsive } from "@/hooks/use-responsive";
 
-const MENU_TO_SHOP_GAP = 0;
 const SHOP_ROUTE = "/(tabs)/shop" as Href;
 const COLLECTION_ROUTE = "/collection" as Href;
 const XP_BAR_ASPECT = 1024 / 128;
@@ -93,12 +92,10 @@ function TopBarIcon({
 export function HomeTopIcons({
   top,
   side,
-  spread = false,
   onMenuPress,
 }: {
   top: number;
   side: number;
-  spread?: boolean;
   onMenuPress?: () => void;
 }) {
   const { scale } = useResponsive();
@@ -128,12 +125,7 @@ export function HomeTopIcons({
           active={menuOpen}
           onPress={onMenuPress ?? (() => setMenuOpen((open) => !open))}
         />
-        <View
-          style={{
-            gap: scale(ICON_GAP),
-            marginTop: spread ? scale(MENU_TO_SHOP_GAP) : 0,
-          }}
-        >
+        <View style={{ gap: scale(ICON_GAP) }}>
           <TopBarIcon
             label="상점"
             source={require("@/assets/pixel/icon-shop.png")}

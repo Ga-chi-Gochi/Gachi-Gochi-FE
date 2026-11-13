@@ -45,7 +45,7 @@ export function ResourceHeader({ soundOn, onToggleSound, onProfile, onSettings }
           <HomeTopBar />
         </View>
 
-        <HomeTopIcons top={insets.top + scale(8)} side={scale(14)} spread onMenuPress={() => setMenuOpen(true)} />
+        <HomeTopIcons top={insets.top + scale(8)} side={scale(14)} onMenuPress={() => setMenuOpen(true)} />
       </View>
 
       <HomeMenuSheet

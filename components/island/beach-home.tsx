@@ -1,6 +1,7 @@
 import { Image, type ImageSource } from 'expo-image';
 import { useState } from 'react';
 import { Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -18,13 +19,27 @@ const adult = require('@/assets/pixel/gyulsae-adult.png') as ImageSource;
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
+const TOP_SEA_FLEX = 1.15;
+const TOTAL_FLEX = 5.75;
+const DIVIDER_HEIGHT = 8;
+
+export function useBeachTopSeaHeight() {
+  const { height, scale } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const rest = Math.max(0, height - insets.top - scale(DIVIDER_HEIGHT));
+  return insets.top + (rest * TOP_SEA_FLEX) / TOTAL_FLEX;
+}
+
 /** 와이어프레임 1페이지. 위 바다, 초원, 모래, 포말, 아래 바다 */
 export function BeachHome({ onPet }: { onPet: () => void }) {
   const { scale } = useResponsive();
+  const topSeaHeight = useBeachTopSeaHeight();
 
   return (
     <View style={{ flex: 1 }}>
-      <TileBand source={waterDeep} flex={1.15} />
+      <View style={{ height: topSeaHeight, overflow: 'hidden' }}>
+        <TileFill source={waterDeep} />
+      </View>
       <TileBand source={grass} flex={2.05} />
       <View style={{ height: scale(8), backgroundColor: pixel.grassDeep }} />
       <TileBand source={sand} flex={0.85} />

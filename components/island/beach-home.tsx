@@ -2,13 +2,13 @@ import { Image, type ImageSource } from 'expo-image';
 import { useState } from 'react';
 import { Platform, Pressable, View, useWindowDimensions } from 'react-native';
 
-import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const TILE = 64;
 
 const waterDeep = require('@/assets/images/beach/water-deep.png') as ImageSource;
 const grass = require('@/assets/images/beach/grass.png') as ImageSource;
+const grassDark = require('@/assets/images/beach/grass-dark.png') as ImageSource;
 const sand = require('@/assets/images/beach/sand.png') as ImageSource;
 const shore = require('@/assets/images/beach/shore.png') as ImageSource;
 const waterShallow = require('@/assets/images/beach/water-shallow.png') as ImageSource;
@@ -25,11 +25,11 @@ export function BeachHome({ onPet }: { onPet: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <TileBand source={waterDeep} flex={1.15} />
-      <TileBand source={grass} flex={2.05} />
-      <View style={{ height: scale(8), backgroundColor: pixel.grassDeep }} />
-      <TileBand source={sand} flex={0.85} />
-      <TileBand source={shore} flex={0.55} />
-      <TileBand source={waterShallow} flex={1.15} />
+      <TileBand source={grass} flex={1.7} />
+      <TileBand source={grassDark} flex={0.55} />
+      <TileBand source={sand} flex={0.8} />
+      <TileBand source={shore} height={TILE} />
+      <TileBand source={waterShallow} flex={1.25} />
 
       <View
         pointerEvents="box-none"
@@ -37,7 +37,7 @@ export function BeachHome({ onPet }: { onPet: () => void }) {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: '27%',
+          bottom: '32%',
           flexDirection: 'row',
           justifyContent: 'center',
           alignItems: 'flex-end',
@@ -57,9 +57,9 @@ export function BeachHome({ onPet }: { onPet: () => void }) {
   );
 }
 
-function TileBand({ source, flex }: { source: ImageSource; flex: number }) {
+function TileBand({ source, flex, height }: { source: ImageSource; flex?: number; height?: number }) {
   return (
-    <View style={{ flex, overflow: 'hidden' }}>
+    <View style={{ flex, height, overflow: 'hidden' }}>
       <TileFill source={source} />
     </View>
   );

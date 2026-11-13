@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { PixelScreen, PixelText } from '@/components/pixel/pixel-ui';
+import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { StoreDetailSheet } from '@/components/store-detail-sheet';
 import { StoreGrid } from '@/components/store-grid';
@@ -28,6 +29,7 @@ export function StoreScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const mode = useStoreModeToggle();
+  const notice = usePixelNotice();
 
   const products = useMemo(() => getStoreProducts(tab), [tab]);
   const selected = products.find((product) => product.id === selectedId) ?? null;
@@ -50,33 +52,37 @@ export function StoreScreen() {
 
   const purchase = (product: StoreProduct) => {
     if (product.kind === 'coin') {
-      Alert.alert('준비 중', '귤코인 구매는 준비 중이에요.');
+      notice.show({ title: '준비 중', message: '귤코인 구매는 준비 중이에요.' });
       return;
     }
     const ok = buy(product.id, product.price);
     if (!ok) {
       if (owned.includes(product.id)) {
-        Alert.alert('보유 중', '이미 가지고 있는 상품이에요.');
+        notice.show({ title: '보유 중', message: '이미 가지고 있는 상품이에요.' });
       } else {
-        Alert.alert('귤이 부족해요', `귤 ${product.price - coins}개가 더 필요해요.`);
+        notice.show({ title: '귤이 부족해요', message: `귤 ${product.price - coins}개가 더 필요해요.` });
       }
       return;
     }
     setSheetOpen(false);
     if (product.tab === 'island') {
-      Alert.alert('구매 완료', `${product.name}을(를) 얻었어요. 섬에 배치할까요?`, [
-        { text: '나중에', style: 'cancel' },
-        {
-          text: '섬에 배치',
-          onPress: () => {
-            startPlacing(product.id);
-            router.navigate(ISLAND_HOME);
+      notice.show({
+        title: '구매 완료',
+        message: `${product.name}을(를) 얻었어요. 섬에 배치할까요?`,
+        buttons: [
+          { label: '나중에' },
+          {
+            label: '섬에 배치',
+            onPress: () => {
+              startPlacing(product.id);
+              router.navigate(ISLAND_HOME);
+            },
           },
-        },
-      ]);
+        ],
+      });
       return;
     }
-    Alert.alert('구매 완료', `${product.name}을(를) 얻었어요.`);
+    notice.show({ title: '구매 완료', message: `${product.name}을(를) 얻었어요.` });
   };
 
   return (
@@ -122,6 +128,7 @@ export function StoreScreen() {
         onClose={() => setSheetOpen(false)}
         onPurchase={purchase}
       />
+      {notice.element}
     </PixelScreen>
   );
 }

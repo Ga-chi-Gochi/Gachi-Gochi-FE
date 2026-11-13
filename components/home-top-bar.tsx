@@ -1,9 +1,19 @@
 import { Image, type ImageSource } from "expo-image";
 import { router, usePathname, type Href } from "expo-router";
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type ReactNode,
+} from "react";
 import { Pressable, View } from "react-native";
 
-import { HomeMenuPopup } from "@/components/home-menu-popup";
+import {
+  HomeMenuPopup,
+  type HomeMenuActions,
+  type HomeMenuAnchor,
+} from "@/components/home-menu-popup";
 import { PixelText } from "@/components/pixel/pixel-ui";
 import { usePlayState } from "@/components/play-state";
 import { getGrowthProgress, getGrowthStage } from "@/constants/growth";
@@ -92,15 +102,32 @@ function TopBarIcon({
 export function HomeTopIcons({
   top,
   side,
-  onMenuPress,
+  menuActions,
 }: {
   top: number;
   side: number;
-  onMenuPress?: () => void;
+  menuActions?: HomeMenuActions;
 }) {
   const { scale } = useResponsive();
   const pathname = usePathname();
+  const menuRef = useRef<ComponentRef<typeof View>>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<HomeMenuAnchor | null>(null);
+
+  const toggleMenu = () => {
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+    const node = menuRef.current;
+    if (!node) {
+      return;
+    }
+    node.measureInWindow((x, y) => {
+      setMenuAnchor({ x, y });
+      setMenuOpen(true);
+    });
+  };
 
   return (
     <View
@@ -117,14 +144,21 @@ export function HomeTopIcons({
         gap: scale(6),
       }}
     >
-      {menuOpen ? <HomeMenuPopup onClose={() => setMenuOpen(false)} /> : null}
+      <HomeMenuPopup
+        {...menuActions}
+        open={menuOpen}
+        anchor={menuAnchor}
+        onClose={() => setMenuOpen(false)}
+      />
       <View style={{ gap: scale(ICON_GAP) }}>
-        <TopBarIcon
-          label="메뉴"
-          source={require("@/assets/pixel/icon-menu.png")}
-          active={menuOpen}
-          onPress={onMenuPress ?? (() => setMenuOpen((open) => !open))}
-        />
+        <View ref={menuRef} collapsable={false}>
+          <TopBarIcon
+            label="메뉴"
+            source={require("@/assets/pixel/icon-menu.png")}
+            active={menuOpen}
+            onPress={toggleMenu}
+          />
+        </View>
         <View style={{ gap: scale(ICON_GAP) }}>
           <TopBarIcon
             label="상점"

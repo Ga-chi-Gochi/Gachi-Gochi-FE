@@ -44,7 +44,7 @@ export default function IslandHomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-        <BeachHome onPet={openPet} />
+        <BeachHome />
         <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
         <ResourceHeader
           soundOn={soundOn}

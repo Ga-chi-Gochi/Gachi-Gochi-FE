@@ -94,10 +94,16 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
     return ids;
   }, [unlockedZones, zoneUnlockReveal]);
 
-  const walkPoints = useMemo(
-    () => pointsOnBeach([...openZones], box),
-    [box, openZones],
-  );
+  const eggStage = growthStage.level <= 1;
+  const walkPoints = useMemo(() => {
+    if (box.width === 0 || box.height === 0) {
+      return [];
+    }
+    if (eggStage) {
+      return [{ x: box.width / 2, y: box.height * 0.42 }];
+    }
+    return pointsOnBeach([...openZones], box);
+  }, [box, eggStage, openZones]);
 
   return (
     <View
@@ -179,7 +185,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         : null}
 
       {!placing && !petOpen && walkPoints.length > 0 ? (
-        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} onPress={onPet} />
+        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} paused={eggStage} onPress={onPet} />
       ) : null}
 
       {exploreForestUnlocked && isExploring && !placing && !petOpen ? (

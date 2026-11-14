@@ -106,6 +106,13 @@ export function WanderingCreature({ growthStage, walkPoints, paused, onPress }: 
     if (!nearest || walkPoints.length === 0) {
       return;
     }
+    if (pausedRef.current) {
+      walkRef.current?.stop();
+      x.setValue(nearest.x);
+      y.setValue(nearest.y);
+      posRef.current = { x: nearest.x, y: nearest.y };
+      return;
+    }
     const onLand = walkPoints.some(
       (p) => Math.hypot(p.x - posRef.current.x, p.y - posRef.current.y) < 28,
     );

@@ -1,6 +1,15 @@
 import { Image, type ImageSource } from 'expo-image';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, Platform, Pressable, View, useWindowDimensions } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import { usePixelNotice } from '@/components/pixel-notice';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -9,6 +18,12 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 
 const BUTTON_SIZE = 42;
 const BUTTON_GAP = 6;
+const MENU_ICON_SIZE = 42;
+const OPEN_MS = 280;
+const CLOSE_MS = 200;
+const STAGGER_MS = 48;
+const openEase = Easing.out(Easing.cubic);
+const closeEase = Easing.in(Easing.cubic);
 const CLOSE_SIZE = 22;
 const DRAWN_FILL = '#D9C49B';
 const DRAWN_BORDER = '#6B5A3E';
@@ -50,6 +65,47 @@ export function HomeMenuPopup({
   const notice = usePixelNotice();
   const buttonSize = scale(BUTTON_SIZE);
   const gap = scale(BUTTON_GAP);
+  const closeSize = scale(CLOSE_SIZE);
+  const [shown, setShown] = useState(false);
+  const closeProgress = useSharedValue(0);
+  const profileProgress = useSharedValue(0);
+  const settingsProgress = useSharedValue(0);
+  const soundProgress = useSharedValue(0);
+  const resetProgress = useSharedValue(0);
+  const hasReset = Boolean(onReset);
+  const iconSize = scale(MENU_ICON_SIZE);
+  const iconCenterX = buttonSize + gap + iconSize / 2;
+  const iconCenterY = iconSize / 2;
+  const rowStep = buttonSize + gap;
+  const firstRowY = closeSize + gap + buttonSize / 2;
+
+  if (open && anchor && !shown) {
+    setShown(true);
+  }
+
+  useEffect(() => {
+    if (!shown) {
+      return;
+    }
+    const values = hasReset
+      ? [closeProgress, profileProgress, settingsProgress, soundProgress, resetProgress]
+      : [closeProgress, profileProgress, settingsProgress, soundProgress];
+    values.forEach((progress, index) => {
+      const order = open ? index : values.length - 1 - index;
+      progress.value = withDelay(
+        order * STAGGER_MS,
+        withTiming(open ? 1 : 0, {
+          duration: open ? OPEN_MS : CLOSE_MS,
+          easing: open ? openEase : closeEase,
+        }),
+      );
+    });
+    if (open) {
+      return;
+    }
+    const timer = setTimeout(() => setShown(false), CLOSE_MS + STAGGER_MS * (values.length - 1) + 40);
+    return () => clearTimeout(timer);
+  }, [closeProgress, hasReset, open, profileProgress, resetProgress, settingsProgress, shown, soundProgress]);
 
   const showPending = (label: string) =>
     notice.show({ title: '준비 중', message: `${label}은(는) 준비 중이에요.` });
@@ -83,7 +139,7 @@ export function HomeMenuPopup({
 
   return (
     <>
-      <Modal visible={open && anchor != null} transparent animationType="none" onRequestClose={onClose}>
+      <Modal visible={shown && anchor != null} transparent animationType="none" onRequestClose={onClose}>
         <Pressable
           accessibilityLabel="메뉴 닫기"
           onPress={onClose}
@@ -99,49 +155,79 @@ export function HomeMenuPopup({
               alignItems: 'flex-start',
               gap,
             }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="메뉴 닫기"
-              onPress={onClose}
-              hitSlop={6}
-              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
-              <DrawnFrame size={scale(CLOSE_SIZE)} border={scale(2)} bottom={scale(3)}>
-                <PixelGlyph pattern={CLOSE_PATTERN} cell={scale(2)} color={DRAWN_BORDER} />
-              </DrawnFrame>
-            </Pressable>
+            <DropItem
+              progress={closeProgress}
+              fromX={iconCenterX - closeSize / 2}
+              fromY={iconCenterY - closeSize / 2}
+              interactive={open}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="메뉴 닫기"
+                onPress={onClose}
+                hitSlop={6}
+                style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+                <DrawnFrame size={closeSize} border={scale(2)} bottom={scale(3)}>
+                  <PixelGlyph pattern={CLOSE_PATTERN} cell={scale(2)} color={DRAWN_BORDER} />
+                </DrawnFrame>
+              </Pressable>
+            </DropItem>
 
             <View style={{ gap }}>
-              <MenuImageButton
-                label="프로필"
-                source={profileIcon}
-                size={buttonSize}
-                onPress={() => run('프로필', onProfile)}
-              />
-              <MenuImageButton
-                label="설정"
-                source={settingsIcon}
-                size={buttonSize}
-                onPress={() => run('설정', onSettings)}
-              />
-              <MenuImageButton
-                label={soundOn ? '소리 켜짐' : '소리 꺼짐'}
-                source={soundIcon}
-                size={buttonSize}
-                dimmed={!soundOn}
-                switchState={soundOn}
-                onPress={() => {
-                  if (onToggleSound) onToggleSound();
-                  else run('소리');
-                }}
-              />
+              <DropItem
+                progress={profileProgress}
+                fromX={iconCenterX - buttonSize / 2}
+                fromY={iconCenterY - firstRowY}
+                interactive={open}>
+                <MenuImageButton
+                  label="프로필"
+                  source={profileIcon}
+                  size={buttonSize}
+                  onPress={() => run('프로필', onProfile)}
+                />
+              </DropItem>
+              <DropItem
+                progress={settingsProgress}
+                fromX={iconCenterX - buttonSize / 2}
+                fromY={iconCenterY - (firstRowY + rowStep)}
+                interactive={open}>
+                <MenuImageButton
+                  label="설정"
+                  source={settingsIcon}
+                  size={buttonSize}
+                  onPress={() => run('설정', onSettings)}
+                />
+              </DropItem>
+              <DropItem
+                progress={soundProgress}
+                fromX={iconCenterX - buttonSize / 2}
+                fromY={iconCenterY - (firstRowY + rowStep * 2)}
+                interactive={open}>
+                <MenuImageButton
+                  label={soundOn ? '소리 켜짐' : '소리 꺼짐'}
+                  source={soundIcon}
+                  size={buttonSize}
+                  dimmed={!soundOn}
+                  switchState={soundOn}
+                  onPress={() => {
+                    if (onToggleSound) onToggleSound();
+                    else run('소리');
+                  }}
+                />
+              </DropItem>
               {onReset ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="데이터 초기화"
-                  onPress={confirmReset}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
-                  <ResetIconButton size={buttonSize} />
-                </Pressable>
+                <DropItem
+                  progress={resetProgress}
+                  fromX={iconCenterX - buttonSize / 2}
+                  fromY={iconCenterY - (firstRowY + rowStep * 3)}
+                  interactive={open}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="데이터 초기화"
+                    onPress={confirmReset}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+                    <ResetIconButton size={buttonSize} />
+                  </Pressable>
+                </DropItem>
               ) : null}
             </View>
           </View>
@@ -149,6 +235,39 @@ export function HomeMenuPopup({
       </Modal>
       {notice.element}
     </>
+  );
+}
+
+function DropItem({
+  progress,
+  fromX,
+  fromY,
+  interactive,
+  children,
+}: {
+  progress: SharedValue<number>;
+  fromX: number;
+  fromY: number;
+  interactive: boolean;
+  children: ReactNode;
+}) {
+  const style = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.25, 1], [0, 0.35, 1]),
+    transform: [
+      { translateX: (1 - progress.value) * fromX },
+      { translateY: (1 - progress.value) * fromY },
+      { scale: 0.72 + progress.value * 0.28 },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents={interactive ? 'auto' : 'none'}
+      accessibilityElementsHidden={!interactive}
+      importantForAccessibility={interactive ? 'auto' : 'no-hide-descendants'}
+      style={style}>
+      {children}
+    </Animated.View>
   );
 }
 

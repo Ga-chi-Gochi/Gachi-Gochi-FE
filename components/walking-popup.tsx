@@ -2,38 +2,19 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import type { PixelNoticeOptions } from '@/components/pixel-notice';
 import { palette } from '@/constants/palette';
-import { WALKING_REWARD_LABELS, type WalkingDrops } from '@/constants/walking-reward';
+import { WALKING_REWARD_COINS, WALKING_REWARD_TIERS, WALKING_REWARD_XP, type WalkingReward } from '@/constants/walking-reward';
 import { useResponsive } from '@/hooks/use-responsive';
 
 // 처음 들어온 사용자에게 순서대로 보여 주는 설명 팝업 문구.
 export const WALKING_INTRO_MESSAGES = [
-  `걷기를 진행하면 ${WALKING_REWARD_LABELS.oxygen}과 ${WALKING_REWARD_LABELS.water}이 생겨요! ${WALKING_REWARD_LABELS.oxygen}은 탄소를 제거하고, ${WALKING_REWARD_LABELS.water}은 가치고치들을 성장시킨답니다.`,
-  '가치고치들이 자라면 씨앗을 심고 나무를 키울 수 있어요. 귤은 가치고치 세계의 화폐예요!',
+  `걷기를 진행하면 귤과 XP가 생겨요! 하루에 ${WALKING_REWARD_TIERS.map((tier) => tier.steps.toLocaleString('ko-KR')).join(' · ')}걸음을 넘길 때마다 귤 ${WALKING_REWARD_COINS}개와 XP ${WALKING_REWARD_XP}를 받아요.`,
+  '귤은 가치고치 세계의 화폐라 상점에서 쓸 수 있고, XP가 쌓이면 귤새가 자라요. 보상은 날마다 새로 받을 수 있어요!',
 ];
 
-type WalkingRewardPopupProps = {
-  distanceMeters: number;
-  reward: WalkingDrops;
-  onClose: () => void;
-};
-
-export function WalkingRewardPopup({ distanceMeters, reward, onClose }: WalkingRewardPopupProps) {
-  const { scale } = useResponsive();
-
-  return (
-    <PopupShell icon="check" title="걷기 보상 도착!" message={`오늘은 ${distanceMeters.toLocaleString('ko-KR')}미터 걸었네요!`}>
-      {/* [TODO: 애니메이션] '공간이 정화되고 고치들이 자라는 애니메이션'이 들어갈 자리. 지금은 빈 칸만 잡아 둔다. */}
-      <View style={{ height: scale(96), borderRadius: scale(16), backgroundColor: palette.leafSoft, alignItems: 'center', justifyContent: 'center' }}>
-        <MaterialIcons name="auto-awesome" size={scale(28)} color={palette.leaf} />
-      </View>
-      <View style={{ gap: scale(8) }}>
-        <RewardLine label={WALKING_REWARD_LABELS.oxygen} value={`+${reward.oxygen}`} />
-        <RewardLine label={WALKING_REWARD_LABELS.water} value={`+${reward.water}`} />
-      </View>
-      <PopupButton label="확인" onPress={onClose} />
-    </PopupShell>
-  );
+export function walkingRewardNotice(reward: WalkingReward): PixelNoticeOptions {
+  return { title: '걷기 보상 도착!', message: `귤 ${reward.coins}개, XP ${reward.xp}를 받았어요` };
 }
 
 type WalkingIntroPopupProps = {
@@ -84,17 +65,6 @@ export function PopupShell({
         <Text style={{ color: palette.body, fontSize: scale(15), lineHeight: scale(22) }}>{message}</Text>
         {children}
       </View>
-    </View>
-  );
-}
-
-function RewardLine({ label, value }: { label: string; value: string }) {
-  const { scale } = useResponsive();
-
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: palette.mist, borderRadius: scale(14), paddingHorizontal: scale(14), paddingVertical: scale(10) }}>
-      <Text style={{ color: palette.body, fontWeight: '700', fontSize: scale(14) }}>{label}</Text>
-      <Text style={{ color: palette.ink, fontWeight: '800', fontSize: scale(16) }}>{value}</Text>
     </View>
   );
 }

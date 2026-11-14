@@ -97,6 +97,8 @@ type PlayState = {
   placeDecor: (itemId: string, zoneId: IslandZoneId) => boolean;
   removeDecor: (itemId: string) => void;
   claimLocalShopReward: () => void;
+  addCoins: (amount: number) => void;
+  addXp: (amount: number) => Promise<void>;
   petCreature: () => Promise<void>;
   growCreature: () => Promise<boolean>;
   expandIsland: () => boolean;
@@ -541,6 +543,14 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
         const nextCoins = coins + 50;
         setCoins(nextCoins);
         void updateIslandState((current) => ({ ...current, coins: nextCoins }));
+      },
+      addCoins: (amount) => {
+        const nextCoins = coins + amount;
+        setCoins(nextCoins);
+        void updateIslandState((current) => ({ ...current, coins: nextCoins }));
+      },
+      addXp: async (amount) => {
+        await applyXpGain(amount);
       },
       petCreature,
       growCreature,

@@ -44,9 +44,9 @@ export default function IslandHomeScreen() {
   };
 
   return (
-    <IslandCamera>
-        <BeachHome />
-        <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
+    <IslandCamera
+      overlay={
+        <>
         <ResourceHeader
           soundOn={soundOn}
           onToggleSound={() => setSoundOn((current) => !current)}
@@ -110,6 +110,10 @@ export default function IslandHomeScreen() {
             onDone={acknowledgeExploreEggReveal}
           />
         ) : null}
+        </>
+      }>
+      <BeachHome />
+      <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
     </IslandCamera>
   );
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
+import { sandStandY } from '@/components/island/beach-home';
 import { useIslandCameraStyle } from '@/components/island/island-camera';
 
 import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
@@ -107,7 +108,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
       return [];
     }
     if (eggStage) {
-      return [{ x: box.width / 2, y: box.height * 0.42 }];
+      return [{ x: box.width / 2, y: sandStandY(box.width, box.height) }];
     }
     return pointsOnBeach([...openZones], box);
   }, [box, eggStage, openZones]);

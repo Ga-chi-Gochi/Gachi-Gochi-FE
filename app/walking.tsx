@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { router } from 'expo-router';
-import { type ComponentProps, type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { FigButton } from '@/components/fig-button';
@@ -18,9 +18,10 @@ import { palette } from '@/constants/palette';
 import { pixel } from '@/constants/pixel-theme';
 import { WALKING_REWARD_TIERS } from '@/constants/walking-reward';
 import { useHealthAccess } from '@/hooks/use-health-access';
+import { usePedometerSteps } from '@/hooks/use-pedometer-steps';
 import { useResponsive } from '@/hooks/use-responsive';
-import { useTodaySteps } from '@/hooks/use-today-steps';
 import { useWalkingReward } from '@/hooks/use-walking-reward';
+import type { WalkingDataSource } from '@/lib/walking-api';
 import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward';
 
 // 걷기 화면. 먼저 '건강 앱 접근 허용' 여부를 확인하고,
@@ -58,12 +59,20 @@ export default function WalkingScreen() {
 }
 
 const KCAL_PER_STEP = 0.04;
+const STEP_LENGTH_METERS = 0.7;
+const DEV_STEP_INCREMENT = 100;
+const STEP_SOURCE: WalkingDataSource = 'mock';
 
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
 function WalkingContent({ devTools }: { devTools: ReactNode }) {
   const { scale } = useResponsive();
-  const { steps, distanceMeters, source, isLoaded, error, refresh, addMockSteps, resetMockSteps, mockReadFailure, setMockReadFailure } = useTodaySteps();
-  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source });
+  const { steps: sensorSteps, status: stepStatus, refresh } = usePedometerSteps();
+  const [devSteps, setDevSteps] = useState(0);
+  const steps = sensorSteps + devSteps;
+  const distanceMeters = Math.round(steps * STEP_LENGTH_METERS);
+  const isLoaded = stepStatus !== 'loading';
+  const unreadable = stepStatus === 'unavailable' && devSteps === 0;
+  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source: STEP_SOURCE });
   const { coins } = usePlayState();
   const { iconsInset, iconsHeight } = useHomeTopLayout();
   const { show: showNotice, element: noticeElement } = usePixelNotice();
@@ -96,10 +105,10 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
   const resetToday = useCallback(() => {
     void resetTodayClaims().then((done) => {
       if (done) {
-        resetMockSteps();
+        setDevSteps(0);
       }
     });
-  }, [resetMockSteps, resetTodayClaims]);
+  }, [resetTodayClaims]);
 
   const showIntro = introStep != null;
 
@@ -110,6 +119,23 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
     showNotice(walkingRewardNotice(reward));
     dismissReward();
   }, [dismissReward, introChecked, reward, showIntro, showNotice]);
+
+  const deniedNoticeShown = useRef(false);
+  useEffect(() => {
+    if (stepStatus !== 'denied') {
+      deniedNoticeShown.current = false;
+      return;
+    }
+    if (!introChecked || showIntro || deniedNoticeShown.current) {
+      return;
+    }
+    deniedNoticeShown.current = true;
+    showNotice({
+      title: '걸음 수 권한이 필요해요',
+      message: '설정 > 개인정보 보호 및 보안 > 동작 및 피트니스에서 가치고치를 허용해 주세요.',
+      buttons: [{ label: '닫기' }, { label: '다시 확인', onPress: () => void refresh() }],
+    });
+  }, [introChecked, refresh, showIntro, showNotice, stepStatus]);
 
   return (
     <>
@@ -126,16 +152,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         <HomeTopIcons top={scale(8)} side={scale(16)} />
       </View>
       <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
-        {error ? (
-          <NoticeCard
-            icon="sync-problem"
-            warning
-            title="걸음 수를 불러오지 못했어요"
-            message="건강 앱이 켜져 있는지 확인한 뒤 아래 버튼을 눌러 주세요."
-            actionLabel="다시 시도"
-            onAction={() => void refresh()}
-          />
-        ) : isLoaded && steps === 0 ? (
+        {stepStatus === 'ready' && steps === 0 ? (
           <NoticeCard
             icon="directions-walk"
             title="아직 오늘 걸은 기록이 없어요"
@@ -153,10 +170,14 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
           />
         ) : null}
         <View style={{ alignItems: 'center', gap: scale(6) }}>
-          <Text accessibilityLabel={`오늘 ${formatNumber(steps)} 걸음`} style={{ color: pixel.ink, fontWeight: '800' }}>
-            <Text style={{ fontSize: scale(44) }}>{formatNumber(steps)}</Text>
-            <Text style={{ fontSize: scale(18) }}> 걸음</Text>
-          </Text>
+          {unreadable ? (
+            <Text style={{ color: pixel.muted, fontSize: scale(16), fontWeight: '800', paddingVertical: scale(14) }}>이 기기에서는 걸음 수를 읽을 수 없어요</Text>
+          ) : (
+            <Text accessibilityLabel={isLoaded ? `오늘 ${formatNumber(steps)} 걸음` : '걸음 수를 불러오는 중'} style={{ color: pixel.ink, fontWeight: '800' }}>
+              <Text style={{ fontSize: scale(44) }}>{isLoaded ? formatNumber(steps) : '-'}</Text>
+              <Text style={{ fontSize: scale(18) }}> 걸음</Text>
+            </Text>
+          )}
           <View style={{ flexDirection: 'row', gap: scale(16) }}>
             <PixelText size={14} color={pixel.muted}>{formatKm(distanceMeters)}km</PixelText>
             <PixelText size={14} color={pixel.muted}>{formatNumber(Math.round(steps * KCAL_PER_STEP))}kcal</PixelText>
@@ -168,11 +189,10 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
           <View style={{ gap: scale(8) }}>
             <Text style={{ color: palette.muted, fontSize: scale(12), fontWeight: '700' }}>개발용 (배포 빌드에서는 보이지 않아요)</Text>
             <View style={{ flexDirection: 'row', gap: scale(10) }}>
-              <FigButton label="+500보" tone="white" onPress={addMockSteps} />
+              <FigButton label={`+${DEV_STEP_INCREMENT}걸음 테스트`} tone="white" onPress={() => setDevSteps((current) => current + DEV_STEP_INCREMENT)} />
               <FigButton label="오늘 기록 초기화" tone="white" onPress={resetToday} />
             </View>
             <View style={{ flexDirection: 'row', gap: scale(10) }}>
-              <FigButton label={`불러오기 실패로 테스트: ${mockReadFailure ? '켜짐' : '꺼짐'}`} tone="white" onPress={() => setMockReadFailure(!mockReadFailure)} />
               <FigButton label={`저장 실패로 테스트: ${mockSaveFailure ? '켜짐' : '꺼짐'}`} tone="white" onPress={() => setMockSaveFailure(!mockSaveFailure)} />
             </View>
           </View>

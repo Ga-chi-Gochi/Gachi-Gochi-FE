@@ -9,7 +9,7 @@ module.exports = defineConfig([
   },
   {
     // Reanimated shared values are intentionally mutated (.value = …)
-    files: ['components/island/island-map.tsx'],
+    files: ['components/island/island-map.tsx', 'components/island/island-camera.tsx'],
     rules: {
       'react-hooks/immutability': 'off',
     },

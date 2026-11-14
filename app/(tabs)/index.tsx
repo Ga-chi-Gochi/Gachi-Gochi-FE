@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { BeachHome } from '@/components/island/beach-home';
+import { IslandCamera } from '@/components/island/island-camera';
 import { BeachIsland } from '@/components/island/beach-island';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { GrowthReveal } from '@/components/island/growth-reveal';
@@ -43,7 +44,7 @@ export default function IslandHomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <IslandCamera>
         <BeachHome />
         <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
         <ResourceHeader
@@ -109,6 +110,6 @@ export default function IslandHomeScreen() {
             onDone={acknowledgeExploreEggReveal}
           />
         ) : null}
-      </View>
+    </IslandCamera>
   );
 }

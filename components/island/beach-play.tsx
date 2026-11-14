@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import Reanimated from 'react-native-reanimated';
+
+import { useIslandCameraStyle } from '@/components/island/island-camera';
 
 import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
 import {
@@ -57,6 +60,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
   const [box, setBox] = useState<Box>({ width: 0, height: 0 });
   const [toastName, setToastName] = useState<string | null>(null);
 
+  const cameraStyle = useIslandCameraStyle();
   const placing = Boolean(pendingPlaceItemId);
   const pendingItem = pendingPlaceItemId ? getShopItem(pendingPlaceItemId) : null;
   const preferredZoneId = pendingItem?.preferredZone ?? null;
@@ -66,17 +70,20 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
       return;
     }
     const reveal = zoneUnlockReveal;
-    const timers = [
-      setTimeout(() => {
-        setToastName(reveal.zoneName);
-        acknowledgeZoneUnlock();
-      }, 1400),
-      setTimeout(() => setToastName(null), 3200),
-    ];
-    return () => {
-      timers.forEach(clearTimeout);
-    };
+    const timer = setTimeout(() => {
+      setToastName(reveal.zoneName);
+      acknowledgeZoneUnlock();
+    }, 1700);
+    return () => clearTimeout(timer);
   }, [acknowledgeZoneUnlock, zoneUnlockReveal]);
+
+  useEffect(() => {
+    if (!toastName) {
+      return;
+    }
+    const timer = setTimeout(() => setToastName(null), 2000);
+    return () => clearTimeout(timer);
+  }, [toastName]);
 
   useEffect(() => {
     if (!lastPlaced) {
@@ -113,6 +120,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         const { width, height } = event.nativeEvent.layout;
         setBox((current) => (current.width === width && current.height === height ? current : { width, height }));
       }}>
+      <Reanimated.View pointerEvents="box-none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
       {ISLAND_ZONES.map((zone) => {
         const decor = placed.filter((entry) => entry.zoneId === zone.id);
         if (decor.length === 0 || !openZones.has(zone.id)) {
@@ -147,19 +155,6 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         );
       })}
 
-      {zoneUnlockReveal ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            ...frameBox(zoneUnlockReveal.zoneId, box),
-            borderWidth: scale(3),
-            borderColor: pixel.tangerine,
-            backgroundColor: 'rgba(255, 232, 170, 0.35)',
-          }}
-        />
-      ) : null}
-
       {placing
         ? ISLAND_ZONES.map((zone) => {
             const frame = frameBox(zone.id, box);
@@ -193,6 +188,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
           <ExploreWaitingAnim gochiId={exploringGochiId} variant="map" />
         </View>
       ) : null}
+      </Reanimated.View>
 
       {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal ? (
         <Pressable
@@ -221,45 +217,44 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
       ) : null}
 
       {zoneUnlockReveal ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: scale(16),
-            right: scale(16),
-            top: '24%',
-            paddingVertical: scale(8),
-            paddingHorizontal: scale(12),
-            backgroundColor: 'rgba(26,21,32,0.72)',
-            borderWidth: scale(2),
-            borderColor: pixel.ink,
-            alignItems: 'center',
-          }}>
-          <PixelText size={12} color={pixel.white} center>
-            {zoneUnlockReveal.volcanoBurst ? '화산이 흔들려요…' : '바다가 갈라지며 땅이 이어져요…'}
-          </PixelText>
+        <View pointerEvents="none" style={{ position: 'absolute', top: '24%', left: 0, right: 0, alignItems: 'center' }}>
+          <View
+            style={{
+              maxWidth: '86%',
+              paddingVertical: scale(8),
+              paddingHorizontal: scale(12),
+              backgroundColor: 'rgba(26,21,32,0.72)',
+              borderWidth: scale(2),
+              borderColor: pixel.ink,
+              alignItems: 'center',
+            }}>
+            <PixelText size={12} color={pixel.white} center>
+              {zoneUnlockReveal.volcanoBurst ? '화산이 흔들려요…' : '바다가 갈라지며 땅이 이어져요…'}
+            </PixelText>
+          </View>
         </View>
       ) : null}
 
       {toastName && !lastPlaced ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            alignSelf: 'center',
-            top: '22%',
-            left: scale(24),
-            right: scale(24),
-            paddingHorizontal: scale(14),
-            paddingVertical: scale(10),
-            backgroundColor: pixel.leaf,
-            borderWidth: scale(pixel.border),
-            borderColor: pixel.ink,
-            alignItems: 'center',
-          }}>
-          <PixelText size={13} color={pixel.white} center>
-            {toastName}이(가) 해변에 이어졌어요!
-          </PixelText>
+        <View pointerEvents="none" style={{ position: 'absolute', top: '22%', left: 0, right: 0, alignItems: 'center' }}>
+          <View
+            style={{
+              maxWidth: '86%',
+              paddingHorizontal: scale(14),
+              paddingVertical: scale(10),
+              backgroundColor: pixel.leaf,
+              borderWidth: scale(pixel.border),
+              borderColor: pixel.ink,
+              alignItems: 'center',
+              gap: scale(2),
+            }}>
+            <PixelText size={13} color={pixel.white} center>
+              새로운 지역이 잠금 해제되었어요!
+            </PixelText>
+            <PixelText size={12} color={pixel.white} center>
+              {toastName}
+            </PixelText>
+          </View>
         </View>
       ) : null}
 

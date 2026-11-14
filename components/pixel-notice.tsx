@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
 import { pixel } from '@/constants/pixel-theme';
@@ -30,6 +31,7 @@ export function PixelNotice({ notice, onClose }: { notice: PixelNoticeOptions | 
 
   return (
     <Modal visible={notice !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: scale(24) }}>
         <Pressable
           accessibilityLabel="닫기"
@@ -58,6 +60,7 @@ export function PixelNotice({ notice, onClose }: { notice: PixelNoticeOptions | 
           </PixelPanel>
         ) : null}
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

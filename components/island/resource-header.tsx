@@ -1,9 +1,13 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
+import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
+import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
+
+type IslandVersion = 1 | 2 | 3;
 
 type ResourceHeaderProps = {
   soundOn: boolean;
@@ -12,9 +16,56 @@ type ResourceHeaderProps = {
   onSettings: () => void;
   onShop: () => void;
   onCodex: () => void;
+  islandVersion: 1 | 2 | 3;
+  onPickIslandVersion: (version: IslandVersion) => void;
 };
 
-export function ResourceHeader({ soundOn, onToggleSound, onProfile, onSettings }: ResourceHeaderProps) {
+function IslandVersionButtons({
+  version,
+  onPick,
+}: {
+  version: 1 | 2 | 3;
+  onPick: (version: IslandVersion) => void;
+}) {
+  const { scale } = useResponsive();
+  return (
+    <View style={{ flexDirection: 'row', gap: scale(6), marginTop: scale(6) }}>
+      {([1, 2, 3] as const).map((id) => {
+        const selected = id === version;
+        return (
+          <Pressable
+            key={id}
+            accessibilityRole="button"
+            accessibilityLabel={`섬 버전 ${id}`}
+            accessibilityState={{ selected }}
+            onPress={() => onPick(id)}
+            style={{
+              minWidth: scale(44),
+              minHeight: scale(44),
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: scale(pixel.border),
+              borderColor: pixel.ink,
+              backgroundColor: selected ? pixel.tangerine : pixel.white,
+            }}>
+            <PixelText size={13} color={selected ? pixel.white : pixel.ink}>
+              {id}
+            </PixelText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function ResourceHeader({
+  soundOn,
+  onToggleSound,
+  onProfile,
+  onSettings,
+  islandVersion,
+  onPickIslandVersion,
+}: ResourceHeaderProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
   const { iconsInset } = useHomeTopLayout();
@@ -40,7 +91,10 @@ export function ResourceHeader({ soundOn, onToggleSound, onProfile, onSettings }
           flexDirection: 'row',
           alignItems: 'flex-start',
         }}>
-        <HomeTopBar />
+        <View>
+          <HomeTopBar />
+          <IslandVersionButtons version={islandVersion} onPick={onPickIslandVersion} />
+        </View>
       </View>
 
       <HomeTopIcons

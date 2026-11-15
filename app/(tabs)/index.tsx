@@ -2,7 +2,7 @@ import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { BeachHome } from '@/components/island/beach-home';
+import { BeachHome, type IslandLook } from '@/components/island/beach-home';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
 import { VolcanoGas } from '@/components/island/volcano-gas';
 import { IslandCamera } from '@/components/island/island-camera';
@@ -38,6 +38,7 @@ export default function IslandHomeScreen() {
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
+  const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
   const openPet = () => {
     if (zoneUnlockReveal || pendingPlaceItemId) {
       return;
@@ -57,6 +58,8 @@ export default function IslandHomeScreen() {
           onSettings={() => setSheet({ title: '설정', body: '준비 중' })}
           onShop={() => router.push('/(tabs)/shop' as Href)}
           onCodex={() => router.push('/collection' as Href)}
+          islandVersion={islandVersion}
+          onPickIslandVersion={setIslandVersion}
         />
 
         {hasExploreReward && !exploreEggReveal ? (
@@ -116,7 +119,7 @@ export default function IslandHomeScreen() {
         <VolcanoGas />
         </>
       }>
-      <BeachHome />
+      <BeachHome look={islandVersion} />
       <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
     </IslandCamera>
     </VolcanoEruptionProvider>

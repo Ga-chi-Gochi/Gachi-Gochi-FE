@@ -1,15 +1,14 @@
 import { Image, type ImageSource } from 'expo-image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Animated, Easing, Platform, View, useWindowDimensions } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
 import { useIslandCameraStyle } from '@/components/island/island-camera';
-import { useVolcanoEruption } from '@/components/island/volcano-eruption';
-import { VolcanoSprite, volcanoSpriteSize } from '@/components/island/volcano-sprite';
+import { useVolcanoEruption, LAVA_BOIL_MS, LAVA_FILL_MS, LAVA_SPILL_MS } from '@/components/island/volcano-eruption';
 import {
   CELL,
   coastTiles,
-  grassField,
+  grassLawn,
   sandCornerSe,
   sandCornerSw,
   sandEdgeE,
@@ -67,32 +66,19 @@ function tileSource(cell: IslandCell): ImageSource {
   if (cell.kind === 'sand') {
     return SAND_RIM[cell.rim ?? 'fill'];
   }
-  return grassField;
+  return grassLawn;
 }
 
-/** 직선 바깥면만 둥근 모래. 모서리와 남쪽, 안쪽 해변은 빈틈 없는 모래다. */
-function sandRim(x: number, y: number, isLand: (x: number, y: number) => boolean): SandRim {
-  const openN = !isLand(x, y - 1);
-  const openS = !isLand(x, y + 1);
-  const openE = !isLand(x + 1, y);
-  const openW = !isLand(x - 1, y);
-  if (openS) {
-    return 'fill';
+/** 겉 한 칸은 꽉 찬 모래 계단이다. 그보다 안쪽만 잔디다. */
+function inland(x: number, y: number, isLand: (x: number, y: number) => boolean) {
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (!isLand(x + dx, y + dy)) {
+        return false;
+      }
+    }
   }
-  if (openN && !openE && !openW) {
-    return 'n';
-  }
-  if (openE && !openN && !openW) {
-    return 'e';
-  }
-  if (openW && !openN && !openE) {
-    return 'w';
-  }
-  return 'fill';
-}
-
-function enclosed(x: number, y: number, isLand: (x: number, y: number) => boolean) {
-  return isLand(x, y - 1) && isLand(x, y + 1) && isLand(x - 1, y) && isLand(x + 1, y);
+  return true;
 }
 
 /** 화면 안에서 거의 원인 섬. 반 칸을 어긋내 격자 위에서도 위아래가 좁아지게 한다. */
@@ -164,6 +150,45 @@ function evenCoast(land: Set<string>, minX: number, maxX: number, minY: number, 
 const VOLCANO_COLS = volcanoCellRows[0].length;
 const VOLCANO_ROWS = volcanoCellRows.length;
 
+/** 쉬는 분화구 안쪽. 아래 줄부터 한 줄씩 차오른다. */
+const CRATER_SPANS = [
+  { y: 14, x0: 52, x1: 70 },
+  { y: 13, x0: 46, x1: 74 },
+  { y: 12, x0: 42, x1: 76 },
+  { y: 11, x0: 42, x1: 78 },
+  { y: 10, x0: 40, x1: 82 },
+  { y: 9, x0: 42, x1: 78 },
+  { y: 8, x0: 40, x1: 80 },
+  { y: 7, x0: 42, x1: 76 },
+  { y: 6, x0: 42, x1: 78 },
+  { y: 5, x0: 44, x1: 74 },
+  { y: 4, x0: 44, x1: 72 },
+  { y: 3, x0: 48, x1: 70 },
+  { y: 2, x0: 50, x1: 68 },
+];
+const CRATER_MID = 60;
+/** 겉은 식은 껍질, 속은 주황, 열기는 노랗다. */
+const MAGMA_COLOR = {
+  crust: '#6E1C0C',
+  deep: '#D64016',
+  body: '#FF8C20',
+  hot: '#FFE460',
+} as const;
+
+type MagmaKind = keyof typeof MAGMA_COLOR;
+type CraterPixel = { x: number; y: number; kind: MagmaKind; row: number; fromCenter: number };
+
+const CRATER_PIXELS: CraterPixel[] = CRATER_SPANS.flatMap((span, row) => {
+  const pixels: CraterPixel[] = [];
+  for (let x = span.x0; x <= span.x1; x += 2) {
+    const edge = x === span.x0 || x === span.x1 || span.y >= 13;
+    const hot = !edge && (x + span.y) % 8 === 0;
+    const kind: MagmaKind = edge ? 'crust' : span.y >= 11 ? 'deep' : hot ? 'hot' : 'body';
+    pixels.push({ x, y: span.y, kind, row, fromCenter: Math.abs(x - CRATER_MID) / 24 });
+  }
+  return pixels;
+});
+
 function volcanoOrigin(width: number, height: number) {
   const { cx, cy } = islandFrame(width, height);
   return {
@@ -175,6 +200,18 @@ function volcanoOrigin(width: number, height: number) {
 export function volcanoMouthPoint(width: number, height: number) {
   const { cx, cy } = islandFrame(width, height);
   return { x: cx, y: cy - CELL * 0.5 };
+}
+
+/** 구름이 피어나는 화구. 섬 배치 좌표다. */
+export function craterCloudPoint(width: number, height: number) {
+  if (width <= 0 || height <= 0) {
+    return { x: 0, y: 0 };
+  }
+  const origin = volcanoOrigin(width, height);
+  return {
+    x: (origin.x + VOLCANO_COLS / 2) * CELL,
+    y: origin.y * CELL + 6,
+  };
 }
 
 export function sandStandX(width: number, height: number) {
@@ -237,13 +274,13 @@ function buildIslandCells(width: number, height: number, zones: readonly IslandZ
         continue;
       }
       const fresh = growing != null && !settled.has(keyOf(x, y));
-      const meadow = enclosed(x, y, isLand);
+      const meadow = inland(x, y, isLand);
       cells.push({
         key: keyOf(x, y),
         x,
         y,
         kind: meadow ? 'grass' : 'sand',
-        rim: meadow ? undefined : sandRim(x, y, isLand),
+        rim: meadow ? undefined : 'fill',
         riseDelay: fresh ? delayFor(x, y, cx, cy) : undefined,
       });
     }
@@ -292,10 +329,9 @@ function buildIslandCells(width: number, height: number, zones: readonly IslandZ
 export function BeachHome() {
   const cameraStyle = useIslandCameraStyle();
   const { unlockedZones, zoneUnlockReveal } = usePlayState();
-  const { token, phase } = useVolcanoEruption();
+  const { shaking, boiling, token, calm, openFog } = useVolcanoEruption();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [box, setBox] = useState({ width: windowWidth, height: windowHeight });
-  const erupting = phase === 'erupt';
   const growingZoneId = zoneUnlockReveal?.zoneId ?? null;
   const cells = useMemo(
     () => buildIslandCells(box.width, box.height, unlockedZones, growingZoneId),
@@ -303,12 +339,11 @@ export function BeachHome() {
   );
   const volcano = useMemo(() => {
     if (box.width === 0 || box.height === 0) {
-      return { tiles: [], left: 0, top: 0 };
+      return { origin: { x: 0, y: 0 }, tiles: [] };
     }
     const origin = volcanoOrigin(box.width, box.height);
     return {
-      left: origin.x * CELL,
-      top: origin.y * CELL - volcanoSpriteSize.pad,
+      origin,
       tiles: volcanoCellRows.flatMap((row, rowIndex) =>
         row.map((source, colIndex) => ({
           key: `volcano-${rowIndex}-${colIndex}`,
@@ -332,6 +367,7 @@ export function BeachHome() {
         <SeaFill />
       </View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
+        <Quake active={shaking}>
         {cells.map((cell) =>
           cell.riseDelay == null ? (
             <Image
@@ -353,29 +389,179 @@ export function BeachHome() {
             <RisingCell key={cell.key} cell={cell} />
           ),
         )}
-        {erupting ? (
-          <VolcanoSprite left={volcano.left} top={volcano.top} playToken={token} />
-        ) : (
-          volcano.tiles.map((tile) => (
-            <Image
-              key={tile.key}
-              source={tile.source}
-              pointerEvents="none"
-              transition={0}
-              style={{
-                position: 'absolute',
-                left: tile.x * CELL,
-                top: tile.y * CELL,
-                width: CELL,
-                height: CELL,
-                ...pixelImageStyle,
-              }}
-              contentFit="fill"
-            />
-          ))
-        )}
+        {volcano.tiles.map((tile) => (
+          <Image
+            key={tile.key}
+            source={tile.source}
+            pointerEvents="none"
+            transition={0}
+            style={{
+              position: 'absolute',
+              left: tile.x * CELL,
+              top: tile.y * CELL,
+              width: CELL,
+              height: CELL,
+              ...pixelImageStyle,
+            }}
+            contentFit="fill"
+          />
+        ))}
+        <LavaRise
+          key={token}
+          active={boiling}
+          originX={volcano.origin.x * CELL}
+          originY={volcano.origin.y * CELL}
+          onCalm={calm}
+          onSpilled={openFog}
+        />
+        </Quake>
       </Reanimated.View>
     </View>
+  );
+}
+
+function spills(pixel: CraterPixel) {
+  return pixel.y <= 4 || (pixel.kind === 'crust' && pixel.y <= 6);
+}
+
+function magmaColor(pixel: CraterPixel, surface: boolean, elapsed: number) {
+  if (pixel.kind === 'crust') {
+    return MAGMA_COLOR.crust;
+  }
+  const flicker = Math.sin(elapsed / 90 + pixel.x * 0.45 + pixel.y) > 0.35;
+  if (surface || pixel.kind === 'hot') {
+    return flicker ? MAGMA_COLOR.hot : MAGMA_COLOR.body;
+  }
+  if (pixel.kind === 'deep') {
+    return flicker && pixel.y < 13 ? MAGMA_COLOR.body : MAGMA_COLOR.deep;
+  }
+  return flicker ? MAGMA_COLOR.deep : MAGMA_COLOR.body;
+}
+
+function LavaRise({
+  active,
+  originX,
+  originY,
+  onCalm,
+  onSpilled,
+}: {
+  active: boolean;
+  originX: number;
+  originY: number;
+  onCalm: () => void;
+  onSpilled: () => void;
+}) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const started = performance.now();
+    let frame = 0;
+    let calmed = false;
+    let spilled = false;
+    const burstAt = LAVA_FILL_MS + LAVA_BOIL_MS;
+    const tick = (now: number) => {
+      const next = now - started;
+      setElapsed(next);
+      if (!calmed && next >= burstAt) {
+        calmed = true;
+        onCalm();
+      }
+      if (!spilled && next >= burstAt + LAVA_SPILL_MS) {
+        spilled = true;
+        onSpilled();
+        return;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [active, onCalm, onSpilled]);
+
+  if (!active) {
+    return null;
+  }
+  const fill = surgeFill(elapsed / LAVA_FILL_MS);
+  const boiling = elapsed >= LAVA_FILL_MS && elapsed < LAVA_FILL_MS + LAVA_BOIL_MS;
+  const spill = Math.max(0, Math.min(1, (elapsed - LAVA_FILL_MS - LAVA_BOIL_MS) / LAVA_SPILL_MS));
+  const rowProgress = fill * CRATER_SPANS.length;
+  const fullRows = Math.floor(rowProgress);
+  const partial = rowProgress - fullRows;
+  const surfaceRow = Math.min(CRATER_SPANS.length - 1, fullRows);
+  return (
+    <>
+      {CRATER_PIXELS.map((pixel) => {
+        const shown = pixel.row < fullRows || (pixel.row === fullRows && pixel.fromCenter <= partial);
+        if (!shown) {
+          return null;
+        }
+        const onSurface = pixel.row >= surfaceRow - 2 || (boiling && pixel.y <= 6);
+        const wave = Math.sin(elapsed / 60 + pixel.x * 0.65 + pixel.y * 0.35);
+        const bubble = onSurface && wave > 0.2;
+        const pop = onSurface && Math.sin(elapsed / 130 + pixel.x * 1.4) > 0.55;
+        const bob = pop ? 4 : bubble ? 2 : 0;
+        const overflow = spill > 0 && spills(pixel);
+        const lift = 5 + (1 - Math.min(1, Math.abs(pixel.x - CRATER_MID) / 18)) * 9;
+        const fade = overflow && spill > 0.72 ? 1 - (spill - 0.72) / 0.28 : 1;
+        return (
+          <View
+            key={`${pixel.x}-${pixel.y}`}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: originX + pixel.x + (overflow ? Math.sign(pixel.x - CRATER_MID) * 3 * spill : 0),
+              top: originY + pixel.y - bob - (overflow ? lift * spill : 0),
+              width: 2,
+              height: 2,
+              opacity: fade,
+              backgroundColor: magmaColor(pixel, onSurface, elapsed),
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+/** 세 번 꿀렁이며 차오른다. 각 구간은 빠르게 올랐다가 잠깐 잦아든다. */
+function surgeFill(amount: number) {
+  const t = Math.min(1, Math.max(0, amount));
+  const gulps = 3;
+  const scaled = t * gulps;
+  const index = Math.min(gulps - 1, Math.floor(scaled));
+  const local = scaled - index;
+  const eased = 1 - (1 - local) ** 2;
+  return Math.min(1, (index + eased) / gulps);
+}
+
+function Quake({ active, children }: { active: boolean; children: ReactNode }) {
+  const [shift] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    if (!active) {
+      shift.setValue(0);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shift, { toValue: 4, duration: 50, useNativeDriver: true }),
+        Animated.timing(shift, { toValue: -4, duration: 50, useNativeDriver: true }),
+        Animated.timing(shift, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]),
+      { iterations: 20 },
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [active, shift]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, transform: [{ translateX: shift }] }}>
+      {children}
+    </Animated.View>
   );
 }
 

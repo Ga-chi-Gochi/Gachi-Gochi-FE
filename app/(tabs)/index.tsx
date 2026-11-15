@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { BeachHome } from '@/components/island/beach-home';
+import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
+import { VolcanoGas } from '@/components/island/volcano-gas';
 import { IslandCamera } from '@/components/island/island-camera';
 import { BeachIsland } from '@/components/island/beach-island';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
@@ -44,6 +46,7 @@ export default function IslandHomeScreen() {
   };
 
   return (
+    <VolcanoEruptionProvider>
     <IslandCamera
       overlay={
         <>
@@ -110,10 +113,12 @@ export default function IslandHomeScreen() {
             onDone={acknowledgeExploreEggReveal}
           />
         ) : null}
+        <VolcanoGas />
         </>
       }>
       <BeachHome />
       <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
     </IslandCamera>
+    </VolcanoEruptionProvider>
   );
 }

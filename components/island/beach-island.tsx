@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import { BeachPlay } from '@/components/island/beach-play';
+import { useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner } from '@/components/island/place-mode';
 import { PixelButton, PixelText } from '@/components/pixel/pixel-ui';
@@ -23,12 +24,11 @@ export function BeachIsland({ petOpen, onPet, onClosePet }: BeachIslandProps) {
     growthStage,
     pendingPlaceItemId,
     cancelPlacing,
-    canExpand,
     growCreature,
-    expandIsland,
     petCreature,
   } = usePlayState();
 
+  const { erupt } = useVolcanoEruption();
   const pendingItem = pendingPlaceItemId ? getShopItem(pendingPlaceItemId) : null;
   const preferredName = pendingItem?.preferredZone
     ? ISLAND_ZONES.find((zone) => zone.id === pendingItem.preferredZone)?.name
@@ -48,7 +48,7 @@ export function BeachIsland({ petOpen, onPet, onClosePet }: BeachIslandProps) {
 
       <View style={{ position: 'absolute', top: '20%', left: scale(12), width: scale(112), gap: scale(8), zIndex: 6 }}>
         <PixelButton label="키우기" tone="green" onPress={() => void growCreature()} />
-        <PixelButton label="섬 넓히기" disabled={!canExpand} onPress={() => expandIsland()} />
+        <PixelButton label="섬 넓히기" onPress={erupt} />
       </View>
 
       {petOpen ? (

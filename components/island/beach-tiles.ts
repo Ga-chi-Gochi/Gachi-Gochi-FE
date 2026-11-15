@@ -57,6 +57,12 @@ export const coastTiles: ImageSource[][] = [
 export const grassFill = require('@/assets/images/beach/tiles/grass-fill.png') as ImageSource;
 export const grassDarkFill = require('@/assets/images/beach/tiles/grass-dark-fill.png') as ImageSource;
 export const sandFill = require('@/assets/images/beach/tiles/sand-fill.png') as ImageSource;
+/** 바다 쪽은 비어 있어 모서리가 둥글게 깎인다. */
+export const sandEdgeN = require('@/assets/images/beach/tiles/sand-edge-n.png') as ImageSource;
+export const sandEdgeE = require('@/assets/images/beach/tiles/sand-edge-e.png') as ImageSource;
+export const sandEdgeW = require('@/assets/images/beach/tiles/sand-edge-w.png') as ImageSource;
+export const sandCornerSe = require('@/assets/images/beach/tiles/sand-corner-se.png') as ImageSource;
+export const sandCornerSw = require('@/assets/images/beach/tiles/sand-corner-sw.png') as ImageSource;
 
 /** 하얀 점이 박힌 잔디. 넓은 들판에 쓴다. */
 export const grassField = require('@/assets/images/beach/grass.png') as ImageSource;
@@ -64,3 +70,25 @@ export const grassField = require('@/assets/images/beach/grass.png') as ImageSou
 export const grassDarkField = require('@/assets/images/beach/grass-dark.png') as ImageSource;
 /** 해변 모래. 칸마다 같은 결이 이어진다. */
 export const sandBeach = require('@/assets/images/beach/sand.png') as ImageSource;
+
+/** 휴화산. 참고 모양을 가로 4칸, 세로 3칸으로 나눈 요소다. */
+export const volcanoCellRows = [
+  [
+    require('@/assets/images/beach/tiles/volcano-cell-0-0.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-0-1.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-0-2.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-0-3.png'),
+  ],
+  [
+    require('@/assets/images/beach/tiles/volcano-cell-1-0.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-1-1.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-1-2.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-1-3.png'),
+  ],
+  [
+    require('@/assets/images/beach/tiles/volcano-cell-2-0.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-2-1.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-2-2.png'),
+    require('@/assets/images/beach/tiles/volcano-cell-2-3.png'),
+  ],
+] as ImageSource[][];

@@ -41,7 +41,7 @@ const SLICE_ROWS = 5;
 type ShoreSlice = { x: number; top: number; opacity: number };
 
 const RAMP_PX = 2;
-const RAMP_BLOCK = 16;
+const RAMP_BLOCK = 32;
 const RAMP_SHEETS: readonly MotionSheet[] = [SEA_TINT_SHEETS.t1, SEA_TINT_SHEETS.t2, SEA_TINT_SHEETS.t3];
 const RAMP_COLORS = ['#45BBB1', '#30AAA5', '#249793'] as const;
 const RAMP_DEEP_COLOR = '#1C8481';
@@ -54,8 +54,46 @@ const RAMP_SPARKLE_REACH = 24;
 const RAMP_SPARKLE_EVERY = 151;
 const RAMP_SPARKLE_PHASES = 4;
 
-type RampBlock = { key: string; x: number; y: number; stage: number };
+type RampBlock = { key: string; x: number; y: number; stage: number; size: number };
 type ShallowRamp = { blocks: RampBlock[]; dots: SurfaceGrain[]; sparkles: { key: string; x: number; y: number; lag: number }[] };
+type PixelBounds = { x0: number; x1: number; y0: number; y1: number };
+type ShoreWater = { slices: ShoreSlice[]; ramp: ShallowRamp };
+
+const CORE_REACH = 1.3;
+const REVEAL_MS = 380;
+
+type RevealOrigin = { cx: number; cy: number };
+type Reveal<T> = { stay: T[]; gone: [number, T[]][]; fresh: [number, T[]][] };
+
+function revealDelay(x: number, y: number, origin: RevealOrigin) {
+  return 160 + Math.floor(Math.hypot(x - origin.cx, y - origin.cy) / CELL) * 28;
+}
+
+function splitReveal<T>(after: readonly T[], before: readonly T[] | undefined, id: (item: T) => string, delayOf: (item: T) => number): Reveal<T> {
+  if (!before) {
+    return { stay: [...after], gone: [], fresh: [] };
+  }
+  const beforeIds = new Set(before.map(id));
+  const afterIds = new Set(after.map(id));
+  const group = (items: T[]) => {
+    const byDelay = new Map<number, T[]>();
+    for (const item of items) {
+      const delay = delayOf(item);
+      const list = byDelay.get(delay);
+      if (list) {
+        list.push(item);
+      } else {
+        byDelay.set(delay, [item]);
+      }
+    }
+    return [...byDelay.entries()].sort((a, b) => a[0] - b[0]);
+  };
+  return {
+    stay: after.filter((item) => beforeIds.has(id(item))),
+    gone: group(before.filter((item) => !afterIds.has(id(item)))),
+    fresh: group(after.filter((item) => !beforeIds.has(id(item)))),
+  };
+}
 
 function shoreHeight(slice: ShoreSlice) {
   if (slice.opacity >= 1) {
@@ -346,7 +384,7 @@ function buildIslandCells(
   zones: readonly IslandZoneId[],
   growingZoneId: IslandZoneId | null,
   look: IslandLook,
-): { cells: IslandCell[]; grains: SurfaceGrain[]; slices?: ShoreSlice[]; ramp?: ShallowRamp } {
+): { cells: IslandCell[]; grains: SurfaceGrain[]; slices?: ShoreSlice[]; ramp?: ShallowRamp; before?: ShoreWater } {
   if (width === 0 || height === 0) {
     return { cells: [], grains: [] };
   }
@@ -425,7 +463,7 @@ function buildIslandCells(
   };
   const southEnough = (px: number, py: number) => (py - cy) / ry > SOUTH_SHORE;
   if (SHORE_STYLE === 'slices') {
-    const slices = buildShoreSlices(minX, maxX, minY, maxY, landAt, southEnough);
+    const slices = buildShoreSlices({ x0: minX * CELL, x1: (maxX + 1) * CELL, y0: minY * CELL, y1: (maxY + 1) * CELL }, landAt, southEnough);
     if (SLICE_FOAM_LINES) {
       const foam: SurfaceGrain[] = [];
       paintSouthFoam(foam, minX, maxX, minY, maxY, landAt, southEnough);
@@ -434,9 +472,12 @@ function buildIslandCells(
     return { cells, grains, slices };
   }
   if (SHORE_STYLE === 'ramp') {
-    const slices = buildShoreSlices(minX, maxX, minY, maxY, landAt, southEnough);
-    const ramp = buildShallowRamp(width, minX, maxX, minY, maxY, landAt, slices, cx);
-    return { cells, grains, slices, ramp };
+    const water = cachedShoreWater(width, height, shape, fullZones, southEnough);
+    if (!growing) {
+      return { cells, grains, ...water };
+    }
+    const before = cachedShoreWater(width, height, shape, settledZones, southEnough);
+    return { cells, grains, ...water, before };
   }
   paintSouthFoam(grains, minX, maxX, minY, maxY, landAt, southEnough);
   return { cells, grains };
@@ -485,18 +526,68 @@ function buildCoastCells(
   return coast;
 }
 
+function landBounds(shape: LandShape, zones: readonly IslandZoneId[]): PixelBounds {
+  let nx0 = -CORE_REACH;
+  let nx1 = CORE_REACH;
+  let ny0 = -CORE_REACH;
+  let ny1 = CORE_REACH;
+  for (const zoneId of zones) {
+    if (zoneId === 'core') {
+      continue;
+    }
+    const lobe = ZONE_LOBE[zoneId];
+    nx0 = Math.min(nx0, lobe.ox - lobe.rx);
+    nx1 = Math.max(nx1, lobe.ox + lobe.rx);
+    ny0 = Math.min(ny0, lobe.oy - lobe.ry);
+    ny1 = Math.max(ny1, lobe.oy + lobe.ry);
+  }
+  return {
+    x0: Math.floor((shape.cx + nx0 * shape.rx) / CELL - 1) * CELL,
+    x1: Math.ceil((shape.cx + nx1 * shape.rx) / CELL + 1) * CELL,
+    y0: Math.floor((shape.cy + ny0 * shape.ry) / CELL - 1) * CELL,
+    y1: Math.ceil((shape.cy + ny1 * shape.ry) / CELL + 1) * CELL,
+  };
+}
+
+const WATER_CACHE_SIZE = 6;
+const waterCache = new Map<string, ShoreWater>();
+
+function cachedShoreWater(
+  width: number,
+  height: number,
+  shape: LandShape,
+  zones: readonly IslandZoneId[],
+  southEnough: (px: number, py: number) => boolean,
+): ShoreWater {
+  const key = `${width}x${height}:${[...zones].sort().join(',')}`;
+  const hit = waterCache.get(key);
+  if (hit) {
+    return hit;
+  }
+  const { cx, cy, rx, ry } = shape;
+  const water = buildShoreWater(landBounds(shape, zones), (px, py) => insideZones((px - cx) / rx, (py - cy) / ry, zones), southEnough, cx);
+  waterCache.set(key, water);
+  if (waterCache.size > WATER_CACHE_SIZE) {
+    waterCache.delete(waterCache.keys().next().value as string);
+  }
+  return water;
+}
+
+function buildShoreWater(
+  bounds: PixelBounds,
+  landAt: (px: number, py: number) => boolean,
+  southEnough: (px: number, py: number) => boolean,
+  cx: number,
+): ShoreWater {
+  const slices = buildShoreSlices(bounds, landAt, southEnough);
+  return { slices, ramp: buildShallowRamp(bounds, landAt, slices, cx) };
+}
+
 function buildShoreSlices(
-  minX: number,
-  maxX: number,
-  minY: number,
-  maxY: number,
+  { x0, x1, y0, y1 }: PixelBounds,
   landAt: (px: number, py: number) => boolean,
   southEnough: (px: number, py: number) => boolean,
 ): ShoreSlice[] {
-  const x0 = minX * CELL;
-  const x1 = (maxX + 1) * CELL;
-  const y0 = minY * CELL;
-  const y1 = (maxY + 1) * CELL;
   const found: { x: number; top: number }[] = [];
   for (let x = x0; x < x1; x += SLICE_PX) {
     let edge = -1;
@@ -545,21 +636,12 @@ function rampColor(stage: number) {
   return stage === RAMP_EMPTY ? RAMP_DEEP_COLOR : RAMP_COLORS[stage];
 }
 
-function buildShallowRamp(
-  width: number,
-  minX: number,
-  maxX: number,
-  minY: number,
-  maxY: number,
-  landAt: (px: number, py: number) => boolean,
-  slices: ShoreSlice[],
-  cx: number,
-): ShallowRamp {
-  const outer = RAMP_STEPS[RAMP_STEPS.length - 1] + RAMP_DITHER;
-  const x0 = Math.max(0, minX * CELL - outer);
-  const x1 = Math.min(Math.ceil(width / RAMP_PX) * RAMP_PX, (maxX + 1) * CELL + outer);
-  const y0 = Math.max(0, minY * CELL - outer);
-  const y1 = (maxY + 1) * CELL + outer;
+function buildShallowRamp(bounds: PixelBounds, landAt: (px: number, py: number) => boolean, slices: ShoreSlice[], cx: number): ShallowRamp {
+  const outer = Math.ceil((RAMP_STEPS[RAMP_STEPS.length - 1] + RAMP_DITHER) / RAMP_BLOCK) * RAMP_BLOCK + RAMP_BLOCK;
+  const x0 = bounds.x0 - outer;
+  const x1 = bounds.x1 + outer;
+  const y0 = bounds.y0 - outer;
+  const y1 = bounds.y1 + outer + CELL;
   const cols = Math.ceil((x1 - x0) / RAMP_PX);
   const rows = Math.ceil((y1 - y0) / RAMP_PX);
   const far = Number.POSITIVE_INFINITY;
@@ -666,7 +748,7 @@ function buildShallowRamp(
         }
       }
       if (base !== RAMP_EMPTY) {
-        blocks.push({ key: `block-${bx},${by}`, x: bx, y: by, stage: base });
+        blocks.push({ key: `block-${bx},${by}`, x: bx, y: by, stage: base, size: RAMP_BLOCK });
       }
       for (let j = 0; j < per; j += 1) {
         let runColor: string | null = null;
@@ -705,7 +787,41 @@ function buildShallowRamp(
       sparkles.push({ key: `spark-${row},${col}`, x: px, y: py, lag: waveLag(Math.floor(px / CELL), centerCol) + phase });
     }
   }
-  return { blocks, dots, sparkles };
+  return { blocks: mergeRampBlocks(blocks), dots, sparkles };
+}
+
+function mergeRampBlocks(blocks: RampBlock[]): RampBlock[] {
+  if (RAMP_BLOCK >= CELL) {
+    return blocks;
+  }
+  const byKey = new Map(blocks.map((block) => [`${block.x},${block.y}`, block]));
+  const used = new Set<RampBlock>();
+  const merged: RampBlock[] = [];
+  for (const block of blocks) {
+    if (used.has(block)) {
+      continue;
+    }
+    const ox = Math.floor(block.x / CELL) * CELL;
+    const oy = Math.floor(block.y / CELL) * CELL;
+    const parts: RampBlock[] = [];
+    for (let y = oy; y < oy + CELL; y += RAMP_BLOCK) {
+      for (let x = ox; x < ox + CELL; x += RAMP_BLOCK) {
+        const part = byKey.get(`${x},${y}`);
+        if (part && part.stage === block.stage && !used.has(part)) {
+          parts.push(part);
+        }
+      }
+    }
+    const full = (CELL / RAMP_BLOCK) ** 2;
+    if (parts.length === full) {
+      parts.forEach((part) => used.add(part));
+      merged.push({ key: `block-${ox},${oy}`, x: ox, y: oy, stage: block.stage, size: CELL });
+    } else {
+      used.add(block);
+      merged.push(block);
+    }
+  }
+  return merged;
 }
 
 const CORNER_INSET = [
@@ -801,10 +917,10 @@ function paintLandFill(
   const grass = '#C5D78A';
   const sand = SAND_COLORS[0];
   for (let y = y0; y < y1; y += FILL) {
-    let runX = -1;
+    let runX = Number.NaN;
     let runSand = false;
     const flush = (x: number) => {
-      if (runX < 0) {
+      if (Number.isNaN(runX)) {
         return;
       }
       grains.push({
@@ -815,7 +931,7 @@ function paintLandFill(
         height: FILL + TILE_BLEED,
         color: runSand ? sand : grass,
       });
-      runX = -1;
+      runX = Number.NaN;
     };
     for (let x = x0; x < x1; x += FILL) {
       const midX = x + 1;
@@ -826,7 +942,7 @@ function paintLandFill(
         continue;
       }
       const beach = shoreSand(midX, midY, cx, cy, rx, ry, zones);
-      if (runX < 0) {
+      if (Number.isNaN(runX)) {
         runX = x;
         runSand = beach;
         continue;
@@ -1216,6 +1332,10 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
     };
   }, [box.height, box.width]);
   const centerCol = Math.floor(islandFrame(box.width, box.height).cx / CELL);
+  const revealOrigin = useMemo(() => {
+    const { cx, cy } = landShape(box.width, box.height);
+    return { cx, cy };
+  }, [box.height, box.width]);
 
   return (
     <View
@@ -1226,15 +1346,27 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
         setBox((current) => (current.width === width && current.height === height ? current : { width, height }));
       }}>
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="none">
-        <SeaFill centerCol={centerCol} />
+        <FlatLayer>
+          <SeaFill centerCol={centerCol} />
+        </FlatLayer>
       </View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
         <Quake active={shaking}>
-          <SeaBand cells={coastBands.shore} sheet={SHORE_SHEET} centerCol={centerCol} />
-          <SeaBand cells={coastBands.shallow} sheet={SHALLOW_SHEET} centerCol={centerCol} />
-          <SeaBand cells={coastBands.deep} sheet={DEEP_SHEET} centerCol={centerCol} />
-          {island.ramp ? <ShallowRampLayer ramp={island.ramp} centerCol={centerCol} /> : null}
-          {island.slices ? <ShoreSlices slices={island.slices} centerCol={centerCol} shoreOnly={island.ramp != null} /> : null}
+          <FlatLayer>
+            <SeaBand cells={coastBands.shore} sheet={SHORE_SHEET} centerCol={centerCol} />
+            <SeaBand cells={coastBands.shallow} sheet={SHALLOW_SHEET} centerCol={centerCol} />
+            <SeaBand cells={coastBands.deep} sheet={DEEP_SHEET} centerCol={centerCol} />
+            {island.ramp ? <ShallowRampLayer ramp={island.ramp} before={island.before?.ramp} centerCol={centerCol} origin={revealOrigin} /> : null}
+            {island.slices ? (
+              <ShoreSlices
+                slices={island.slices}
+                before={island.before?.slices}
+                centerCol={centerCol}
+                origin={revealOrigin}
+                shoreOnly={island.ramp != null}
+              />
+            ) : null}
+          </FlatLayer>
         </Quake>
       </Reanimated.View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
@@ -1524,7 +1656,7 @@ const RampSheetBlock = memo(function RampSheetBlock({ block, centerCol }: { bloc
   const left = -(((block.x % CELL) + CELL) % CELL);
   const top = -(((block.y % CELL) + CELL) % CELL);
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: block.x, top: block.y, width: RAMP_BLOCK, height: RAMP_BLOCK, overflow: 'hidden' }}>
+    <View pointerEvents="none" style={{ position: 'absolute', left: block.x, top: block.y, width: block.size, height: block.size, overflow: 'hidden' }}>
       <View pointerEvents="none" style={{ position: 'absolute', left, top }}>
         <SheetSprite source={sheet.body} cols={sheet.cols} rows={sheet.rows} size={CELL} frame={frame} />
       </View>
@@ -1532,7 +1664,55 @@ const RampSheetBlock = memo(function RampSheetBlock({ block, centerCol }: { bloc
   );
 });
 
-const ShallowRampLayer = memo(function ShallowRampLayer({ ramp, centerCol }: { ramp: ShallowRamp; centerCol: number }) {
+function RevealGroup({ delay, appear, children }: { delay: number; appear: boolean; children: ReactNode }) {
+  const [value] = useState(() => new Animated.Value(appear ? 0 : 1));
+  useEffect(() => {
+    const anim = Animated.timing(value, {
+      toValue: appear ? 1 : 0,
+      duration: REVEAL_MS,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [appear, delay, value]);
+  return (
+    <Animated.View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: value }}>
+      {children}
+    </Animated.View>
+  );
+}
+
+function RevealList<T>({ reveal, render }: { reveal: Reveal<T>; render: (item: T) => ReactNode }) {
+  return (
+    <>
+      {reveal.stay.map(render)}
+      {reveal.gone.map(([delay, list]) => (
+        <RevealGroup key={`gone-${delay}`} delay={delay} appear={false}>
+          {list.map(render)}
+        </RevealGroup>
+      ))}
+      {reveal.fresh.map(([delay, list]) => (
+        <RevealGroup key={`fresh-${delay}`} delay={delay} appear>
+          {list.map(render)}
+        </RevealGroup>
+      ))}
+    </>
+  );
+}
+
+const ShallowRampLayer = memo(function ShallowRampLayer({
+  ramp,
+  before,
+  centerCol,
+  origin,
+}: {
+  ramp: ShallowRamp;
+  before?: ShallowRamp;
+  centerCol: number;
+  origin: RevealOrigin;
+}) {
   useSeaClock();
   const groups = useMemo(() => {
     const byLag = new Map<number, ShallowRamp['sparkles']>();
@@ -1547,36 +1727,70 @@ const ShallowRampLayer = memo(function ShallowRampLayer({ ramp, centerCol }: { r
     }
     return [...byLag.entries()];
   }, [ramp.sparkles]);
+  const blocks = useMemo(
+    () =>
+      splitReveal(
+        ramp.blocks,
+        before?.blocks,
+        (block) => `${block.key}:${block.stage}:${block.size}`,
+        (block) => revealDelay(block.x + block.size / 2, block.y + block.size / 2, origin),
+      ),
+    [before?.blocks, origin, ramp.blocks],
+  );
+  const dots = useMemo(
+    () =>
+      splitReveal(
+        ramp.dots,
+        before?.dots,
+        (dot) => `${dot.key}:${dot.color}:${dot.size}`,
+        (dot) => revealDelay(dot.x + dot.size / 2, dot.y, origin),
+      ),
+    [before?.dots, origin, ramp.dots],
+  );
   return (
     <>
-      {ramp.blocks.map((block) => (
-        <RampSheetBlock key={block.key} block={block} centerCol={centerCol} />
-      ))}
+      <RevealList reveal={blocks} render={(block) => <RampSheetBlock key={block.key} block={block} centerCol={centerCol} />} />
       <FlatLayer>
-        {ramp.dots.map((dot) => (
-          <GrainDot key={dot.key} grain={dot} />
-        ))}
-        {groups.map(([lag, list]) => (
-          <FoamSegment key={lag} frame={sparkleFrameForLag(lag)}>
-            {list.map((sparkle) => (
-              <GrainDot key={sparkle.key} grain={{ key: sparkle.key, x: sparkle.x, y: sparkle.y, size: RAMP_PX, color: RAMP_SPARKLE_COLOR }} />
+        <RevealList reveal={dots} render={(dot) => <GrainDot key={dot.key} grain={dot} />} />
+        {before
+          ? null
+          : groups.map(([lag, list]) => (
+              <FoamSegment key={lag} frame={sparkleFrameForLag(lag)}>
+                {list.map((sparkle) => (
+                  <GrainDot key={sparkle.key} grain={{ key: sparkle.key, x: sparkle.x, y: sparkle.y, size: RAMP_PX, color: RAMP_SPARKLE_COLOR }} />
+                ))}
+              </FoamSegment>
             ))}
-          </FoamSegment>
-        ))}
       </FlatLayer>
     </>
   );
 });
 
-function ShoreSlices({ slices, centerCol, shoreOnly }: { slices: ShoreSlice[]; centerCol: number; shoreOnly: boolean }) {
+function ShoreSlices({
+  slices,
+  before,
+  centerCol,
+  origin,
+  shoreOnly,
+}: {
+  slices: ShoreSlice[];
+  before?: ShoreSlice[];
+  centerCol: number;
+  origin: RevealOrigin;
+  shoreOnly: boolean;
+}) {
   useSeaClock();
-  return (
-    <>
-      {slices.map((slice) => (
-        <ShoreSliceStrip key={slice.x} slice={slice} centerCol={centerCol} shoreOnly={shoreOnly} />
-      ))}
-    </>
+  const reveal = useMemo(
+    () =>
+      splitReveal(
+        slices,
+        before,
+        (slice) => `${slice.x}:${slice.top}:${slice.opacity}`,
+        (slice) => revealDelay(slice.x + SLICE_PX / 2, slice.top, origin),
+      ),
+    [before, origin, slices],
   );
+  return <RevealList reveal={reveal} render={(slice) => <ShoreSliceStrip key={slice.x} slice={slice} centerCol={centerCol} shoreOnly={shoreOnly} />} />;
 }
 
 const ShoreSliceStrip = memo(function ShoreSliceStrip({ slice, centerCol, shoreOnly }: { slice: ShoreSlice; centerCol: number; shoreOnly: boolean }) {

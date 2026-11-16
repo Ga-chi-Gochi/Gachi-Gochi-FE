@@ -57,7 +57,7 @@ function useWebSheetTransform(frame: SheetFrame, size: number) {
     }
     const apply = () => {
       const { col, row } = frame.current();
-      node.style.transform = `translate3d(${-col * size}px, ${-row * size}px, 0)`;
+      node.style.transform = `translate(${-col * size}px, ${-row * size}px)`;
     };
     apply();
     const colListener = frame.col.addListener(apply);

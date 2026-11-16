@@ -1,6 +1,8 @@
 import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BeachPlay } from '@/components/island/beach-play';
+import { useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner } from '@/components/island/place-mode';
 import { PixelButton, PixelText } from '@/components/pixel/pixel-ui';
@@ -19,16 +21,16 @@ type BeachIslandProps = {
 /** 해변 자체가 섬이다. 걷기, 배치, 확장, 성장은 해변 위에서 한다. */
 export function BeachIsland({ petOpen, onPet, onClosePet }: BeachIslandProps) {
   const { scale } = useResponsive();
+  const insets = useSafeAreaInsets();
   const {
     growthStage,
     pendingPlaceItemId,
     cancelPlacing,
-    canExpand,
     growCreature,
-    expandIsland,
     petCreature,
   } = usePlayState();
 
+  const { erupt } = useVolcanoEruption();
   const pendingItem = pendingPlaceItemId ? getShopItem(pendingPlaceItemId) : null;
   const preferredName = pendingItem?.preferredZone
     ? ISLAND_ZONES.find((zone) => zone.id === pendingItem.preferredZone)?.name
@@ -46,9 +48,17 @@ export function BeachIsland({ petOpen, onPet, onClosePet }: BeachIslandProps) {
 
       <BeachPlay petOpen={petOpen} onPet={onPet} />
 
-      <View style={{ position: 'absolute', top: '20%', left: scale(12), width: scale(112), gap: scale(8), zIndex: 6 }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: scale(12),
+          bottom: insets.bottom + scale(12),
+          width: scale(112),
+          gap: scale(8),
+          zIndex: 6,
+        }}>
         <PixelButton label="키우기" tone="green" onPress={() => void growCreature()} />
-        <PixelButton label="섬 넓히기" disabled={!canExpand} onPress={() => expandIsland()} />
+        <PixelButton label="섬 넓히기" onPress={erupt} />
       </View>
 
       {petOpen ? (

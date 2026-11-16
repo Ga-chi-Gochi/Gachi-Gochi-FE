@@ -37,6 +37,18 @@ export function useIslandCameraStyle() {
   return animated;
 }
 
+/** 지금 화면의 확대와 이동. 구름이 화구 위치에서 피어나게 할 때 쓴다. */
+export function useIslandCameraSnapshot() {
+  const camera = useContext(IslandCameraContext);
+  if (!camera) {
+    return { zoom: 1, x: 0, y: 0 };
+  }
+  if (Platform.OS === 'web' && camera.web) {
+    return camera.web;
+  }
+  return { zoom: camera.zoom.value, x: camera.tx.value, y: camera.ty.value };
+}
+
 function clampPan(zoom: number, x: number, y: number, width: number, height: number) {
   'worklet';
   const span = Math.abs(zoom - 1);

@@ -1,8 +1,94 @@
-// 섬 땅 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
+// 섬 땅·얕은 물·해안 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
 // 좌표 단위는 RN 화면 dp 와 같다. 한 칸 CELL = 32.
 import type { IslandZoneId } from '@/constants/island-zones';
 
+import { MOTION_SEQ, SEA_TINT_SHEETS, type MotionSheet } from './motion';
+import { waveLag } from './seaClock';
+
 export const CELL = 32;
+/** 'tiles' 해안 방식에서만 쓰는 해안 타일 표. 지금 방식('ramp')에서는 쓰지 않아 이름만 둔다 */
+const coastTiles: string[][] = [0, 1, 2, 3, 4].map((row) => [1, 2, 3, 4, 5].map((n) => `coast-${row}-${n}`));
+
+export const DEEP_SHEET: MotionSheet = SEA_TINT_SHEETS.deep;
+export const SHORE_SHEET = MOTION_SEQ['sea-shore'].sheet;
+export const SHALLOW_SHEET = MOTION_SEQ['sea-shallow'].sheet;
+
+type ShoreStyle = 'tiles' | 'pixel' | 'slices' | 'ramp';
+export const SHORE_STYLE = 'ramp' as ShoreStyle;
+export const SLICE_PX = 8;
+const SLICE_OVERLAP = 4;
+const SLICE_FADE_PX = 24;
+const SLICE_FOAM_LINES = false;
+export const SLICE_ROWS = 5;
+
+export type ShoreSlice = { x: number; top: number; opacity: number };
+
+export const RAMP_PX = 2;
+const RAMP_BLOCK = 32;
+export const RAMP_SHEETS: readonly MotionSheet[] = [SEA_TINT_SHEETS.t1, SEA_TINT_SHEETS.t2, SEA_TINT_SHEETS.t3];
+export const RAMP_COLORS = ['#45BBB1', '#30AAA5', '#249793'] as const;
+const RAMP_DEEP_COLOR = '#1C8481';
+const RAMP_STEPS = [14, 28, 44] as const;
+const RAMP_DITHER = 2;
+const RAMP_EMPTY: number = RAMP_STEPS.length;
+const RAMP_FREE = -1;
+export const RAMP_SPARKLE_COLOR = '#E7FFFD';
+const RAMP_SPARKLE_REACH = 24;
+const RAMP_SPARKLE_EVERY = 151;
+const RAMP_SPARKLE_PHASES = 4;
+
+export type RampBlock = { key: string; x: number; y: number; stage: number; size: number };
+export type ShallowRamp = { blocks: RampBlock[]; dots: SurfaceGrain[]; sparkles: { key: string; x: number; y: number; lag: number }[] };
+type PixelBounds = { x0: number; x1: number; y0: number; y1: number };
+export type ShoreWater = { slices: ShoreSlice[]; ramp: ShallowRamp };
+
+const CORE_REACH = 1.3;
+export const REVEAL_MS = 380;
+
+export type RevealOrigin = { cx: number; cy: number };
+export type Reveal<T> = { stay: T[]; gone: [number, T[]][]; fresh: [number, T[]][] };
+
+export function revealDelay(x: number, y: number, origin: RevealOrigin) {
+  return 160 + Math.floor(Math.hypot(x - origin.cx, y - origin.cy) / CELL) * 28;
+}
+
+export function splitReveal<T>(after: readonly T[], before: readonly T[] | undefined, id: (item: T) => string, delayOf: (item: T) => number): Reveal<T> {
+  if (!before) {
+    return { stay: [...after], gone: [], fresh: [] };
+  }
+  const beforeIds = new Set(before.map(id));
+  const afterIds = new Set(after.map(id));
+  const group = (items: T[]) => {
+    const byDelay = new Map<number, T[]>();
+    for (const item of items) {
+      const delay = delayOf(item);
+      const list = byDelay.get(delay);
+      if (list) {
+        list.push(item);
+      } else {
+        byDelay.set(delay, [item]);
+      }
+    }
+    return [...byDelay.entries()].sort((a, b) => a[0] - b[0]);
+  };
+  return {
+    stay: after.filter((item) => beforeIds.has(id(item))),
+    gone: group(before.filter((item) => !afterIds.has(id(item)))),
+    fresh: group(after.filter((item) => !beforeIds.has(id(item)))),
+  };
+}
+
+export function shoreHeight(slice: ShoreSlice) {
+  if (slice.opacity >= 1) {
+    return CELL;
+  }
+  return Math.max(RAMP_PX * 2, Math.round((CELL * slice.opacity) / RAMP_PX) * RAMP_PX);
+}
+
+export const FOAM_KEY = /^(foam|wash|bubble)-/;
+export const FOAM_SEGMENT_PX = 16;
+
+
 
 type LandKind = 'grass' | 'sand';
 /** 남쪽은 꽉 찬 모래. 그 외 가장자리는 바깥이 비어 있는 타일로 둥글게 깎는다. */
@@ -125,6 +211,19 @@ function insideZones(nx: number, ny: number, zones: readonly IslandZoneId[]) {
   return zones.some((zoneId) => zoneId !== 'core' && insideLobe(nx, ny, zoneId));
 }
 
+type LandShape = { cx: number; cy: number; rx: number; ry: number };
+
+export function landShape(width: number, height: number): LandShape {
+  const { cx, cy, rx: radius } = islandFrame(width, height);
+  return { cx, cy, rx: radius, ry: radius * 0.7 };
+}
+
+function landCell(x: number, y: number, shape: LandShape, zones: readonly IslandZoneId[]) {
+  const nx = ((x + 0.5) * CELL - shape.cx) / shape.rx;
+  const ny = ((y + 0.5) * CELL - shape.cy) / shape.ry;
+  return insideZones(nx, ny, zones);
+}
+
 const keyOf = (x: number, y: number) => `${x},${y}`;
 
 export function delayFor(x: number, y: number, cx: number, cy: number) {
@@ -200,6 +299,23 @@ export function craterCloudPoint(width: number, height: number) {
   };
 }
 
+export function isWalkable(px: number, py: number, width: number, height: number, zones: readonly IslandZoneId[]) {
+  if (width <= 0 || height <= 0) {
+    return false;
+  }
+  const x = Math.floor(px / CELL);
+  const y = Math.floor(py / CELL);
+  if (x < 0 || y < 0 || x >= Math.ceil(width / CELL)) {
+    return false;
+  }
+  if (!landCell(x, y, landShape(width, height), zones)) {
+    return false;
+  }
+  const origin = volcanoOrigin(width, height);
+  const nearVolcano = x >= origin.x - 1 && x <= origin.x + VOLCANO_COLS && y >= origin.y - 1 && y <= origin.y + VOLCANO_ROWS;
+  return !nearVolcano;
+}
+
 export function sandStandX(width: number, height: number) {
   if (width <= 0 || height <= 0) {
     return 0;
@@ -226,7 +342,7 @@ export function buildIslandCells(
   zones: readonly IslandZoneId[],
   growingZoneId: IslandZoneId | null,
   look: IslandLook,
-): { cells: IslandCell[]; grains: SurfaceGrain[] } {
+): { cells: IslandCell[]; grains: SurfaceGrain[]; slices?: ShoreSlice[]; ramp?: ShallowRamp; before?: ShoreWater } {
   if (width === 0 || height === 0) {
     return { cells: [], grains: [] };
   }
@@ -236,9 +352,8 @@ export function buildIslandCells(
   if (look === 2) {
     return buildJeju(width, height);
   }
-  const { cx, cy, rx: radius } = islandFrame(width, height);
-  const rx = radius;
-  const ry = radius * 0.7;
+  const shape = landShape(width, height);
+  const { cx, cy, rx, ry } = shape;
   const cols = Math.ceil(width / CELL);
   const reach = 2.2;
   const minX = Math.max(0, Math.floor((cx - rx * reach) / CELL) - 1);
@@ -253,9 +368,7 @@ export function buildIslandCells(
     const set = new Set<string>();
     for (let y = minY; y <= maxY; y += 1) {
       for (let x = minX; x <= maxX; x += 1) {
-        const nx = ((x + 0.5) * CELL - cx) / rx;
-        const ny = ((y + 0.5) * CELL - cy) / ry;
-        if (insideZones(nx, ny, zoneList)) {
+        if (landCell(x, y, shape, zoneList)) {
           set.add(keyOf(x, y));
         }
       }
@@ -293,24 +406,380 @@ export function buildIslandCells(
   }
 
   const grains = buildSurfaceGrains(cells, cx, cy, rx, ry, fullZones);
-  paintSouthFoam(
-    grains,
-    minX,
-    maxX,
-    minY,
-    maxY,
-    (px, py) => {
-      if (!insideZones((px - cx) / rx, (py - cy) / ry, fullZones)) {
-        return false;
-      }
-      if (growing != null && !settled.has(keyOf(Math.floor(px / CELL), Math.floor(py / CELL)))) {
-        return false;
-      }
-      return true;
-    },
-    (px, py) => (py - cy) / ry > SOUTH_SHORE,
-  );
+  if (SHORE_STYLE === 'tiles') {
+    cells.push(...buildCoastCells(minX, maxX, minY, maxY, isLand, (x, y) => growing != null && !settled.has(keyOf(x, y)), cx, cy, ry));
+    return { cells, grains };
+  }
+  const landAt = (px: number, py: number) => {
+    if (!insideZones((px - cx) / rx, (py - cy) / ry, fullZones)) {
+      return false;
+    }
+    if (growing != null && !settled.has(keyOf(Math.floor(px / CELL), Math.floor(py / CELL)))) {
+      return false;
+    }
+    return true;
+  };
+  const southEnough = (px: number, py: number) => (py - cy) / ry > SOUTH_SHORE;
+  if (SHORE_STYLE === 'slices') {
+    const slices = buildShoreSlices({ x0: minX * CELL, x1: (maxX + 1) * CELL, y0: minY * CELL, y1: (maxY + 1) * CELL }, landAt, southEnough);
+    if (SLICE_FOAM_LINES) {
+      const foam: SurfaceGrain[] = [];
+      paintSouthFoam(foam, minX, maxX, minY, maxY, landAt, southEnough);
+      grains.push(...foam.filter((grain) => grain.key.startsWith('foam-')));
+    }
+    return { cells, grains, slices };
+  }
+  if (SHORE_STYLE === 'ramp') {
+    const water = cachedShoreWater(width, height, shape, fullZones, southEnough);
+    if (!growing) {
+      return { cells, grains, ...water };
+    }
+    const before = cachedShoreWater(width, height, shape, settledZones, southEnough);
+    return { cells, grains, ...water, before };
+  }
+  paintSouthFoam(grains, minX, maxX, minY, maxY, landAt, southEnough);
   return { cells, grains };
+}
+
+function buildCoastCells(
+  minX: number,
+  maxX: number,
+  minY: number,
+  maxY: number,
+  isLand: (x: number, y: number) => boolean,
+  isFresh: (x: number, y: number) => boolean,
+  cx: number,
+  cy: number,
+  ry: number,
+): IslandCell[] {
+  const coast: IslandCell[] = [];
+  for (let x = minX; x <= maxX; x += 1) {
+    let southY = -1;
+    for (let y = minY; y <= maxY; y += 1) {
+      if (isLand(x, y)) {
+        southY = y;
+      }
+    }
+    if (southY < 0 || ((southY + 0.5) * CELL - cy) / ry <= SOUTH_SHORE) {
+      continue;
+    }
+    const fresh = isFresh(x, southY);
+    for (let row = 0; row < COAST_ROWS; row += 1) {
+      const y = southY + 1 + row;
+      if (isLand(x, y)) {
+        continue;
+      }
+      const tiles = coastTiles[row];
+      coast.push({
+        key: `coast-${x},${y}`,
+        x,
+        y,
+        kind: 'coast',
+        coastRow: row,
+        coastCol: ((x % tiles.length) + tiles.length) % tiles.length,
+        riseDelay: fresh ? delayFor(x, y, cx, cy) : undefined,
+      });
+    }
+  }
+  return coast;
+}
+
+function landBounds(shape: LandShape, zones: readonly IslandZoneId[]): PixelBounds {
+  let nx0 = -CORE_REACH;
+  let nx1 = CORE_REACH;
+  let ny0 = -CORE_REACH;
+  let ny1 = CORE_REACH;
+  for (const zoneId of zones) {
+    if (zoneId === 'core') {
+      continue;
+    }
+    const lobe = ZONE_LOBE[zoneId];
+    nx0 = Math.min(nx0, lobe.ox - lobe.rx);
+    nx1 = Math.max(nx1, lobe.ox + lobe.rx);
+    ny0 = Math.min(ny0, lobe.oy - lobe.ry);
+    ny1 = Math.max(ny1, lobe.oy + lobe.ry);
+  }
+  return {
+    x0: Math.floor((shape.cx + nx0 * shape.rx) / CELL - 1) * CELL,
+    x1: Math.ceil((shape.cx + nx1 * shape.rx) / CELL + 1) * CELL,
+    y0: Math.floor((shape.cy + ny0 * shape.ry) / CELL - 1) * CELL,
+    y1: Math.ceil((shape.cy + ny1 * shape.ry) / CELL + 1) * CELL,
+  };
+}
+
+const WATER_CACHE_SIZE = 6;
+const waterCache = new Map<string, ShoreWater>();
+
+function cachedShoreWater(
+  width: number,
+  height: number,
+  shape: LandShape,
+  zones: readonly IslandZoneId[],
+  southEnough: (px: number, py: number) => boolean,
+): ShoreWater {
+  const key = `${width}x${height}:${[...zones].sort().join(',')}`;
+  const hit = waterCache.get(key);
+  if (hit) {
+    return hit;
+  }
+  const { cx, cy, rx, ry } = shape;
+  const water = buildShoreWater(landBounds(shape, zones), (px, py) => insideZones((px - cx) / rx, (py - cy) / ry, zones), southEnough, cx);
+  waterCache.set(key, water);
+  if (waterCache.size > WATER_CACHE_SIZE) {
+    waterCache.delete(waterCache.keys().next().value as string);
+  }
+  return water;
+}
+
+function buildShoreWater(
+  bounds: PixelBounds,
+  landAt: (px: number, py: number) => boolean,
+  southEnough: (px: number, py: number) => boolean,
+  cx: number,
+): ShoreWater {
+  const slices = buildShoreSlices(bounds, landAt, southEnough);
+  return { slices, ramp: buildShallowRamp(bounds, landAt, slices, cx) };
+}
+
+function buildShoreSlices(
+  { x0, x1, y0, y1 }: PixelBounds,
+  landAt: (px: number, py: number) => boolean,
+  southEnough: (px: number, py: number) => boolean,
+): ShoreSlice[] {
+  const found: { x: number; top: number }[] = [];
+  for (let x = x0; x < x1; x += SLICE_PX) {
+    let edge = -1;
+    let edgeX = x;
+    for (let sx = x; sx < x + SLICE_PX; sx += WAVE) {
+      for (let y = y0; y < y1; y += WAVE) {
+        if (landAt(sx + 1, y + 1) && y > edge) {
+          edge = y;
+          edgeX = sx;
+        }
+      }
+    }
+    if (edge < 0 || !southEnough(edgeX + 1, edge + 1)) {
+      continue;
+    }
+    found.push({ x, top: edge + WAVE - SLICE_OVERLAP });
+  }
+  const slices: ShoreSlice[] = [];
+  for (let start = 0; start < found.length; ) {
+    let end = start;
+    while (end + 1 < found.length && found[end + 1].x === found[end].x + SLICE_PX) {
+      end += 1;
+    }
+    const runLeft = found[start].x;
+    const runRight = found[end].x + SLICE_PX;
+    for (let i = start; i <= end; i += 1) {
+      const { x, top } = found[i];
+      const inset = Math.min(x - runLeft, runRight - (x + SLICE_PX)) + SLICE_PX / 2;
+      slices.push({ x, top, opacity: Math.min(1, inset / SLICE_FADE_PX) });
+    }
+    start = end + 1;
+  }
+  return slices;
+}
+
+function rampStage(distance: number) {
+  for (let stage = 0; stage < RAMP_STEPS.length; stage += 1) {
+    if (distance < RAMP_STEPS[stage]) {
+      return stage;
+    }
+  }
+  return RAMP_EMPTY;
+}
+
+function rampColor(stage: number) {
+  return stage === RAMP_EMPTY ? RAMP_DEEP_COLOR : RAMP_COLORS[stage];
+}
+
+function buildShallowRamp(bounds: PixelBounds, landAt: (px: number, py: number) => boolean, slices: ShoreSlice[], cx: number): ShallowRamp {
+  const outer = Math.ceil((RAMP_STEPS[RAMP_STEPS.length - 1] + RAMP_DITHER) / RAMP_BLOCK) * RAMP_BLOCK + RAMP_BLOCK;
+  const x0 = bounds.x0 - outer;
+  const x1 = bounds.x1 + outer;
+  const y0 = bounds.y0 - outer;
+  const y1 = bounds.y1 + outer + CELL;
+  const cols = Math.ceil((x1 - x0) / RAMP_PX);
+  const rows = Math.ceil((y1 - y0) / RAMP_PX);
+  const far = Number.POSITIVE_INFINITY;
+  const dist = new Float32Array(cols * rows).fill(far);
+  const land = new Uint8Array(cols * rows);
+  const shore = new Uint8Array(cols * rows);
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      if (landAt(x0 + col * RAMP_PX + 1, y0 + row * RAMP_PX + 1)) {
+        land[row * cols + col] = 1;
+        dist[row * cols + col] = 0;
+      }
+    }
+  }
+  for (const slice of slices) {
+    const c0 = Math.max(0, Math.floor((slice.x - x0) / RAMP_PX));
+    const c1 = Math.min(cols, Math.ceil((slice.x + SLICE_PX - x0) / RAMP_PX));
+    const r0 = Math.max(0, Math.floor((slice.top - y0) / RAMP_PX));
+    const r1 = Math.min(rows, Math.ceil((slice.top + shoreHeight(slice) - y0) / RAMP_PX));
+    for (let row = r0; row < r1; row += 1) {
+      for (let col = c0; col < c1; col += 1) {
+        shore[row * cols + col] = 1;
+        dist[row * cols + col] = 0;
+      }
+    }
+  }
+  const straight = RAMP_PX;
+  const diagonal = RAMP_PX * Math.SQRT2;
+  const relax = (index: number, from: number, cost: number) => {
+    const next = dist[from] + cost;
+    if (next < dist[index]) {
+      dist[index] = next;
+    }
+  };
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const index = row * cols + col;
+      if (col > 0) relax(index, index - 1, straight);
+      if (row > 0) {
+        relax(index, index - cols, straight);
+        if (col > 0) relax(index, index - cols - 1, diagonal);
+        if (col < cols - 1) relax(index, index - cols + 1, diagonal);
+      }
+    }
+  }
+  for (let row = rows - 1; row >= 0; row -= 1) {
+    for (let col = cols - 1; col >= 0; col -= 1) {
+      const index = row * cols + col;
+      if (col < cols - 1) relax(index, index + 1, straight);
+      if (row < rows - 1) {
+        relax(index, index + cols, straight);
+        if (col < cols - 1) relax(index, index + cols + 1, diagonal);
+        if (col > 0) relax(index, index + cols - 1, diagonal);
+      }
+    }
+  }
+  const centerCol = Math.floor(cx / CELL);
+  const stageAt = (px: number, py: number) => {
+    const col = Math.floor((px - x0) / RAMP_PX);
+    const row = Math.floor((py - y0) / RAMP_PX);
+    if (col < 0 || row < 0 || col >= cols || row >= rows) {
+      return RAMP_EMPTY;
+    }
+    const index = row * cols + col;
+    if (shore[index]) {
+      return 0;
+    }
+    if (land[index]) {
+      const edge =
+        (col > 0 && !land[index - 1]) || (col < cols - 1 && !land[index + 1]) || (row > 0 && !land[index - cols]) || (row < rows - 1 && !land[index + cols]);
+      return edge ? 0 : RAMP_FREE;
+    }
+    const checker = (row + col) % 2 === 0;
+    return rampStage(dist[index] + (checker ? RAMP_DITHER : -RAMP_DITHER));
+  };
+  const blocks: RampBlock[] = [];
+  const dots: SurfaceGrain[] = [];
+  const sparkles: ShallowRamp['sparkles'] = [];
+  const per = RAMP_BLOCK / RAMP_PX;
+  const counts = new Array<number>(RAMP_EMPTY + 1);
+  const stages = new Int8Array(per * per);
+  for (let by = Math.floor(y0 / RAMP_BLOCK) * RAMP_BLOCK; by < y1; by += RAMP_BLOCK) {
+    for (let bx = Math.floor(x0 / RAMP_BLOCK) * RAMP_BLOCK; bx < x1; bx += RAMP_BLOCK) {
+      counts.fill(0);
+      let free = 0;
+      for (let j = 0; j < per; j += 1) {
+        for (let i = 0; i < per; i += 1) {
+          const stage = stageAt(bx + i * RAMP_PX, by + j * RAMP_PX);
+          stages[j * per + i] = stage;
+          if (stage === RAMP_FREE) {
+            free += 1;
+          } else {
+            counts[stage] += 1;
+          }
+        }
+      }
+      if (free === per * per || counts[RAMP_EMPTY] === per * per) {
+        continue;
+      }
+      let base = RAMP_EMPTY;
+      for (let stage = 0; stage <= RAMP_EMPTY; stage += 1) {
+        if (counts[stage] > counts[base]) {
+          base = stage;
+        }
+      }
+      if (base !== RAMP_EMPTY) {
+        blocks.push({ key: `block-${bx},${by}`, x: bx, y: by, stage: base, size: RAMP_BLOCK });
+      }
+      for (let j = 0; j < per; j += 1) {
+        let runColor: string | null = null;
+        let runStart = 0;
+        for (let i = 0; i <= per; i += 1) {
+          const stage = i < per ? stages[j * per + i] : RAMP_FREE;
+          const color = stage === RAMP_FREE || stage === base ? null : rampColor(stage);
+          if (color !== runColor) {
+            if (runColor) {
+              dots.push({
+                key: `dot-${bx + runStart * RAMP_PX},${by + j * RAMP_PX}`,
+                x: bx + runStart * RAMP_PX,
+                y: by + j * RAMP_PX,
+                size: (i - runStart) * RAMP_PX,
+                height: RAMP_PX,
+                color: runColor,
+              });
+            }
+            runColor = color;
+            runStart = i;
+          }
+        }
+      }
+    }
+  }
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const index = row * cols + col;
+      const d = dist[index];
+      if (land[index] || shore[index] || d >= RAMP_SPARKLE_REACH || d <= RAMP_PX || (col * 7 + row * 13) % RAMP_SPARKLE_EVERY !== 0) {
+        continue;
+      }
+      const px = x0 + col * RAMP_PX;
+      const py = y0 + row * RAMP_PX;
+      const phase = ((col * 3 + row * 5) % RAMP_SPARKLE_PHASES) * (32 / RAMP_SPARKLE_PHASES);
+      sparkles.push({ key: `spark-${row},${col}`, x: px, y: py, lag: waveLag(Math.floor(px / CELL), centerCol) + phase });
+    }
+  }
+  return { blocks: mergeRampBlocks(blocks), dots, sparkles };
+}
+
+function mergeRampBlocks(blocks: RampBlock[]): RampBlock[] {
+  if (RAMP_BLOCK >= CELL) {
+    return blocks;
+  }
+  const byKey = new Map(blocks.map((block) => [`${block.x},${block.y}`, block]));
+  const used = new Set<RampBlock>();
+  const merged: RampBlock[] = [];
+  for (const block of blocks) {
+    if (used.has(block)) {
+      continue;
+    }
+    const ox = Math.floor(block.x / CELL) * CELL;
+    const oy = Math.floor(block.y / CELL) * CELL;
+    const parts: RampBlock[] = [];
+    for (let y = oy; y < oy + CELL; y += RAMP_BLOCK) {
+      for (let x = ox; x < ox + CELL; x += RAMP_BLOCK) {
+        const part = byKey.get(`${x},${y}`);
+        if (part && part.stage === block.stage && !used.has(part)) {
+          parts.push(part);
+        }
+      }
+    }
+    const full = (CELL / RAMP_BLOCK) ** 2;
+    if (parts.length === full) {
+      parts.forEach((part) => used.add(part));
+      merged.push({ key: `block-${ox},${oy}`, x: ox, y: oy, stage: block.stage, size: CELL });
+    } else {
+      used.add(block);
+      merged.push(block);
+    }
+  }
+  return merged;
 }
 
 const CORNER_INSET = [
@@ -406,10 +875,10 @@ function paintLandFill(
   const grass = '#C5D78A';
   const sand = SAND_COLORS[0];
   for (let y = y0; y < y1; y += FILL) {
-    let runX = -1;
+    let runX = Number.NaN;
     let runSand = false;
     const flush = (x: number) => {
-      if (runX < 0) {
+      if (Number.isNaN(runX)) {
         return;
       }
       grains.push({
@@ -420,7 +889,7 @@ function paintLandFill(
         height: FILL + TILE_BLEED,
         color: runSand ? sand : grass,
       });
-      runX = -1;
+      runX = Number.NaN;
     };
     for (let x = x0; x < x1; x += FILL) {
       const midX = x + 1;
@@ -431,7 +900,7 @@ function paintLandFill(
         continue;
       }
       const beach = shoreSand(midX, midY, cx, cy, rx, ry, zones);
-      if (runX < 0) {
+      if (Number.isNaN(runX)) {
         runX = x;
         runSand = beach;
         continue;

@@ -5,6 +5,7 @@ import Phaser from 'phaser';
 import type { IslandZoneId } from '@/constants/island-zones';
 import { ISLAND_ZONES } from '@/constants/island-zones';
 import { nearestWalkPoint } from '@/constants/island-terrain';
+import { largestRegion } from '@/components/island/walk-route';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
@@ -25,6 +26,14 @@ import {
 } from './gas';
 import {
   CELL,
+  DEEP_SHEET,
+  RAMP_COLORS,
+  RAMP_PX,
+  RAMP_SHEETS,
+  RAMP_SPARKLE_COLOR,
+  REVEAL_MS,
+  SHORE_SHEET,
+  SLICE_PX,
   CRATER_MID,
   CRATER_PIXELS,
   CRATER_SPANS,
@@ -33,6 +42,12 @@ import {
   VOLCANO_ROWS,
   buildIslandCells,
   craterCloudPoint,
+  islandFrame,
+  isWalkable,
+  landShape,
+  revealDelay,
+  shoreHeight,
+  splitReveal,
   magmaColor,
   sandStandX,
   sandStandY,
@@ -40,13 +55,29 @@ import {
   surgeFill,
   volcanoOrigin,
   type IslandCell,
+  type RampBlock,
+  type Reveal,
+  type RevealOrigin,
+  type ShoreSlice,
+  type SurfaceGrain,
 } from './shape';
+import {
+  MAX_TICK_MS,
+  ON_LAND_RADIUS,
+  advance,
+  createEngine,
+  currentLift,
+  planRoute,
+  stageIdFor,
+  startRest,
+  startTravel,
+  type Engine,
+  type Planner,
+  type WalkGrid,
+} from './creature';
+import { MOTION_RULES, MOTION_SEQ, type MotionSheet } from './motion';
+import { SPARKLE_ON_FRAMES, SeaClock, waveLag } from './seaClock';
 
-import seaUrl1 from '../assets/sea-01.png';
-import seaUrl2 from '../assets/sea-02.png';
-import seaUrl3 from '../assets/sea-03.png';
-import seaUrl4 from '../assets/sea-04.png';
-import seaUrl5 from '../assets/sea-05.png';
 import grassLawnUrl from '../assets/grass-lawn.png';
 import sandFillUrl from '../assets/sand-fill.png';
 import eggUrl from '../assets/gyulsae-egg.png';
@@ -58,7 +89,12 @@ const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: tr
   string
 >;
 
-const SEA_URLS = [seaUrl1, seaUrl2, seaUrl3, seaUrl4, seaUrl5];
+/** 깊은 바다 그림판 한 장의 세로 줄 수와 가로 최대 칸 수 (64칸 = 2048px, 모바일 GPU 텍스처 한도 안) */
+const SEA_BAND_ROWS = 8;
+const SEA_CHUNK_COLS = 64;
+
+/** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
+const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 // ------------------------------------------------------------------ 카메라 (island-camera.tsx)
 const MIN_ZOOM = 0.62;
@@ -84,32 +120,6 @@ const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: num
   south: { x: 0.24, y: 0.7, w: 0.52, h: 0.12 },
 };
 
-type WalkPoint = { x: number; y: number };
-
-// ------------------------------------------------------------------ 귤새 걷기 (wandering-creature.tsx)
-const WALK_SPEED = 16;
-const IDLE_MS_MIN = 1600;
-const IDLE_MS_MAX = 4200;
-const MOVE_MS_MIN = 3200;
-const MOVE_MS_MAX = 11000;
-
-const rand = (min: number, max: number) => min + Math.random() * Math.max(0, max - min);
-
-function pickPoint(points: WalkPoint[], avoid?: WalkPoint | null): WalkPoint | null {
-  if (points.length === 0) return null;
-  if (points.length === 1) return points[0];
-  let next = points[Math.floor(Math.random() * points.length)];
-  if (avoid) {
-    for (let i = 0; i < 4; i += 1) {
-      const candidate = points[Math.floor(Math.random() * points.length)];
-      if (Math.hypot(candidate.x - avoid.x, candidate.y - avoid.y) > 18) {
-        next = candidate;
-        break;
-      }
-    }
-  }
-  return next;
-}
 
 const DEFAULT_STATE: GameState = {
   zones: ['core'],
@@ -156,11 +166,24 @@ export class IslandScene extends Phaser.Scene {
 
   private worldCam!: Phaser.Cameras.Scene2D.Camera;
   private fixedCam!: Phaser.Cameras.Scene2D.Camera;
-  private seaLayer!: Phaser.GameObjects.Container;
   private world!: Phaser.GameObjects.Container;
   private overlay!: Phaser.GameObjects.Container;
 
-  private sea!: Phaser.GameObjects.TileSprite;
+  private sea!: Phaser.GameObjects.Container;
+  /**
+   * 깊은 바다 그림판. 칸마다 시간차가 다른 프레임을 가로로 그리고, 같은 줄을 SEA_BAND_ROWS 번 세로로 복사한다.
+   * 가로는 최대 SEA_CHUNK_COLS 칸씩 나눈다 (GPU 텍스처 크기 한도). 그림판을 쓰는 Image 들을 세로로 쌓아 깐다.
+   */
+  private seaChunks: { tex: Phaser.Textures.CanvasTexture; col0: number; cols: number }[] = [];
+  private seaCol0 = 0;
+  private seaClock = new SeaClock();
+  private centerCol = 0;
+  private water!: Phaser.GameObjects.Container;
+  private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
+  private shoreStrips: { img: Phaser.GameObjects.Image; lag: number }[] = [];
+  private sparkles: { x: number; y: number; lag: number }[] = [];
+  private sparkleGfx!: Phaser.GameObjects.Graphics;
+  private waterSeq = 0;
   private quake!: Phaser.GameObjects.Container;
   private rising!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
@@ -168,8 +191,8 @@ export class IslandScene extends Phaser.Scene {
   private lava!: Phaser.GameObjects.Graphics;
   private decor!: Phaser.GameObjects.Container;
   private creature!: Phaser.GameObjects.Container;
-  private creatureImg!: Phaser.GameObjects.Image;
-  private creatureShadow!: Phaser.GameObjects.Graphics;
+  private creatureBody!: Phaser.GameObjects.Image;
+  private creatureShadow!: Phaser.GameObjects.Image;
   private explore!: Phaser.GameObjects.Container;
   private gas!: Phaser.GameObjects.Graphics;
 
@@ -197,19 +220,15 @@ export class IslandScene extends Phaser.Scene {
     clearStarted: number;
   } = null;
 
-  // 귤새
+  // 귤새 (모션 엔진: creature.ts)
   private walk = {
-    points: [] as WalkPoint[],
+    engine: null as Engine | null,
+    points: [] as { x: number; y: number }[],
     pointsKey: '',
-    paused: false,
-    pos: { x: 0, y: 0 },
-    moving: false,
-    facing: 'right' as 'left' | 'right',
-    tween: null as Phaser.Tweens.Tween | null,
-    timer: null as Phaser.Time.TimerEvent | null,
-    idleSince: 0,
+    plan: undefined as Planner | undefined,
     size: 36,
-    placedOnce: false,
+    shown: 32,
+    unit: 36 / 32,
   };
 
   // 입력
@@ -233,7 +252,10 @@ export class IslandScene extends Phaser.Scene {
   }
 
   preload() {
-    SEA_URLS.forEach((url, i) => this.load.image(`sea-${i}`, url));
+    for (const [path, url] of Object.entries(motionUrls)) {
+      const name = /([\w-]+)\.png$/.exec(path)?.[1];
+      if (name) this.load.spritesheet(name, url, { frameWidth: 32, frameHeight: 32 });
+    }
     this.load.image('grass-lawn', grassLawnUrl);
     this.load.image('sand-fill', sandFillUrl);
     this.load.image('gyulsae-egg', eggUrl);
@@ -256,46 +278,47 @@ export class IslandScene extends Phaser.Scene {
         this.textures.get(`volcano-${r}-${c}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
       }
     }
-    this.makeSeaStrip();
     this.makeDotTextures();
 
     // 층: 섬 세계(바다 포함, 확대·이동) → 화산재(화면 고정)
     // 바다도 섬과 같은 세계에 둔다. 끌거나 확대하면 바다와 섬이 한 화면처럼 같이 움직인다.
-    this.seaLayer = this.add.container(0, 0);
     this.world = this.add.container(0, 0);
     this.overlay = this.add.container(0, 0);
 
-    this.sea = this.add.tileSprite(0, 0, 1, 1, 'sea-strip').setOrigin(0);
+    this.sea = this.add.container(0, 0);
     this.layoutSea();
 
     this.quake = this.add.container(0, 0);
+    // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
+    this.water = this.add.container(0, 0);
+    this.sparkleGfx = this.add.graphics();
     this.rising = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
     this.volcano = this.add.container(0, 0);
     this.lava = this.add.graphics();
-    this.quake.add([this.rising, this.terrain, this.volcano, this.lava]);
+    this.quake.add([this.water, this.sparkleGfx, this.rising, this.terrain, this.volcano, this.lava]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
-    this.creatureShadow = this.add.graphics();
-    this.creatureImg = this.add.image(0, 0, 'gyulsae-young');
-    this.creature.add([this.creatureShadow, this.creatureImg]);
+    this.creatureShadow = this.add.image(0, 0, 'juvenile-idle-shadow', 0);
+    this.creatureBody = this.add.image(0, 0, 'juvenile-idle', 0);
+    this.creature.add([this.creatureShadow, this.creatureBody]);
     this.creature.setVisible(false);
     this.explore = this.add.container(0, 0).setVisible(false);
-    // 바다는 흔들림(quake) 밖에 둔다. 원래도 땅만 흔들렸다.
+    // 깊은 바다는 흔들림(quake) 밖에 둔다. 원래도 깊은 바다는 안 흔들렸다.
     this.world.add([this.sea, this.quake, this.decor, this.creature, this.explore]);
 
     this.gas = this.add.graphics();
     this.overlay.add(this.gas);
 
-    // 카메라: main = 바다(고정), worldCam = 섬, fixedCam = 화산재
+    // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
     const main = this.cameras.main;
     main.setBackgroundColor('#1C8481');
     this.worldCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.fixedCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     main.ignore([this.world, this.overlay]);
-    this.worldCam.ignore([this.seaLayer, this.overlay]);
-    this.fixedCam.ignore([this.seaLayer, this.world]);
+    this.worldCam.ignore([this.overlay]);
+    this.fixedCam.ignore([this.world]);
     for (const c of [main, this.worldCam, this.fixedCam]) c.setRoundPixels(true);
     this.applyFixedCams();
     this.applyCamera(true);
@@ -312,30 +335,71 @@ export class IslandScene extends Phaser.Scene {
   }
 
   /**
-   * 바다를 화면보다 넓게 깐다. 가장 작게 축소(0.62)하고 끝까지 끌어도 빈 곳이 안 보이게
-   * 화면 크기의 -1.2배 ~ +2.2배를 덮는다. 칸 무늬(sea-01..05)는 섬 좌표 0 에서 시작하도록 맞춘다.
+   * 깊은 바다를 화면보다 넓게 깐다. 가장 작게 축소(0.62)하고 끝까지 끌어도 빈 곳이 안 보이게
+   * 화면 크기의 -1.2배 ~ +2.2배를 덮는다. 바다는 섬과 같은 세계에 있어서 끌거나 확대하면 같이 움직인다.
+   * 칸마다 시간차(waveLag)가 다르고 세로로는 같으므로, 한 줄을 캔버스에 그려 세로로 반복해 깐다.
    */
   private layoutSea() {
-    const strip = CELL * 5;
-    const x0 = Math.floor((-1.2 * this.W) / strip) * strip;
+    const x0 = Math.floor((-1.2 * this.W) / CELL) * CELL;
     const y0 = Math.floor((-1.2 * this.H) / CELL) * CELL;
-    const x1 = Math.ceil((2.2 * this.W) / strip) * strip;
+    const x1 = Math.ceil((2.2 * this.W) / CELL) * CELL;
     const y1 = Math.ceil((2.2 * this.H) / CELL) * CELL;
-    this.sea.setPosition(x0, y0).setSize(x1 - x0, y1 - y0);
+    this.centerCol = Math.floor(islandFrame(this.W, this.H).cx / CELL);
+    this.seaCol0 = x0 / CELL;
+    const old = this.seaChunks.map((c) => c.tex.key);
+    this.sea.removeAll(true);
+    this.seaChunks = [];
+    const totalCols = (x1 - x0) / CELL;
+    const bandH = SEA_BAND_ROWS * CELL;
+    for (let c = 0; c < totalCols; c += SEA_CHUNK_COLS) {
+      const cols = Math.min(SEA_CHUNK_COLS, totalCols - c);
+      const tex = this.textures.createCanvas(`sea-${(this.waterSeq += 1)}`, cols * CELL, bandH);
+      if (!tex) continue;
+      this.seaChunks.push({ tex, col0: this.seaCol0 + c, cols });
+      for (let y = y0; y < y1; y += bandH) {
+        this.sea.add(this.add.image(x0 + c * CELL, y, tex.key).setOrigin(0));
+      }
+    }
+    this.paintSea();
+    for (const key of old) this.textures.remove(key);
+  }
+
+  /** 바다 시계가 넘어갈 때마다 깊은 바다를 다시 그린다 (칸마다 시간차). 첫 줄을 그리고 아래로 복사한다 */
+  private paintSea() {
+    const sheet = DEEP_SHEET as MotionSheet;
+    const src = this.textures.get(sheet.body as unknown as string).getSourceImage() as CanvasImageSource;
+    for (const chunk of this.seaChunks) {
+      const ctx = chunk.tex.getContext();
+      ctx.imageSmoothingEnabled = false;
+      for (let i = 0; i < chunk.cols; i += 1) {
+        const f = this.seaClock.shown(waveLag(chunk.col0 + i, this.centerCol));
+        ctx.drawImage(src, (f % sheet.cols) * CELL, Math.floor(f / sheet.cols) * CELL, CELL, CELL, i * CELL, 0, CELL, CELL);
+      }
+      for (let r = 1; r < SEA_BAND_ROWS; r += 1) {
+        ctx.drawImage(chunk.tex.getSourceImage() as CanvasImageSource, 0, 0, chunk.cols * CELL, CELL, 0, r * CELL, chunk.cols * CELL, CELL);
+      }
+      chunk.tex.refresh();
+    }
+  }
+
+  /** 얕은 물 블록·해안 띠의 시트 프레임과 반짝이를 지금 바다 시계에 맞춘다 */
+  private stepWater() {
+    for (const b of this.rampBlocks) b.img.setFrame(this.seaClock.shown(b.lag));
+    for (const s of this.shoreStrips) {
+      const crop = s.img.getData('crop') as [number, number, number, number];
+      s.img.setFrame(this.seaClock.shown(s.lag));
+      s.img.setCrop(crop[0], crop[1], crop[2], crop[3]);
+    }
+    const g = this.sparkleGfx;
+    g.clear();
+    if (this.sparkles.length === 0) return;
+    g.fillStyle(hex(RAMP_SPARKLE_COLOR), 1);
+    for (const sp of this.sparkles) {
+      if (this.seaClock.shown(sp.lag) < SPARKLE_ON_FRAMES) g.fillRect(sp.x, sp.y, RAMP_PX, RAMP_PX);
+    }
   }
 
   // ------------------------------------------------------------------ 텍스처
-  private makeSeaStrip() {
-    // RN SeaFill: 칸의 가로 순서 = sea-01..05, 세로는 같은 줄 반복. 다섯 장을 이어 붙여 한 장을 깔면 같다.
-    const tex = this.textures.createCanvas('sea-strip', CELL * 5, CELL);
-    if (!tex) return;
-    const ctx = tex.getContext();
-    for (let i = 0; i < 5; i += 1) {
-      ctx.drawImage(this.textures.get(`sea-${i}`).getSourceImage() as CanvasImageSource, i * CELL, 0);
-    }
-    tex.refresh();
-  }
-
   private makeDotTextures() {
     for (const [id, rows] of Object.entries(PATTERNS)) {
       const cols = Math.max(...rows.map((r) => r.length));
@@ -475,8 +539,8 @@ export class IslandScene extends Phaser.Scene {
     if (!this.creature.visible) return;
     const w = this.worldCam.getWorldPoint(p.x, p.y);
     const half = this.walk.size / 2;
-    const cx = this.creature.x;
-    const cy = this.creature.y;
+    const cx = this.walk.engine?.x ?? this.creature.x;
+    const cy = this.walk.engine?.y ?? this.creature.y;
     if (Math.abs(w.x - cx) <= half && Math.abs(w.y - cy) <= half) {
       send({ type: 'tapCreature' });
     }
@@ -486,6 +550,11 @@ export class IslandScene extends Phaser.Scene {
   private onMessage(msg: ToGame) {
     if (msg.type === 'state') {
       const { type: _type, ...next } = msg;
+      if (!this.gotState) {
+        // 기본값으로 만든 귤새를 버리고 진짜 첫 상태의 첫 점에서 시작한다 (RN 처럼)
+        this.walk.engine = null;
+        this.walk.pointsKey = '';
+      }
       this.applyState(next);
       if (!this.gotState) {
         this.gotState = true;
@@ -525,7 +594,8 @@ export class IslandScene extends Phaser.Scene {
   private buildTerrain() {
     const { W, H } = this;
     const s = this.state;
-    const { cells, grains } = buildIslandCells(W, H, s.zones, s.growing, s.look);
+    const island = buildIslandCells(W, H, s.zones, s.growing, s.look);
+    const { cells, grains } = island;
 
     // 고정된 타일 칸 + 점들을 캔버스 한 장에 미리 그린다. (RN은 이것들이 전부 View 였다)
     const tiles = cells.filter((c) => c.riseDelay == null && !(c.kind === 'sand' || c.fine));
@@ -581,6 +651,8 @@ export class IslandScene extends Phaser.Scene {
       this.rising.add(this.risingCell(c));
     }
 
+    this.buildWater(island);
+
     // 화산 칸 (휴화산 4×3)
     const origin = volcanoOrigin(W, H);
     this.volcanoAt = { x: origin.x * CELL, y: origin.y * CELL };
@@ -594,6 +666,152 @@ export class IslandScene extends Phaser.Scene {
         this.volcano.add(img);
       }
     }
+  }
+
+  /**
+   * 얕은 물과 남쪽 해안 (beach-home 의 ShallowRampLayer · ShoreSlices, 'ramp' 방식).
+   * - 블록: 32칸마다 얕은 물 시트 t1~t3 중 하나를 칸 시간차에 맞춰 재생
+   * - 점: 단계 사이 디더링(고정) → 한 장으로 미리 그림
+   * - 해안 띠: 파도 시트를 8px 세로 띠로 잘라 섬 곡선을 따라 붙임
+   * - 섬이 솟는 중(before 있음)에는 사라지는 것·새로 생기는 것을 가운데서 먼 순서로 380ms 동안 흐리게/진하게
+   */
+  private buildWater(island: ReturnType<typeof buildIslandCells>) {
+    this.tweens.killTweensOf(this.water.list);
+    this.water.removeAll(true);
+    this.rampBlocks = [];
+    this.shoreStrips = [];
+    this.sparkles = [];
+    const ramp = island.ramp;
+    const slices = island.slices;
+    if (!ramp && !slices) {
+      this.stepWater();
+      return;
+    }
+    const shape = landShape(this.W, this.H);
+    const origin: RevealOrigin = { cx: shape.cx, cy: shape.cy };
+    const before = island.before;
+
+    const blockImg = (block: RampBlock) => {
+      const sheet = RAMP_SHEETS[block.stage] as MotionSheet;
+      const lag = waveLag(Math.floor(block.x / CELL), this.centerCol);
+      const img = this.add
+        .image(block.x, block.y, sheet.body as unknown as string, this.seaClock.shown(lag))
+        .setOrigin(0)
+        .setDisplaySize(block.size, block.size);
+      this.rampBlocks.push({ img, lag });
+      return img;
+    };
+    const sliceImgs = (slice: ShoreSlice) => {
+      const col = Math.floor(slice.x / CELL);
+      const lag = waveLag(col, this.centerCol);
+      const height = shoreHeight(slice);
+      const cropX = slice.x - col * CELL;
+      const img = this.add
+        .image(col * CELL, slice.top, SHORE_SHEET.body as unknown as string, this.seaClock.shown(lag))
+        .setOrigin(0)
+        .setData('crop', [cropX, 0, SLICE_PX, height]);
+      img.setCrop(cropX, 0, SLICE_PX, height);
+      this.shoreStrips.push({ img, lag });
+      const parts: Phaser.GameObjects.GameObject[] = [img];
+      if (slice.opacity < 1) {
+        // 띠가 짧아지는 곳은 아래 두 줄을 얕은 물 색 점으로 섞는다 (ShoreSliceStrip melt)
+        const melt = this.add.graphics();
+        melt.fillStyle(hex(RAMP_COLORS[0]), 1);
+        for (const y of [height - RAMP_PX * 2, height - RAMP_PX]) {
+          for (let i = 0; i < SLICE_PX / RAMP_PX; i += 1) {
+            if ((i + (slice.x + y) / RAMP_PX) % 2 === 0) melt.fillRect(slice.x + i * RAMP_PX, slice.top + y, RAMP_PX, RAMP_PX);
+          }
+        }
+        parts.push(melt);
+      }
+      return parts;
+    };
+    const dotsImage = (dots: SurfaceGrain[]) => {
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const d of dots) {
+        x0 = Math.min(x0, d.x);
+        y0 = Math.min(y0, d.y);
+        x1 = Math.max(x1, d.x + d.size);
+        y1 = Math.max(y1, d.y + (d.height ?? d.size));
+      }
+      x0 = Math.floor(x0);
+      y0 = Math.floor(y0);
+      const key = `ramp-dots-${(this.waterSeq += 1)}`;
+      const tex = this.textures.createCanvas(key, Math.max(1, Math.ceil(x1) - x0), Math.max(1, Math.ceil(y1) - y0));
+      if (!tex) return dotsGfx(dots);
+      const ctx = tex.getContext();
+      for (const d of dots) {
+        ctx.fillStyle = d.color;
+        ctx.fillRect(d.x - x0, d.y - y0, d.size, d.height ?? d.size);
+      }
+      tex.refresh();
+      const img = this.add.image(x0, y0, key).setOrigin(0);
+      img.once('destroy', () => this.textures.remove(key));
+      return img;
+    };
+    const dotsGfx = (dots: SurfaceGrain[]) => {
+      const g = this.add.graphics();
+      for (const d of dots) {
+        g.fillStyle(hex(d.color), 1);
+        g.fillRect(d.x, d.y, d.size, d.height ?? d.size);
+      }
+      return g;
+    };
+    /** stay 는 그대로, gone 은 흐려지며 사라지고, fresh 는 진해지며 나타난다 (RevealGroup) */
+    const place = <T,>(
+      reveal: Reveal<T>,
+      make: (items: T[]) => Phaser.GameObjects.GameObject[],
+      makeStay: (items: T[]) => Phaser.GameObjects.GameObject[] = make,
+    ) => {
+      this.water.add(makeStay(reveal.stay));
+      for (const [list, appear] of [
+        [reveal.gone, false],
+        [reveal.fresh, true],
+      ] as const) {
+        for (const [delay, items] of list) {
+          const objs = make(items) as unknown as (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha)[];
+          for (const o of objs) o.setAlpha(appear ? 0 : 1);
+          this.water.add(objs);
+          this.tweens.add({ targets: objs, alpha: appear ? 1 : 0, duration: REVEAL_MS, delay, ease: 'Cubic.Out' });
+        }
+      }
+    };
+
+    if (ramp) {
+      const blocks = splitReveal(
+        ramp.blocks,
+        before?.ramp?.blocks,
+        (b) => `${b.key}:${b.stage}:${b.size}`,
+        (b) => revealDelay(b.x + b.size / 2, b.y + b.size / 2, origin),
+      );
+      place(blocks, (items) => items.map(blockImg));
+      const dots = splitReveal(
+        ramp.dots,
+        before?.ramp?.dots,
+        (d) => `${d.key}:${d.color}:${d.size}`,
+        (d) => revealDelay(d.x + d.size / 2, d.y, origin),
+      );
+      place(
+        dots,
+        (items) => (items.length ? [dotsGfx(items)] : []),
+        (items) => (items.length ? [dotsImage(items)] : []),
+      );
+      // 반짝이는 섬이 솟는 동안에는 쉰다
+      if (!before) this.sparkles = ramp.sparkles.map((sp) => ({ x: sp.x, y: sp.y, lag: ((sp.lag % 32) + 32) % 32 }));
+    }
+    if (slices) {
+      const reveal = splitReveal(
+        slices,
+        before?.slices,
+        (sl) => `${sl.x}:${sl.top}:${sl.opacity}`,
+        (sl) => revealDelay(sl.x + SLICE_PX / 2, sl.top, origin),
+      );
+      place(reveal, (items) => items.flatMap(sliceImgs));
+    }
+    this.stepWater();
   }
 
   private risingCell(cell: IslandCell) {
@@ -877,12 +1095,13 @@ export class IslandScene extends Phaser.Scene {
     this.decorTweens.push(sparkTween);
   }
 
-  // ------------------------------------------------------------------ 귤새 (WanderingCreature)
-  private walkPoints(): WalkPoint[] {
+  // ------------------------------------------------------------------ 귤새 (WanderingCreature + 모션 엔진)
+  /** beach-play pointsOnBeach: 열린 구역마다 네 점. 알은 화산 남쪽 모래 한 점 */
+  private rawWalkPoints() {
     const { W, H } = this;
     if (W === 0 || H === 0) return [];
     if (this.state.level <= 1) return [{ x: sandStandX(W, H), y: sandStandY(W, H) }];
-    const points: WalkPoint[] = [];
+    const points: { x: number; y: number }[] = [];
     for (const id of this.openZones(this.state)) {
       const frame = this.frameBox(id);
       for (const across of [0.28, 0.72]) {
@@ -894,134 +1113,98 @@ export class IslandScene extends Phaser.Scene {
     return points;
   }
 
+  /** beach-play walkGrid: 걸을 수 있는 32칸(화산·물가 제외) 중 가장 큰 덩어리. 알은 길찾기 없음 */
+  private walkGrid(): WalkGrid | undefined {
+    const { W, H } = this;
+    if (this.state.level <= 1 || W === 0 || H === 0) return undefined;
+    const zones = this.openZones(this.state);
+    const canWalk = (x: number, y: number) => isWalkable(x, y, W, H, zones);
+    const cells: { col: number; row: number }[] = [];
+    for (let row = 0; row < Math.ceil(H / CELL); row += 1) {
+      for (let col = 0; col < Math.ceil(W / CELL); col += 1) {
+        if (canWalk((col + 0.5) * CELL, (row + 0.5) * CELL)) cells.push({ col, row });
+      }
+    }
+    return { cell: CELL, cells: largestRegion(cells), canWalk };
+  }
+
   private updateWalkers() {
     const s = this.state;
     const w = this.walk;
-    const level = s.level;
-    w.size = this.sc(level >= 4 ? 44 : level >= 3 ? 40 : 36);
-    // 32칸 그림이 기기 픽셀 정수배로 그려지게 크기를 맞춘다 (흐림·들쭉날쭉 방지)
+    w.size = this.sc(s.level >= 4 ? 44 : s.level >= 3 ? 40 : 36);
+    w.unit = w.size / MOTION_SEQ['egg-still'].artSize;
+    // 32칸 그림이 기기 픽셀 정수배로 그려지게 보이는 크기만 맞춘다 (흐림·들쭉날쭉 방지). 움직임은 원래 크기 기준
     const px = Math.max(1, Math.round((w.size * this.dpr) / 32));
-    const shown = (px * 32) / this.dpr;
-    this.creatureImg.setTexture(creatureKey(level)).setDisplaySize(shown, shown);
-    this.creatureImg.y = -3;
-    // RN: 폭 size×0.55, 높이 4, 모서리 2 인 반투명 그림자
-    const sw = w.size * 0.55;
-    this.creatureShadow.clear();
-    this.creatureShadow.fillStyle(0x1a1520, 0.18);
-    this.creatureShadow.fillRoundedRect(-sw / 2, shown / 2 - 1, sw, 4, 2);
+    w.shown = (px * 32) / this.dpr;
+    this.creatureBody.setDisplaySize(w.shown, w.shown);
+    this.creatureShadow.setDisplaySize(w.shown, w.shown);
 
-    const points = this.walkPoints();
-    const paused = level <= 1;
+    const footOffset = w.size / 2;
+    const raw = this.rawWalkPoints();
+    const grid = this.walkGrid();
+    let points = raw;
+    if (grid && grid.cells.length > 0) {
+      const cellPoints = grid.cells.map((c) => ({ x: (c.col + 0.5) * grid.cell, y: (c.row + 0.5) * grid.cell - footOffset }));
+      const first = raw[0] ? nearestWalkPoint(cellPoints, raw[0]) : null;
+      points = first ? [first, ...cellPoints.filter((p) => p !== first)] : cellPoints;
+    }
+    w.plan = grid ? (from, to) => planRoute(grid, footOffset, from, to) : undefined;
+
     const visible = !s.placing && !s.petOpen && points.length > 0;
     const wasVisible = this.creature.visible;
     this.creature.setVisible(visible);
-    if (!visible && wasVisible) {
-      // RN 에서는 이때 귤새가 사라졌다(언마운트). 걷기·타이머도 멈춘다
-      this.stopWalk();
-    }
-    if (visible && !wasVisible && w.placedOnce && points.length > 0) {
-      // 다시 나타날 때는 첫 점에서 오른쪽을 보고 서 있다가 잠시 뒤 걷는다 (새로 마운트된 것과 같게)
-      this.stopWalk();
-      w.pos = { ...points[0] };
-      w.facing = 'right';
+    if (!visible) {
+      // RN 에서는 이때 귤새가 사라졌다(언마운트). 다시 나오면 새로 시작한다
+      if (wasVisible) w.engine = null;
       w.points = points;
       w.pointsKey = JSON.stringify(points);
-      w.paused = level <= 1;
-      if (!w.paused) w.timer = this.time.delayedCall(rand(600, 1400), () => this.walkOnce());
       return;
     }
 
     const key = JSON.stringify(points);
-    const pausedChanged = paused !== w.paused;
-    const countChanged = points.length !== w.points.length;
-    w.paused = paused;
-    if (key === w.pointsKey && !pausedChanged) return;
-    w.pointsKey = key;
+    if (w.engine && key === w.pointsKey) return;
     w.points = points;
-    if (points.length === 0) return;
-
-    if (!w.placedOnce) {
-      w.placedOnce = true;
-      w.pos = { ...points[0] };
-      this.creature.setPosition(w.pos.x, w.pos.y);
-    }
-
-    // 땅이 바뀌면 가까운 점으로 돌아온다
-    const nearest = nearestWalkPoint(points, w.pos);
-    if (nearest) {
-      if (paused) {
-        this.stopWalk();
-        w.pos = { x: nearest.x, y: nearest.y };
-        this.creature.setPosition(w.pos.x, w.pos.y);
-      } else if (!points.some((p) => Math.hypot(p.x - w.pos.x, p.y - w.pos.y) < 28)) {
-        const dist = Math.hypot(nearest.x - w.pos.x, nearest.y - w.pos.y);
-        const duration = Math.min(MOVE_MS_MAX, Math.max(1200, (dist / WALK_SPEED) * 1000));
-        this.walkTo(nearest, duration, 'Quad.InOut', false);
-      }
-    }
-
-    if (pausedChanged || countChanged) {
-      w.timer?.remove();
-      w.timer = null;
-      if (!paused) {
-        w.timer = this.time.delayedCall(rand(600, 1400), () => this.walkOnce());
-      }
-    }
-  }
-
-  private stopWalk() {
-    const w = this.walk;
-    w.tween?.stop();
-    w.tween = null;
-    w.timer?.remove();
-    w.timer = null;
-    w.moving = false;
-    w.idleSince = this.time.now;
-  }
-
-  private walkTo(target: WalkPoint, duration: number, ease: string, chain: boolean) {
-    const w = this.walk;
-    w.tween?.stop();
-    w.facing = target.x >= w.pos.x ? 'right' : 'left';
-    w.moving = true;
-    w.tween = this.tweens.add({
-      targets: w.pos,
-      x: target.x,
-      y: target.y,
-      duration,
-      ease,
-      onComplete: () => {
-        w.moving = false;
-        w.idleSince = this.time.now;
-        w.tween = null;
-        if (chain && !w.paused) {
-          w.timer = this.time.delayedCall(rand(IDLE_MS_MIN, IDLE_MS_MAX), () => this.walkOnce());
-        }
-      },
-    });
-  }
-
-  private walkOnce() {
-    const w = this.walk;
-    w.timer = null;
-    if (w.paused) return;
-    const target = pickPoint(w.points, w.pos);
-    if (!target) return;
-    const dist = Math.hypot(target.x - w.pos.x, target.y - w.pos.y);
-    if (dist < 8) {
-      w.timer = this.time.delayedCall(rand(IDLE_MS_MIN, IDLE_MS_MAX), () => this.walkOnce());
+    w.pointsKey = key;
+    if (!w.engine) {
+      w.engine = createEngine(stageIdFor(s.level), points[0]);
       return;
     }
-    const duration = Math.min(MOVE_MS_MAX, Math.max(MOVE_MS_MIN, (dist / WALK_SPEED) * 1000));
-    this.walkTo(target, duration, 'Sine.InOut', true);
+    // 땅이 바뀌면: 가까운 점이 멀면 그쪽으로 이동한다 (WanderingCreature walkPoints effect)
+    const engine = w.engine;
+    const nearest = nearestWalkPoint(points, engine);
+    if (!nearest) return;
+    const onLand = points.some((p) => Math.hypot(p.x - engine.x, p.y - engine.y) < ON_LAND_RADIUS);
+    if (!onLand) startTravel(engine, w.plan?.(engine, nearest) ?? [nearest]);
   }
 
-  private drawCreature(now: number) {
+  private drawCreature(delta: number) {
     const w = this.walk;
-    // 쉬는 동안 900ms씩 2dp 오르내린다
-    const bob = w.moving ? 0 : -2 * (0.5 - 0.5 * Math.cos((2 * Math.PI * (now - w.idleSince)) / 1800));
-    this.creature.setPosition(w.pos.x, w.pos.y + bob);
-    this.creatureImg.setFlipX(w.facing === 'left');
+    const engine = w.engine;
+    if (!engine || !this.creature.visible) return;
+    const stageId = stageIdFor(this.state.level);
+    if (engine.stageId !== stageId) {
+      engine.stageId = stageId;
+      startRest(engine, MOTION_RULES.firstRestMs);
+    }
+    advance(engine, Math.min(MAX_TICK_MS, Math.max(0, delta)), w.unit, w.points, false, w.plan);
+    const sheet = MOTION_SEQ[engine.seqId].sheet;
+    const body = sheet.body as unknown as string;
+    if (this.creatureBody.texture.key !== body) this.creatureBody.setTexture(body);
+    this.creatureBody.setFrame(engine.frame).setDisplaySize(w.shown, w.shown);
+    const shadow = sheet.shadow as unknown as string | undefined;
+    if (shadow) {
+      if (this.creatureShadow.texture.key !== shadow) this.creatureShadow.setTexture(shadow);
+      this.creatureShadow.setFrame(engine.frame).setDisplaySize(w.shown, w.shown).setVisible(true);
+    } else {
+      this.creatureShadow.setVisible(false);
+    }
+    const flip = engine.facing === -1;
+    this.creatureBody.setFlipX(flip);
+    this.creatureShadow.setFlipX(flip);
+    // 몸만 위로 뜨고(lift) 그림자는 땅에 그대로
+    this.creature.setPosition(engine.x, engine.y);
+    this.creatureBody.y = currentLift(engine, w.unit);
+    this.creatureShadow.y = 0;
   }
 
   // ------------------------------------------------------------------ 탐험 중 미니 수색 (ExploreWaitingAnim map)
@@ -1106,7 +1289,11 @@ export class IslandScene extends Phaser.Scene {
   update(now: number, delta: number) {
     this.updateErupt(now);
     this.updateGas(now);
-    this.drawCreature(now);
+    this.drawCreature(delta);
+    if (this.seaClock.tick(delta)) {
+      this.paintSea();
+      this.stepWater();
+    }
     this.drawExplore(now);
     this.flushCamera();
 

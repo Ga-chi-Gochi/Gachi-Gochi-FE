@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
-import { sandStandX, sandStandY } from '@/components/island/beach-home';
+import { isWalkable, sandStandX, sandStandY } from '@/components/island/beach-home';
+import { CELL } from '@/components/island/beach-tiles';
 import { useIslandCameraStyle } from '@/components/island/island-camera';
 
 import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
@@ -12,6 +13,7 @@ import {
   PlaceZoneTarget,
   PlacedDecorDrop,
 } from '@/components/island/place-mode';
+import { largestRegion, type WalkGrid } from '@/components/island/walk-route';
 import { WanderingCreature, type WalkPoint } from '@/components/island/wandering-creature';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelText } from '@/components/pixel/pixel-ui';
@@ -112,6 +114,22 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
     }
     return pointsOnBeach([...openZones], box);
   }, [box, eggStage, openZones]);
+  const walkGrid = useMemo<WalkGrid | undefined>(() => {
+    if (eggStage || box.width === 0 || box.height === 0) {
+      return undefined;
+    }
+    const zones = [...openZones];
+    const canWalk = (x: number, y: number) => isWalkable(x, y, box.width, box.height, zones);
+    const cells: { col: number; row: number }[] = [];
+    for (let row = 0; row < Math.ceil(box.height / CELL); row += 1) {
+      for (let col = 0; col < Math.ceil(box.width / CELL); col += 1) {
+        if (canWalk((col + 0.5) * CELL, (row + 0.5) * CELL)) {
+          cells.push({ col, row });
+        }
+      }
+    }
+    return { cell: CELL, cells: largestRegion(cells), canWalk };
+  }, [box, eggStage, openZones]);
 
   return (
     <View
@@ -181,7 +199,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         : null}
 
       {!placing && !petOpen && walkPoints.length > 0 ? (
-        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} paused={eggStage} onPress={onPet} />
+        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} walkGrid={walkGrid} onPress={onPet} />
       ) : null}
 
       {exploreForestUnlocked && isExploring && !placing && !petOpen ? (

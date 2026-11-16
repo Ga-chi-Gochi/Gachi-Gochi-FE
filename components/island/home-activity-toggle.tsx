@@ -21,8 +21,9 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 
 const fabOpen = require('@/assets/pixel/fab-open.png') as ImageSource;
 
-const AREA = 160;
-const FAB_SIZE = 76;
+const AREA = 212;
+const FAB_SIZE = 100;
+const LIFT = 20;
 const FAB_CENTER = AREA - FAB_SIZE / 2;
 const OPEN_MS = 280;
 const CLOSE_MS = 200;
@@ -41,9 +42,9 @@ type Action = {
 };
 
 const ACTIONS: Action[] = [
-  { label: '걷기', href: '/walking', source: require('@/assets/pixel/icon-walk.png'), top: 4, left: 96, size: 52 },
-  { label: '봉그깅', href: '/camera', source: require('@/assets/pixel/icon-bongging.png'), top: 31, left: 31, size: 52 },
-  { label: '로컬 상점', href: '/store', source: require('@/assets/pixel/icon-local-shop.png'), top: 96, left: 4, size: 52 },
+  { label: '걷기', href: '/walking', source: require('@/assets/pixel/icon-walk.png'), top: 5, left: 127, size: 70 },
+  { label: '봉그깅', href: '/camera', source: require('@/assets/pixel/icon-bongging.png'), top: 41, left: 41, size: 70 },
+  { label: '로컬 상점', href: '/store', source: require('@/assets/pixel/icon-local-shop.png'), top: 127, left: 5, size: 70 },
 ];
 
 export function HomeActivityToggle() {
@@ -100,7 +101,7 @@ export function HomeActivityToggle() {
         style={{
           position: 'absolute',
           right: scale(12),
-          bottom: Math.max(insets.bottom, scale(12)),
+          bottom: Math.max(insets.bottom, scale(12)) + scale(LIFT),
           width: scale(AREA),
           height: scale(AREA),
           zIndex: 40,

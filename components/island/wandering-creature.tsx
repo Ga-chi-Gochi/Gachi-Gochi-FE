@@ -1,8 +1,9 @@
 import { useIsFocused } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, View } from 'react-native';
 
 import { createSheetFrame, SheetSprite } from '@/components/island/sheet-sprite';
+import { planRoute, type WalkGrid } from '@/components/island/walk-route';
 import type { GrowthStage } from '@/constants/growth';
 import {
   MOTION_RULES,
@@ -22,8 +23,11 @@ type WanderingCreatureProps = {
   /** 열린 섬 타일 위의 점들 — 섬 확장 시 늘어남 */
   walkPoints: WalkPoint[];
   paused?: boolean;
+  walkGrid?: WalkGrid;
   onPress: (pos: { x: number; y: number }) => void;
 };
+
+type Planner = (from: WalkPoint, to: WalkPoint) => WalkPoint[] | null;
 
 type Phase = 'rest' | 'move' | 'takeoff' | 'fly' | 'land';
 type Facing = 1 | -1;
@@ -36,6 +40,7 @@ type Engine = {
   elapsed: number;
   restLeft: number;
   target: WalkPoint | null;
+  route: WalkPoint[];
   x: number;
   y: number;
   facing: Facing;
@@ -70,24 +75,25 @@ function rand([min, max]: readonly [number, number]) {
   return min + Math.random() * Math.max(0, max - min);
 }
 
-function pickPoint(points: WalkPoint[], avoid?: WalkPoint | null): WalkPoint | null {
+function pickTarget(points: WalkPoint[], from: WalkPoint, plan?: Planner): WalkPoint[] | null {
   if (points.length === 0) {
     return null;
   }
+  const routeTo = (point: WalkPoint) => (plan ? plan(from, point) : [point]);
   if (points.length === 1) {
-    return points[0];
+    return routeTo(points[0]);
   }
-  let next = points[Math.floor(Math.random() * points.length)];
-  if (avoid) {
-    for (let i = 0; i < PICK_RETRIES; i += 1) {
-      const candidate = points[Math.floor(Math.random() * points.length)];
-      if (Math.hypot(candidate.x - avoid.x, candidate.y - avoid.y) > PICK_MIN_GAP) {
-        next = candidate;
-        break;
+  const fallback = points[Math.floor(Math.random() * points.length)];
+  for (let i = 0; i < PICK_RETRIES; i += 1) {
+    const candidate = points[Math.floor(Math.random() * points.length)];
+    if (Math.hypot(candidate.x - from.x, candidate.y - from.y) > PICK_MIN_GAP) {
+      const route = routeTo(candidate);
+      if (route) {
+        return route;
       }
     }
   }
-  return next;
+  return routeTo(fallback);
 }
 
 function seqFor(stage: MotionStage, phase: Phase): MotionSeqId {
@@ -118,44 +124,66 @@ function startRest(engine: Engine, range: readonly [number, number]) {
   enterPhase(engine, 'rest');
   engine.restLeft = rand(range);
   engine.target = null;
+  engine.route = [];
 }
 
-function startTravel(engine: Engine, target: WalkPoint) {
-  const stage = MOTION_STAGES[engine.stageId];
+function aimAt(engine: Engine, target: WalkPoint) {
   engine.target = target;
   engine.facing = target.x >= engine.x ? 1 : -1;
+}
+
+function startTravel(engine: Engine, route: WalkPoint[]) {
+  const stage = MOTION_STAGES[engine.stageId];
+  aimAt(engine, route[0]);
+  engine.route = route.slice(1);
   enterPhase(engine, stage.kind === 'flight' && stage.takeoff ? 'takeoff' : 'move');
 }
 
-function chooseNext(engine: Engine, points: WalkPoint[]) {
-  const target = pickPoint(points, engine);
-  if (!target || Math.hypot(target.x - engine.x, target.y - engine.y) < ARRIVE_MIN) {
+function chooseNext(engine: Engine, points: WalkPoint[], plan?: Planner) {
+  const route = pickTarget(points, engine, plan);
+  const goal = route?.[route.length - 1];
+  if (!route || !goal || Math.hypot(goal.x - engine.x, goal.y - engine.y) < ARRIVE_MIN) {
     startRest(engine, MOTION_RULES.restMs);
     return;
   }
-  startTravel(engine, target);
+  startTravel(engine, route);
 }
 
 function remaining(engine: Engine) {
-  return engine.target ? Math.hypot(engine.target.x - engine.x, engine.target.y - engine.y) : 0;
+  if (!engine.target) {
+    return 0;
+  }
+  let total = Math.hypot(engine.target.x - engine.x, engine.target.y - engine.y);
+  let from = engine.target;
+  for (const point of engine.route) {
+    total += Math.hypot(point.x - from.x, point.y - from.y);
+    from = point;
+  }
+  return total;
 }
 
 function moveToward(engine: Engine, distance: number) {
-  const target = engine.target;
-  if (!target || distance <= 0) {
-    return;
-  }
-  const left = remaining(engine);
-  if (left <= distance) {
+  let left = distance;
+  while (left > 0 && engine.target) {
+    const target = engine.target;
+    const gap = Math.hypot(target.x - engine.x, target.y - engine.y);
+    if (gap > left) {
+      engine.x += ((target.x - engine.x) / gap) * left;
+      engine.y += ((target.y - engine.y) / gap) * left;
+      return;
+    }
     engine.x = target.x;
     engine.y = target.y;
-    return;
+    left -= gap;
+    const next = engine.route.shift();
+    if (!next) {
+      return;
+    }
+    aimAt(engine, next);
   }
-  engine.x += ((target.x - engine.x) / left) * distance;
-  engine.y += ((target.y - engine.y) / left) * distance;
 }
 
-function advance(engine: Engine, dt: number, unit: number, points: WalkPoint[], paused: boolean) {
+function advance(engine: Engine, dt: number, unit: number, points: WalkPoint[], paused: boolean, plan?: Planner) {
   let left = dt;
   for (let guard = 0; left > 0 && guard < MAX_STEPS_PER_TICK; guard += 1) {
     const seq = MOTION_SEQ[engine.seqId];
@@ -174,7 +202,7 @@ function advance(engine: Engine, dt: number, unit: number, points: WalkPoint[], 
     if (resting && !paused) {
       engine.restLeft -= step;
       if (engine.restLeft <= 0) {
-        chooseNext(engine, points);
+        chooseNext(engine, points, plan);
         continue;
       }
     }
@@ -231,6 +259,7 @@ function createEngine(stageId: MotionStageId, start: WalkPoint): Engine {
     elapsed: 0,
     restLeft: 0,
     target: null,
+    route: [],
     x: start.x,
     y: start.y,
     facing: 1,
@@ -239,12 +268,22 @@ function createEngine(stageId: MotionStageId, start: WalkPoint): Engine {
   return engine;
 }
 
-export function WanderingCreature({ growthStage, walkPoints, paused, onPress }: WanderingCreatureProps) {
+export function WanderingCreature({ growthStage, walkPoints: rawPoints, paused, walkGrid, onPress }: WanderingCreatureProps) {
   const { scale } = useResponsive();
   const focused = useIsFocused();
   const size = scale(growthStage.level >= 4 ? 44 : growthStage.level >= 3 ? 40 : 36);
   const unit = size / MOTION_SEQ[MOTION_STAGES.egg.rest].artSize;
   const stageId = stageIdFor(growthStage.level);
+  const footOffset = size / 2;
+  const walkPoints = useMemo(() => {
+    if (!walkGrid || walkGrid.cells.length === 0) {
+      return rawPoints;
+    }
+    const cellPoints = walkGrid.cells.map((cell) => ({ x: (cell.col + 0.5) * walkGrid.cell, y: (cell.row + 0.5) * walkGrid.cell - footOffset }));
+    const anchor = rawPoints[0];
+    const first = anchor ? nearestWalkPoint(cellPoints, anchor) : null;
+    return first ? [first, ...cellPoints.filter((point) => point !== first)] : cellPoints;
+  }, [footOffset, rawPoints, walkGrid]);
   const start = walkPoints[0] ?? { x: 0, y: 0 };
   const [x] = useState(() => new Animated.Value(start.x));
   const [y] = useState(() => new Animated.Value(start.y));
@@ -258,6 +297,11 @@ export function WanderingCreature({ growthStage, walkPoints, paused, onPress }: 
   const pausedRef = useRef(Boolean(paused));
   const unitRef = useRef(unit);
   const stageIdRef = useRef(stageId);
+  const planRef = useRef<Planner | undefined>(undefined);
+
+  useEffect(() => {
+    planRef.current = walkGrid ? (from, to) => planRoute(walkGrid, footOffset, from, to) : undefined;
+  }, [footOffset, walkGrid]);
 
   useEffect(() => {
     unitRef.current = unit;
@@ -290,7 +334,7 @@ export function WanderingCreature({ growthStage, walkPoints, paused, onPress }: 
     }
     const onLand = walkPoints.some((point) => Math.hypot(point.x - engine.x, point.y - engine.y) < ON_LAND_RADIUS);
     if (!onLand) {
-      startTravel(engine, nearest);
+      startTravel(engine, planRef.current?.(engine, nearest) ?? [nearest]);
     }
   }, [walkPoints, x, y]);
 
@@ -318,7 +362,7 @@ export function WanderingCreature({ growthStage, walkPoints, paused, onPress }: 
           engine.stageId = stageIdRef.current;
           startRest(engine, MOTION_RULES.firstRestMs);
         }
-        advance(engine, dt, unitRef.current, pointsRef.current, pausedRef.current);
+        advance(engine, dt, unitRef.current, pointsRef.current, pausedRef.current, planRef.current);
         const cols = MOTION_SEQ[engine.seqId].sheet.cols;
         sheetFrame.set(engine.frame % cols, Math.floor(engine.frame / cols));
         const next: Shown = {

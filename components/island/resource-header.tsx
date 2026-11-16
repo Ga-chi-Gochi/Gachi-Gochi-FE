@@ -2,6 +2,7 @@ import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
+import { VISIBLE_ISLAND_LOOKS } from '@/components/island/beach-home';
 import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { pixel } from '@/constants/pixel-theme';
@@ -28,9 +29,12 @@ function IslandVersionButtons({
   onPick: (version: IslandVersion) => void;
 }) {
   const { scale } = useResponsive();
+  if (VISIBLE_ISLAND_LOOKS.length < 2) {
+    return null;
+  }
   return (
     <View style={{ flexDirection: 'row', gap: scale(6), marginTop: scale(6) }}>
-      {([1, 2, 3] as const).map((id) => {
+      {VISIBLE_ISLAND_LOOKS.map((id) => {
         const selected = id === version;
         return (
           <Pressable

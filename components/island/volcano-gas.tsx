@@ -6,7 +6,6 @@ import { useIslandCameraSnapshot } from '@/components/island/island-camera';
 import { LAVA_BOIL_MS, LAVA_FILL_MS, useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { usePlayState } from '@/components/play-state';
 
-const SPREAD_MS = 1300;
 const HOLD_MS = 360;
 const CLEAR_MS = 1700;
 const CELL = 4;
@@ -15,7 +14,6 @@ const SCALLOP_MAX = 52;
 const BURST_MS = 280;
 const BURST_COVER = 0.36;
 const BURST_STEP = 48;
-const GLIDE_STEP = 12;
 const CLOUD = '#D9D4DC';
 const HOST_ID = 'volcano-gas-host';
 
@@ -460,21 +458,15 @@ function scallopRank(dist: number, angle: number) {
   return Math.max(0, dist - cap * 22 - mid * 10 - down * 18);
 }
 
-/** 넘치는 순간 화면 절반까지 터지고, 나머지는 같은 속도로 덮는다. */
+/** 터지는 속도 그대로 화면이 덮일 때까지 이어진다. 중간에 느려지지 않는다. */
 function cloudMotion(elapsed: number, maxRank: number) {
-  const half = maxRank * BURST_COVER;
   const burstStart = LAVA_FILL_MS + LAVA_BOIL_MS;
-  const burstEnd = burstStart + BURST_MS;
   if (elapsed <= burstStart) {
-    return { target: 0, step: GLIDE_STEP };
+    return { target: 0, step: BURST_STEP };
   }
-  if (elapsed < burstEnd) {
-    const u = (elapsed - burstStart) / BURST_MS;
-    const curved = 1 - (1 - u) ** 3;
-    return { target: curved * half, step: BURST_STEP };
-  }
-  const t = Math.min(1, (elapsed - burstEnd) / SPREAD_MS);
-  return { target: half + t * Math.max(0, maxRank - half), step: GLIDE_STEP };
+  const duration = BURST_MS / BURST_COVER;
+  const t = Math.min(1, (elapsed - burstStart) / duration);
+  return { target: t * maxRank, step: BURST_STEP };
 }
 
 function cellFade(rank: number, spread: number, hole: number) {

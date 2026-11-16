@@ -2,7 +2,7 @@ import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { BeachHome, type IslandLook } from '@/components/island/beach-home';
+import { BeachHome, VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
 import { VolcanoGas } from '@/components/island/volcano-gas';
 import { IslandCamera } from '@/components/island/island-camera';
@@ -119,7 +119,7 @@ export default function IslandHomeScreen() {
         <VolcanoGas />
         </>
       }>
-      <BeachHome look={islandVersion} />
+      <BeachHome look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1} />
       <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
     </IslandCamera>
     </VolcanoEruptionProvider>

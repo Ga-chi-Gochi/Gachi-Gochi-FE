@@ -52,14 +52,16 @@ type SurfaceGrain = {
   color: string;
 };
 
-/** 개발 중 비교용. 1은 둥근 섬, 2는 기울어진 제주도, 3은 세로로 긴 섬이다. */
+/** 개발 중 비교용. 1은 넓은 섬, 2는 기울어진 제주도, 3은 세로로 긴 섬이다. */
 export type IslandLook = 1 | 2 | 3;
+
+/** 화면에 보여줄 섬. 2와 3은 지우지 않고 잠깐 숨긴다. */
+export const VISIBLE_ISLAND_LOOKS: readonly IslandLook[] = [1];
 
 /** 모서리 계단. 바다와 맞닿는 자리는 이 절반으로 한 번 더 나눈다. */
 const EDGE = 4;
 const SAND_COLORS = ['#E6D4A6', '#F2E2B6', '#D8C48E', '#CDB888'] as const;
 const TUFT_COLORS = ['#6E9448', '#8FB85C', '#B7D488', '#D3E7A4', '#5C8438'] as const;
-const TUFT_SIZES = [2, 2, 4, 4, 6, 8] as const;
 
 
 /** 해안 타일 줄 수. 해안기 0부터 4까지. 섬 남쪽 아래에만 붙인다. */
@@ -313,7 +315,7 @@ function buildIslandCells(
       const x0 = x * CELL;
       const y0 = y * CELL;
       const meadow = grassy(x0 + CELL / 2, y0 + CELL / 2);
-      const fine = meadow && !CORNER_INSET.every(([dx, dy]) => grassy(x0 + dx, y0 + dy));
+      const fine = true;
       cells.push({
         key: keyOf(x, y),
         x,
@@ -326,7 +328,7 @@ function buildIslandCells(
     }
   }
 
-  const grains = buildSurfaceGrains(cells, [], cx, cy, rx, ry, fullZones, isLand, look);
+  const grains = buildSurfaceGrains(cells, cx, cy, rx, ry, fullZones);
   paintSouthFoam(
     grains,
     minX,
@@ -407,100 +409,146 @@ function pushGrassBlades(grains: SurfaceGrain[], cellX: number, cellY: number) {
   }
 }
 
-/** 모래는 4px로 깔고, 모서리는 2px로 깎는다. 잔디 점도 칸마다 섞는다. */
-function buildSurfaceGrains(
+/** 잔디 타일 사이로 바다가 비치지 않게 1px 겹친다. */
+const TILE_BLEED = 1;
+const FILL = 2;
+
+/** 땅 안쪽을 2px로 메운다. 칸 가운데만 보던 빈칸과, 확대할 때 갈라지는 경계를 같이 덮는다. */
+function paintLandFill(
+  grains: SurfaceGrain[],
   cells: IslandCell[],
-  shores: { x: number; southY: number }[],
   cx: number,
   cy: number,
   rx: number,
   ry: number,
   zones: readonly IslandZoneId[],
-  isLand: (x: number, y: number) => boolean,
-  look: IslandLook,
+) {
+  const solid = new Set<string>();
+  const rising = new Set<string>();
+  for (const cell of cells) {
+    if (cell.riseDelay != null) {
+      rising.add(keyOf(cell.x, cell.y));
+      continue;
+    }
+    if (cell.kind === 'grass' && !cell.fine) {
+      solid.add(keyOf(cell.x, cell.y));
+    }
+  }
+  const reach = 2.2;
+  const x0 = Math.floor((cx - rx * reach) / FILL) * FILL;
+  const x1 = Math.ceil((cx + rx * reach) / FILL) * FILL;
+  const y0 = Math.floor((cy - ry * reach) / FILL) * FILL;
+  const y1 = Math.ceil((cy + ry * reach) / FILL) * FILL;
+  const grass = '#C5D78A';
+  const sand = SAND_COLORS[0];
+  for (let y = y0; y < y1; y += FILL) {
+    let runX = -1;
+    let runSand = false;
+    const flush = (x: number) => {
+      if (runX < 0) {
+        return;
+      }
+      grains.push({
+        key: `fill-${runX},${y}`,
+        x: runX,
+        y,
+        size: x - runX + TILE_BLEED,
+        height: FILL + TILE_BLEED,
+        color: runSand ? sand : grass,
+      });
+      runX = -1;
+    };
+    for (let x = x0; x < x1; x += FILL) {
+      const midX = x + 1;
+      const midY = y + 1;
+      const cellKey = keyOf(Math.floor(x / CELL), Math.floor(y / CELL));
+      if (!onIsland(midX, midY, cx, cy, rx, ry, zones) || solid.has(cellKey) || rising.has(cellKey)) {
+        flush(x);
+        continue;
+      }
+      const beach = shoreSand(midX, midY, cx, cy, rx, ry, zones);
+      if (runX < 0) {
+        runX = x;
+        runSand = beach;
+        continue;
+      }
+      if (beach !== runSand) {
+        flush(x);
+        runX = x;
+        runSand = beach;
+      }
+    }
+    flush(x1);
+  }
+}
+
+/** 잔디 전체를 짧은 풀잎으로 덮는다. 타일 경계와 단색 가장자리가 풀밭으로 이어지게 한다. */
+function paintGrassTufts(
+  grains: SurfaceGrain[],
+  cells: IslandCell[],
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  zones: readonly IslandZoneId[],
+) {
+  const rising = new Set<string>();
+  for (const cell of cells) {
+    if (cell.riseDelay != null) {
+      rising.add(keyOf(cell.x, cell.y));
+    }
+  }
+  const reach = 2.2;
+  const step = 4;
+  const x0 = Math.floor((cx - rx * reach) / step) * step;
+  const x1 = Math.ceil((cx + rx * reach) / step) * step;
+  const y0 = Math.floor((cy - ry * reach) / step) * step;
+  const y1 = Math.ceil((cy + ry * reach) / step) * step;
+  for (let y = y0; y < y1; y += step) {
+    for (let x = x0; x < x1; x += step) {
+      if (mix(x, y) % 5 === 0) {
+        continue;
+      }
+      const bladeX = x + (mix(x, y, 1) % 3);
+      const bladeY = y + (mix(x, y, 2) % 3);
+      if (!onIsland(bladeX, bladeY, cx, cy, rx, ry, zones) || shoreSand(bladeX, bladeY, cx, cy, rx, ry, zones)) {
+        continue;
+      }
+      if (rising.has(keyOf(Math.floor(bladeX / CELL), Math.floor(bladeY / CELL)))) {
+        continue;
+      }
+      const colorIndex = mix(x, y, 4) % TUFT_COLORS.length;
+      const color = TUFT_COLORS[colorIndex];
+      const dark = colorIndex === 0 || colorIndex === 4;
+      grains.push({ key: `tuft-${x},${y}`, x: bladeX, y: bladeY, size: 2, color });
+      if (!dark) {
+        continue;
+      }
+      const dots = 1 + (mix(x, y, 6) % 2);
+      for (let dot = 1; dot <= dots; dot += 1) {
+        const tipX = bladeX + ((mix(x, y, 7 + dot) % 5) - 2) * 2;
+        const tipY = bladeY - 2 * dot;
+        if (!onIsland(tipX, tipY, cx, cy, rx, ry, zones) || shoreSand(tipX, tipY, cx, cy, rx, ry, zones)) {
+          continue;
+        }
+        grains.push({ key: `tuft-${x},${y}-${dot}`, x: tipX, y: tipY, size: 2, color });
+      }
+    }
+  }
+}
+
+/** 속 잔디는 타일로 두고, 가장자리와 확장 땅은 2px로 메운 뒤 풀잎을 얹는다. */
+function buildSurfaceGrains(
+  cells: IslandCell[],
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  zones: readonly IslandZoneId[],
 ) {
   const grains: SurfaceGrain[] = [];
-  const coastTop = new Map(shores.map((shore) => [shore.x, (shore.southY + 1) * CELL]));
-  const onLand = (px: number, py: number) => {
-    const nx = (px - cx) / rx;
-    const ny = (py - cy) / ry;
-    return insideZones(nx, ny, zones);
-  };
-  const aboveCoast = (px: number, py: number) => {
-    const coast = coastTop.get(Math.floor(px / CELL));
-    return coast == null || py < coast;
-  };
-  for (const cell of cells) {
-    if (cell.kind === 'coast' || cell.riseDelay != null) {
-      continue;
-    }
-    if (cell.kind === 'sand' || cell.fine) {
-      for (let row = 0; row < CELL / EDGE; row += 1) {
-        for (let col = 0; col < CELL / EDGE; col += 1) {
-          const x = cell.x * CELL + col * EDGE;
-          const y = cell.y * CELL + row * EDGE;
-          const midX = x + EDGE / 2;
-          const midY = y + EDGE / 2;
-          if (!onLand(midX, midY) || !aboveCoast(midX, midY)) {
-            continue;
-          }
-          const beach = shoreSand(midX, midY, cx, cy, rx, ry, zones);
-          if (beach) {
-            addPatch(grains, `rim-${cell.x},${cell.y},${col},${row}`, x, y, EDGE, sandColor(look, x, y), (px, py) =>
-              shoreSand(px, py, cx, cy, rx, ry, zones),
-            );
-            continue;
-          }
-          const speck = mix(x, y) % 5 === 0;
-          const color = speck ? TUFT_COLORS[mix(x, y, 2) % TUFT_COLORS.length] : '#C5D78A';
-          addPatch(grains, `meadow-${cell.x},${cell.y},${col},${row}`, x, y, EDGE, color, (px, py) => onLand(px, py) && !shoreSand(px, py, cx, cy, rx, ry, zones));
-        }
-      }
-      continue;
-    }
-    if (look === 1) {
-      const count = 8 + (mix(cell.x, cell.y) % 5);
-      for (let index = 0; index < count; index += 1) {
-        const size = TUFT_SIZES[mix(cell.x, cell.y, index) % TUFT_SIZES.length];
-        grains.push({
-          key: `tuft-${cell.x},${cell.y},${index}`,
-          x: cell.x * CELL + (mix(cell.x + 3, cell.y, index) % (CELL - size)),
-          y: cell.y * CELL + (mix(cell.x, cell.y + 5, index) % (CELL - size)),
-          size,
-          color: TUFT_COLORS[mix(cell.x, cell.y, index + 9) % TUFT_COLORS.length],
-        });
-      }
-      continue;
-    }
-    pushGrassBlades(grains, cell.x, cell.y);
-  }
-  const minX = Math.floor((cx - rx * 1.35) / EDGE);
-  const maxX = Math.ceil((cx + rx * 1.35) / EDGE);
-  const minY = Math.floor((cy - ry * 1.35) / EDGE);
-  const maxY = Math.ceil((cy + ry * 1.35) / EDGE);
-  for (let y = minY; y <= maxY; y += 1) {
-    for (let x = minX; x <= maxX; x += 1) {
-      const px = x * EDGE;
-      const py = y * EDGE;
-      const nx = (px + EDGE / 2 - cx) / rx;
-      const ny = (py + EDGE / 2 - cy) / ry;
-      if (!insideZones(nx, ny, zones)) {
-        continue;
-      }
-      if (isLand(Math.floor(px / CELL), Math.floor(py / CELL))) {
-        continue;
-      }
-      if (!aboveCoast(px, py)) {
-        continue;
-      }
-      const beach = shoreSand(px + EDGE / 2, py + EDGE / 2, cx, cy, rx, ry, zones);
-      const color = beach ? sandColor(look, px, py) : mix(px, py) % 5 === 0 ? TUFT_COLORS[mix(px, py, 2) % TUFT_COLORS.length] : '#C5D78A';
-      addPatch(grains, `step-${x},${y}`, px, py, EDGE, color, (sx, sy) => {
-        const sand = shoreSand(sx, sy, cx, cy, rx, ry, zones);
-        return beach ? sand : onLand(sx, sy) && !sand;
-      });
-    }
-  }
+  paintLandFill(grains, cells, cx, cy, rx, ry, zones);
+  paintGrassTufts(grains, cells, cx, cy, rx, ry, zones);
   return grains;
 }
 
@@ -802,8 +850,8 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
                 position: 'absolute',
                 left: cell.x * CELL,
                 top: cell.y * CELL,
-                width: CELL,
-                height: CELL,
+                width: CELL + TILE_BLEED,
+                height: CELL + TILE_BLEED,
                 ...pixelImageStyle,
               }}
               contentFit="fill"

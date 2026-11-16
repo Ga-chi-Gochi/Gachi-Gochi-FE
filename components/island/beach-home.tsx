@@ -1,5 +1,5 @@
 import { Image, type ImageSource } from 'expo-image';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Platform, View, useWindowDimensions } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
@@ -12,7 +12,10 @@ import {
   sandBeach,
   seaTiles,
 } from '@/components/island/beach-tiles';
+import { seaFrameForLag, useSeaClock, waveLag } from '@/components/island/sea-clock';
+import { SheetSprite } from '@/components/island/sheet-sprite';
 import { usePlayState } from '@/components/play-state';
+import { MOTION_SEQ, type MotionSheet } from '@/constants/island-motion';
 import type { IslandZoneId } from '@/constants/island-zones';
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
@@ -31,6 +34,20 @@ type IslandCell = {
   /** 넓히기로 새로 생긴 칸. 가운데에서 멀수록 늦게 올라온다. */
   riseDelay?: number;
 };
+
+const SHORE_SHEET = MOTION_SEQ['sea-shore'].sheet;
+const SHALLOW_SHEET = MOTION_SEQ['sea-shallow'].sheet;
+const DEEP_SHEET = MOTION_SEQ['sea-deep'].sheet;
+
+const ANIMATED_COAST_SHEETS: Partial<Record<number, MotionSheet>> = {
+  0: SHORE_SHEET,
+  3: SHALLOW_SHEET,
+  4: DEEP_SHEET,
+};
+
+function animatedSheet(cell: IslandCell): MotionSheet | undefined {
+  return cell.kind === 'coast' ? ANIMATED_COAST_SHEETS[cell.coastRow ?? 0] : undefined;
+}
 
 const LAND_SOURCE: Record<LandKind, ImageSource> = {
   grass: grassField,
@@ -237,6 +254,24 @@ export function BeachHome() {
     () => buildIslandCells(box.width, box.height, unlockedZones, growingZoneId),
     [box.height, box.width, growingZoneId, unlockedZones],
   );
+  const { staticCells, shoreCells, shallowCells, deepCells } = useMemo(() => {
+    const groups = { staticCells: [] as IslandCell[], shoreCells: [] as IslandCell[], shallowCells: [] as IslandCell[], deepCells: [] as IslandCell[] };
+    for (const cell of cells) {
+      const sheet = animatedSheet(cell);
+      if (sheet === SHORE_SHEET) {
+        groups.shoreCells.push(cell);
+      } else if (sheet === SHALLOW_SHEET) {
+        groups.shallowCells.push(cell);
+      } else if (sheet === DEEP_SHEET) {
+        groups.deepCells.push(cell);
+      } else {
+        groups.staticCells.push(cell);
+      }
+    }
+    return groups;
+  }, [cells]);
+
+  const centerCol = Math.floor(islandFrame(box.width, box.height).cx / CELL);
 
   return (
     <View
@@ -247,32 +282,73 @@ export function BeachHome() {
         setBox((current) => (current.width === width && current.height === height ? current : { width, height }));
       }}>
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="none">
-        <SeaFill />
+        <SeaFill centerCol={centerCol} />
       </View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
-        {cells.map((cell) =>
-          cell.riseDelay == null ? (
-            <Image
-              key={cell.key}
-              source={tileSource(cell)}
-              pointerEvents="none"
-              transition={0}
-              style={{
-                position: 'absolute',
-                left: cell.x * CELL,
-                top: cell.y * CELL,
-                width: CELL,
-                height: CELL,
-                ...pixelImageStyle,
-              }}
-              contentFit="fill"
-            />
-          ) : (
-            <RisingCell key={cell.key} cell={cell} />
-          ),
-        )}
+        <CellTiles cells={staticCells} />
+        <SeaBand cells={shoreCells} sheet={SHORE_SHEET} centerCol={centerCol} />
+        <SeaBand cells={shallowCells} sheet={SHALLOW_SHEET} centerCol={centerCol} />
+        <SeaBand cells={deepCells} sheet={DEEP_SHEET} centerCol={centerCol} />
       </Reanimated.View>
     </View>
+  );
+}
+
+function CellTiles({ cells }: { cells: IslandCell[] }) {
+  return (
+    <>
+      {cells.map((cell) =>
+        cell.riseDelay == null ? (
+          <Image
+            key={cell.key}
+            source={tileSource(cell)}
+            pointerEvents="none"
+            transition={0}
+            style={{
+              position: 'absolute',
+              left: cell.x * CELL,
+              top: cell.y * CELL,
+              width: CELL,
+              height: CELL,
+              ...pixelImageStyle,
+            }}
+            contentFit="fill"
+          />
+        ) : (
+          <RisingCell key={cell.key} cell={cell}>
+            <Image source={tileSource(cell)} transition={0} style={{ width: CELL, height: CELL, ...pixelImageStyle }} contentFit="fill" />
+          </RisingCell>
+        ),
+      )}
+    </>
+  );
+}
+
+function SeaBand({ cells, sheet, centerCol }: { cells: IslandCell[]; sheet: MotionSheet; centerCol: number }) {
+  useSeaClock();
+  return (
+    <>
+      {cells.map((cell) => {
+        const sprite = (
+          <SheetSprite
+            source={sheet.body}
+            cols={sheet.cols}
+            rows={sheet.rows}
+            size={CELL}
+            frame={seaFrameForLag(waveLag(cell.x, centerCol))}
+          />
+        );
+        return cell.riseDelay == null ? (
+          <View key={cell.key} pointerEvents="none" style={{ position: 'absolute', left: cell.x * CELL, top: cell.y * CELL }}>
+            {sprite}
+          </View>
+        ) : (
+          <RisingCell key={cell.key} cell={cell}>
+            {sprite}
+          </RisingCell>
+        );
+      })}
+    </>
   );
 }
 
@@ -302,7 +378,7 @@ function useRise(delay: number | null) {
   };
 }
 
-function RisingCell({ cell }: { cell: IslandCell }) {
+function RisingCell({ cell, children }: { cell: IslandCell; children: ReactNode }) {
   const rise = useRise(cell.riseDelay ?? null);
   return (
     <Animated.View
@@ -315,23 +391,19 @@ function RisingCell({ cell }: { cell: IslandCell }) {
         height: CELL,
         ...rise,
       }}>
-      <Image
-        source={tileSource(cell)}
-        transition={0}
-        style={{ width: CELL, height: CELL, ...pixelImageStyle }}
-        contentFit="fill"
-      />
+      {children}
     </Animated.View>
   );
 }
 
 /** 화면 전체의 깊은 바다. 확대해도 이 층은 움직이지 않는다. */
-function SeaFill() {
+function SeaFill({ centerCol }: { centerCol: number }) {
   const { width, height: windowHeight } = useWindowDimensions();
   const [measured, setMeasured] = useState(0);
   const height = Math.max(windowHeight, measured);
   const cols = Math.max(1, Math.ceil(width / CELL));
   const rows = Math.max(1, Math.ceil(height / CELL));
+  useSeaClock();
 
   return (
     <View
@@ -340,19 +412,22 @@ function SeaFill() {
         const next = Math.ceil(event.nativeEvent.layout.height);
         setMeasured((current) => (current === next ? current : next));
       }}>
-      {Array.from({ length: rows }, (_, row) => (
-        <View key={row} style={{ flexDirection: 'row' }}>
-          {Array.from({ length: cols }, (_, col) => (
-            <Image
-              key={col}
-              source={seaTiles[col % seaTiles.length]}
-              transition={0}
-              style={{ width: CELL, height: CELL, ...pixelImageStyle }}
-              contentFit="fill"
-            />
-          ))}
-        </View>
-      ))}
+      <View style={{ position: 'absolute', top: 0, left: 0 }}>
+        {Array.from({ length: rows }, (_, row) => (
+          <View key={row} style={{ flexDirection: 'row' }}>
+            {Array.from({ length: cols }, (_, col) => (
+              <SheetSprite
+                key={col}
+                source={DEEP_SHEET.body}
+                cols={DEEP_SHEET.cols}
+                rows={DEEP_SHEET.rows}
+                size={CELL}
+                frame={seaFrameForLag(waveLag(col, centerCol))}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }

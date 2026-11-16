@@ -181,7 +181,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         : null}
 
       {!placing && !petOpen && walkPoints.length > 0 ? (
-        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} paused={eggStage} onPress={onPet} />
+        <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} onPress={onPet} />
       ) : null}
 
       {exploreForestUnlocked && isExploring && !placing && !petOpen ? (

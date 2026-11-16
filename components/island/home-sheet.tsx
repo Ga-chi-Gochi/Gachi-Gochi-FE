@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PixelText } from '@/components/pixel/pixel-ui';
@@ -26,6 +26,7 @@ export function HomeSheet({ open, title, onClose, children }: HomeSheetProps) {
 
   return (
     <Modal visible={open} animationType="slide" transparent onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end' }}>
         <Pressable
           accessibilityRole="button"
@@ -79,6 +80,7 @@ export function HomeSheet({ open, title, onClose, children }: HomeSheetProps) {
           </View>
         </GestureDetector>
       </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

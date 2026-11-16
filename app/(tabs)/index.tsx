@@ -2,7 +2,10 @@ import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { BeachHome } from '@/components/island/beach-home';
+import { BeachHome, VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
+import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
+import { VolcanoGas } from '@/components/island/volcano-gas';
+import { IslandCamera } from '@/components/island/island-camera';
 import { BeachIsland } from '@/components/island/beach-island';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { GrowthReveal } from '@/components/island/growth-reveal';
@@ -35,6 +38,7 @@ export default function IslandHomeScreen() {
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
+  const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
   const openPet = () => {
     if (zoneUnlockReveal || pendingPlaceItemId) {
       return;
@@ -43,9 +47,10 @@ export default function IslandHomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
-        <BeachHome onPet={openPet} />
-        <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
+    <VolcanoEruptionProvider>
+    <IslandCamera
+      overlay={
+        <>
         <ResourceHeader
           soundOn={soundOn}
           onToggleSound={() => setSoundOn((current) => !current)}
@@ -53,6 +58,8 @@ export default function IslandHomeScreen() {
           onSettings={() => setSheet({ title: '설정', body: '준비 중' })}
           onShop={() => router.push('/(tabs)/shop' as Href)}
           onCodex={() => router.push('/collection' as Href)}
+          islandVersion={islandVersion}
+          onPickIslandVersion={setIslandVersion}
         />
 
         {hasExploreReward && !exploreEggReveal ? (
@@ -109,6 +116,12 @@ export default function IslandHomeScreen() {
             onDone={acknowledgeExploreEggReveal}
           />
         ) : null}
-      </View>
+        <VolcanoGas />
+        </>
+      }>
+      <BeachHome look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1} />
+      <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
+    </IslandCamera>
+    </VolcanoEruptionProvider>
   );
 }

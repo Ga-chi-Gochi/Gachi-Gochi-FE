@@ -97,9 +97,13 @@ type PlayState = {
   placeDecor: (itemId: string, zoneId: IslandZoneId) => boolean;
   removeDecor: (itemId: string) => void;
   claimLocalShopReward: () => void;
+  addCoins: (amount: number) => void;
+  addXp: (amount: number) => Promise<void>;
   petCreature: () => Promise<void>;
   growCreature: () => Promise<boolean>;
   expandIsland: () => boolean;
+  /** 가스에 가려진 동안 다음 땅을 바로 붙인다. 올라오는 연출은 없다. */
+  revealExpandedZone: () => boolean;
   acknowledgeGrowthReveal: () => void;
   acknowledgeZoneUnlock: () => void;
   stageBonggingCertification: (pending: PendingBonggingCertification) => void;
@@ -350,6 +354,24 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setGrowthReveal(null);
   }, []);
 
+  const revealExpandedZone = useCallback(() => {
+    const next = getNextExpandZone(unlockedRef.current);
+    if (!next) {
+      return false;
+    }
+    const nextIds = Array.from(new Set([...unlockedRef.current, next.id]));
+    unlockedRef.current = nextIds;
+    const seen = Array.from(new Set([...seenZoneUnlocksRef.current, next.id]));
+    seenZoneUnlocksRef.current = seen;
+    setUnlockedZones(nextIds);
+    void updateIslandState((record) => ({
+      ...record,
+      seenZoneUnlocks: seen,
+      unlockedZones: nextIds,
+    }));
+    return true;
+  }, []);
+
   const acknowledgeZoneUnlock = useCallback(() => {
     setZoneUnlockReveal((current) => {
       if (!current) {
@@ -542,9 +564,18 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
         setCoins(nextCoins);
         void updateIslandState((current) => ({ ...current, coins: nextCoins }));
       },
+      addCoins: (amount) => {
+        const nextCoins = coins + amount;
+        setCoins(nextCoins);
+        void updateIslandState((current) => ({ ...current, coins: nextCoins }));
+      },
+      addXp: async (amount) => {
+        await applyXpGain(amount);
+      },
       petCreature,
       growCreature,
       expandIsland,
+      revealExpandedZone,
       acknowledgeGrowthReveal,
       acknowledgeZoneUnlock,
       stageBonggingCertification: (pending) => {
@@ -593,6 +624,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       petCreature,
       growCreature,
       expandIsland,
+      revealExpandedZone,
       acknowledgeGrowthReveal,
       acknowledgeZoneUnlock,
       applyXpGain,

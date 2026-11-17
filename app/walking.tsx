@@ -22,9 +22,10 @@ import { palette } from '@/constants/palette';
 import { pixel } from '@/constants/pixel-theme';
 import { WALKING_REWARD_TIERS } from '@/constants/walking-reward';
 import { useHealthAccess } from '@/hooks/use-health-access';
-import { usePedometerSteps } from '@/hooks/use-pedometer-steps';
+import { useHealthSteps } from '@/hooks/use-health-steps';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useWalkingReward } from '@/hooks/use-walking-reward';
+import { openHealthStepsSettings } from '@/lib/health-steps';
 import type { WalkingDataSource } from '@/lib/walking-api';
 import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward';
 
@@ -38,21 +39,24 @@ export default function WalkingScreen() {
   // 튜토리얼 중에는 동의·권한·걸음 수 확인 없이 설명용 화면만 보여 준다
   const guided = tutorial.step === 'walking-screen';
   const [helpOpen, setHelpOpen] = useState(false);
-  const { status, permission, consented, agree, setMockPermission, resetConsent } = useHealthAccess();
+  const { status, permission, consented, agree, resetConsent, refreshPermission } = useHealthAccess();
 
   // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
   useFocusEffect(
     useCallback(() => () => leaveScreen('walking'), [leaveScreen]),
   );
 
+  const permissionLabel =
+    permission === 'granted' ? '허용' : permission === 'unavailable' ? '이 기기 불가' : permission === 'denied' ? '거부' : '확인 중';
+
   const devTools = __DEV__ ? (
     <View style={{ gap: scale(8) }}>
       <Text style={{ color: palette.muted, fontSize: scale(12), fontWeight: '700' }}>
-        개발용 · 권한: {permission === 'granted' ? '허용' : '거부'} · 동의: {consented ? '저장됨' : '없음'}
+        개발용 · 건강 권한: {permissionLabel} · 동의: {consented ? '저장됨' : '없음'}
       </Text>
       <View style={{ flexDirection: 'row', gap: scale(10) }}>
-        <FigButton label="권한 허용으로 테스트" tone="white" onPress={() => setMockPermission('granted')} />
-        <FigButton label="권한 거부로 테스트" tone="white" onPress={() => setMockPermission('denied')} />
+        <FigButton label="건강 권한 다시 확인" tone="white" onPress={() => void refreshPermission()} />
+        <FigButton label="건강 설정 열기" tone="white" onPress={() => openHealthStepsSettings()} />
       </View>
       <View style={{ flexDirection: 'row' }}>
         <FigButton label="동의 기록 초기화" tone="white" onPress={() => void resetConsent().catch(() => undefined)} />
@@ -141,18 +145,22 @@ function WalkingTutorialView() {
 const KCAL_PER_STEP = 0.04;
 const STEP_LENGTH_METERS = 0.7;
 const DEV_STEP_INCREMENT = 100;
-const STEP_SOURCE: WalkingDataSource = 'mock';
 
-// 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
+// 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. HealthKit / Health Connect 로 오늘 걸음을 불러온다.
 function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () => void }) {
   const { scale } = useResponsive();
-  const { steps: sensorSteps, status: stepStatus, refresh } = usePedometerSteps();
+  const { steps: healthSteps, distanceMeters: healthDistance, status: stepStatus, source, refresh } = useHealthSteps();
   const [devSteps, setDevSteps] = useState(0);
-  const steps = sensorSteps + devSteps;
-  const distanceMeters = Math.round(steps * STEP_LENGTH_METERS);
+  const steps = healthSteps + devSteps;
+  const distanceMeters = healthDistance ?? Math.round(steps * STEP_LENGTH_METERS);
+  const stepSource: WalkingDataSource = source ?? 'mock';
   const isLoaded = stepStatus !== 'loading';
   const unreadable = stepStatus === 'unavailable' && devSteps === 0;
-  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source: STEP_SOURCE });
+  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({
+    steps,
+    distanceMeters,
+    source: stepSource,
+  });
   const { coins } = usePlayState();
   const { iconsInset, iconsHeight } = useHomeTopLayout();
   const { show: showNotice, element: noticeElement } = usePixelNotice();
@@ -212,8 +220,12 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
     deniedNoticeShown.current = true;
     showNotice({
       title: '걸음 수 권한이 필요해요',
-      message: '설정 > 개인정보 보호 및 보안 > 동작 및 피트니스에서 가치고치를 허용해 주세요.',
-      buttons: [{ label: '닫기' }, { label: '다시 확인', onPress: () => void refresh() }],
+      message:
+        '아이폰은 건강 앱, 안드로이드는 Health Connect 에서 가치고치의 걸음 읽기를 허용해 주세요.',
+      buttons: [
+        { label: '설정 열기', onPress: () => openHealthStepsSettings() },
+        { label: '다시 확인', onPress: () => void refresh() },
+      ],
     });
   }, [introChecked, refresh, showIntro, showNotice, stepStatus]);
 

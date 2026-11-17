@@ -11,6 +11,7 @@ import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { TopBar } from '@/components/top-bar';
+import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { WalkingConsentFlow } from '@/components/walking-consent-flow';
@@ -36,6 +37,7 @@ export default function WalkingScreen() {
   const { leaveScreen } = tutorial;
   // 튜토리얼 중에는 동의·권한·걸음 수 확인 없이 설명용 화면만 보여 준다
   const guided = tutorial.step === 'walking-screen';
+  const [helpOpen, setHelpOpen] = useState(false);
   const { status, permission, consented, agree, setMockPermission, resetConsent } = useHealthAccess();
 
   // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
@@ -66,14 +68,15 @@ export default function WalkingScreen() {
         ) : status === 'checking' ? (
           <TopBar title="걷기" />
         ) : status === 'ready' ? (
-          <WalkingContent devTools={devTools} />
+          <WalkingContent devTools={devTools} onHelp={() => setHelpOpen(true)} />
         ) : (
           <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
         )}
       </FigScreen>
       {guided ? (
         <TutorialOverlay
-          step={3}
+          step={tutorial.scope === 'full' ? 3 : 1}
+          total={tutorial.scope === 'full' ? undefined : 1}
           title="걷기는 이렇게 해요"
           body="걸은 만큼 귤과 경험치를 받아요. 이 경험치로도 고치가 자라요."
           hint="아래 '섬으로 돌아가기'를 눌러 돌아가요"
@@ -89,9 +92,11 @@ export default function WalkingScreen() {
             tutorial.skip();
             router.replace('/(tabs)');
           }}
+          interceptBack={false}
           zIndex={100}
         />
       ) : null}
+      {helpOpen && !guided ? <FeatureHelpOverlay topic="walking" onClose={() => setHelpOpen(false)} zIndex={90} /> : null}
     </View>
   );
 }
@@ -139,7 +144,7 @@ const DEV_STEP_INCREMENT = 100;
 const STEP_SOURCE: WalkingDataSource = 'mock';
 
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
-function WalkingContent({ devTools }: { devTools: ReactNode }) {
+function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () => void }) {
   const { scale } = useResponsive();
   const { steps: sensorSteps, status: stepStatus, refresh } = usePedometerSteps();
   const [devSteps, setDevSteps] = useState(0);
@@ -274,7 +279,8 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         ) : null}
         {devTools}
       </ScrollView>
-      <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+        <FeatureHelpButton onPress={onHelp} />
         <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
       </View>
       {showIntro ? <WalkingIntroPopup step={introStep} onNext={nextIntro} /> : null}

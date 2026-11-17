@@ -16,6 +16,7 @@ import {
 } from "@/components/home-menu-popup";
 import { PixelText } from "@/components/pixel/pixel-ui";
 import { usePlayState } from "@/components/play-state";
+import { FeatureHelpButton } from "@/components/tutorial/feature-help";
 import { getGrowthProgress, getGrowthStage } from "@/constants/growth";
 import { pixel } from "@/constants/pixel-theme";
 import { useResponsive } from "@/hooks/use-responsive";
@@ -115,10 +116,13 @@ export function HomeTopIcons({
   top,
   side,
   menuActions,
+  onHelp,
 }: {
   top: number;
   side: number;
   menuActions?: HomeMenuActions;
+  /** 있으면 도감 아래에 공통 '?' 버튼을 둔다 */
+  onHelp?: () => void;
 }) {
   const { scale } = useResponsive();
   const pathname = usePathname();
@@ -184,6 +188,7 @@ export function HomeTopIcons({
             active={pathname === "/collection"}
             onPress={() => router.push(COLLECTION_ROUTE)}
           />
+          {onHelp ? <FeatureHelpButton size={ICON_SIZE} onPress={onHelp} /> : null}
         </View>
       </View>
     </View>

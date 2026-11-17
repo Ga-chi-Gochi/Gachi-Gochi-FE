@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { BackHandler, View } from 'react-native';
 
 import { GuideChoices, GuideSpeech } from '@/components/guide/guide-controls';
 import { GuideSpotlight, holeBounds, type SpotlightHole } from '@/components/guide/guide-spotlight';
@@ -14,6 +14,8 @@ export type OverlayBox = { width: number; height: number };
 type TutorialOverlayProps = {
   /** 1부터 세는 현재 단계 */
   step: number;
+  /** 기본은 전체 튜토리얼 장 수. 기능별 도움말은 1 */
+  total?: number;
   title: string;
   body: string;
   /** 본문 아래에 한 줄 더 얹는 안내(예: 어느 버튼을 눌러야 하는지) */
@@ -27,6 +29,8 @@ type TutorialOverlayProps = {
   primary?: { label: string; onPress: () => void; disabled?: boolean };
   /** 구멍 밖 터치를 막을지. 홈 나침반 단계는 토글이 따로 막으므로 false */
   blockOutside?: boolean;
+  /** 안드로이드 뒤로가기를 가로채 '정말 건너뛸까요?' 를 띄울지. 화면을 나가는 게 안내인 카메라·걷기 화면은 false */
+  interceptBack?: boolean;
   onSkip: () => void;
   zIndex?: number;
 };
@@ -39,6 +43,7 @@ const EDGE = 12;
  */
 export function TutorialOverlay({
   step,
+  total = TUTORIAL_TOTAL,
   title,
   body,
   hint,
@@ -47,13 +52,28 @@ export function TutorialOverlay({
   tailFromRight,
   primary,
   blockOutside = true,
+  interceptBack = true,
   onSkip,
   zIndex = 41,
 }: TutorialOverlayProps) {
   const { scale } = useResponsive();
-  const { rewardClaimed } = useTutorial();
+  const { rewardClaimed, replay, scope } = useTutorial();
   const [box, setBox] = useState<OverlayBox>({ width: 0, height: 0 });
   const [confirming, setConfirming] = useState(false);
+  // 다시 보기·기능별 도움말·이미 보상 받은 경우는 보상 안내 없이 가볍게 묻는다
+  const lightSkip = replay || scope !== 'full' || rewardClaimed;
+
+  // 튜토리얼 도중 뒤로가기로 앱이 꺼지지 않게, 한 번 누르면 건너뛰기 확인을 열고 다시 누르면 닫는다
+  useEffect(() => {
+    if (!interceptBack) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setConfirming((current) => !current);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [interceptBack]);
 
   const measured = box.width > 0;
   const target = measured && hole ? hole(box) : null;
@@ -97,16 +117,16 @@ export function TutorialOverlay({
                       정말 건너뛸까요?
                     </PixelText>
                     <PixelText size={14} weight="500" center>
-                      {rewardClaimed
-                        ? '건너뛰어도 메뉴에서 가이드를 다시 볼 수 있어요.'
-                        : `끝까지 보면 귤 ${TUTORIAL_REWARD_COINS}개를 받아요. 건너뛰어도 메뉴에서 가이드를 다시 볼 수 있어요.`}
+                      {lightSkip
+                        ? '언제든 메뉴에서 다시 볼 수 있어요.'
+                        : `끝까지 보면 귤 ${TUTORIAL_REWARD_COINS}개를 받아요. 건너뛰어도 메뉴에서 다시 볼 수 있어요.`}
                     </PixelText>
                     <GuideChoices large={false} left="건너뛰기" right="계속 보기" onLeft={onSkip} onRight={() => setConfirming(false)} />
                   </>
                 ) : (
                   <>
                     <PixelText size={12} color={pixel.muted}>
-                      {`${step} / ${TUTORIAL_TOTAL}`}
+                      {`${step} / ${total}`}
                     </PixelText>
                     <PixelText size={18} center>
                       {title}

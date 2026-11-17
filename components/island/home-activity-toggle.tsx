@@ -209,7 +209,8 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false }: Hom
           {/* 구멍 밖 터치를 막는다. 토글(zIndex 40) 아래, 헤더(20) 위 */}
           <View onStartShouldSetResponder={() => true} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 38 }} />
           <TutorialOverlay
-            step={TOUR_STEPS[tourStep].number}
+            step={tutorial.scope === 'full' ? TOUR_STEPS[tourStep].number : 1}
+            total={tutorial.scope === 'full' ? undefined : 1}
             title={TOUR_STEPS[tourStep].title}
             body={TOUR_STEPS[tourStep].body}
             hint={TOUR_STEPS[tourStep].hint}

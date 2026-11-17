@@ -40,7 +40,7 @@ export function TutorialHomeCards({ enabled = true }: { enabled?: boolean }) {
         title="이제 마음껏 키워 보세요"
         body={
           rewardClaimed
-            ? '인증하고 걸으면서 경험치를 모으면 고치가 쑥쑥 자라요'
+            ? '인증하고 걸으면서 경험치를 모으면 고치가 쑥쑥 자라요. 메뉴에서 언제든 다시 볼 수 있어요.'
             : `인증하고 걸으면서 경험치를 모으면 고치가 쑥쑥 자라요. 튜토리얼 보상으로 귤 ${TUTORIAL_REWARD_COINS}개를 드려요!`
         }
         placement="center"

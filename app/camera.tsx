@@ -10,6 +10,7 @@ import { Alert, Linking, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayState } from '@/components/play-state';
+import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { art } from '@/constants/art';
@@ -27,6 +28,7 @@ export default function CameraScreen() {
   // 튜토리얼 중에는 권한 요청과 실제 카메라를 켜지 않고, 설명만 보여 준다
   const guided = tutorial.step === 'bongging-screen';
   const [leavingTutorial, setLeavingTutorial] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const holdCamera = guided || leavingTutorial;
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
@@ -202,6 +204,11 @@ export default function CameraScreen() {
             style={{ position: 'absolute', left: Math.max(insets.left, scale(16)), top: '50%', marginTop: -scale(21), width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
             <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
           </Pressable>
+          {guided ? null : (
+            <View style={{ position: 'absolute', right: Math.max(insets.right, scale(16)), top: '50%', marginTop: -scale(21) }}>
+              <FeatureHelpButton onPress={() => setHelpOpen(true)} />
+            </View>
+          )}
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(16), paddingVertical: scale(10) }}>
               <MaterialIcons name="delete-outline" size={scale(20)} color={palette.ink} />
@@ -279,7 +286,8 @@ export default function CameraScreen() {
       </View>
       {guided ? (
         <TutorialOverlay
-          step={2}
+          step={tutorial.scope === 'full' ? 2 : 1}
+          total={tutorial.scope === 'full' ? undefined : 1}
           title="봉그깅은 이렇게 해요"
           body="쓰레기를 사진으로 찍어 인증하면 경험치를 얻어요. 경험치가 쌓이면 고치가 자라요."
           hint="왼쪽 위 ✕ 버튼을 눌러 돌아가요"
@@ -294,9 +302,11 @@ export default function CameraScreen() {
             tutorial.skip();
             router.back();
           }}
+          interceptBack={false}
           zIndex={100}
         />
       ) : null}
+      {helpOpen && !guided ? <FeatureHelpOverlay topic="bongging" onClose={() => setHelpOpen(false)} zIndex={90} /> : null}
     </View>
   );
 }

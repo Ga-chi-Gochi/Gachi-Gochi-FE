@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Image, type ImageSource } from 'expo-image';
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import Animated, {
   Easing,
@@ -15,7 +15,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { useResponsive } from '@/hooks/use-responsive';
+
+/** 구멍 중심이 화면 오른쪽·아래 끝에서 얼마나 떨어져 있는지(이미 scale 이 적용된 값) */
+export type TourTarget = { fromRight: number; fromBottom: number; size: number };
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
@@ -47,10 +52,69 @@ const ACTIONS: Action[] = [
   { label: '로컬 상점', href: '/store', source: require('@/assets/pixel/icon-local-shop.png'), top: 127, left: 5, size: 70 },
 ];
 
-export function HomeActivityToggle() {
+/**
+ * 홈에서 짚어 주는 단계: 나침반 → 봉그깅 → 걷기. action 은 ACTIONS 의 번호(나침반은 null).
+ * 봉그깅·걷기는 눌러서 실제 화면으로 들어가 설명을 보고, 뒤로 나오면 다음 단계로 넘어간다.
+ */
+const TOUR_STEPS = {
+  compass: { number: 1, action: null, title: '나침반을 눌러 보세요', body: '활동 버튼이 펼쳐져요', hint: undefined },
+  bongging: {
+    number: 2,
+    action: 1,
+    title: '봉그깅부터 볼게요',
+    body: '쓰레기를 주워 인증하면 경험치를 얻어요',
+    hint: '봉그깅 버튼을 눌러 보세요',
+  },
+  walking: {
+    number: 3,
+    action: 0,
+    title: '이번엔 걷기예요',
+    body: '걸은 만큼 귤과 경험치를 받아요',
+    hint: '걷기 버튼을 눌러 보세요',
+  },
+} as const;
+
+type HomeTourStep = keyof typeof TOUR_STEPS;
+
+function isHomeTourStep(step: string | null): step is HomeTourStep {
+  return step === 'compass' || step === 'bongging' || step === 'walking';
+}
+
+/**
+ * 나침반과 펼쳐진 활동 버튼의 중심 위치(화면 오른쪽·아래 끝에서의 거리)와 크기. 이미 scale 이 적용된 값.
+ * 가이드가 이 버튼들을 구멍으로 짚을 때 같은 계산을 쓰도록 밖으로 낸다.
+ */
+export function activityTarget(
+  name: 'compass' | Action['label'],
+  scale: (value: number) => number,
+  insetBottom: number,
+): TourTarget {
+  const bottomOffset = Math.max(insetBottom, scale(12)) + scale(LIFT);
+  if (name === 'compass') {
+    return { fromRight: scale(12) + scale(FAB_SIZE) / 2, fromBottom: bottomOffset + scale(FAB_SIZE) / 2, size: scale(FAB_SIZE) };
+  }
+  const action = ACTIONS.find((entry) => entry.label === name) ?? ACTIONS[0];
+  return {
+    fromRight: scale(12) + scale(AREA) - scale(action.left + action.size / 2),
+    fromBottom: bottomOffset + scale(AREA) - scale(action.top + action.size / 2),
+    size: scale(action.size),
+  };
+}
+
+type HomeActivityToggleProps = {
+  /** false 면 튜토리얼이 진행 중이어도 안내를 숨긴다(온보딩 가이드를 다시 보는 동안) */
+  tourEnabled?: boolean;
+  /** true 면 사용자가 누르지 않아도 활동 버튼을 펼쳐 둔다(온보딩이 펼친 모습을 짚을 때) */
+  expanded?: boolean;
+};
+
+export function HomeActivityToggle({ tourEnabled = true, expanded = false }: HomeActivityToggleProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
+  const tutorial = useTutorial();
   const [open, setOpen] = useState(false);
+  const tourStep: HomeTourStep | null = tourEnabled && isHomeTourStep(tutorial.step) ? tutorial.step : null;
+  const tour = tourStep !== null;
   const walk = useSharedValue(0);
   const bongging = useSharedValue(0);
   const shop = useSharedValue(0);
@@ -86,9 +150,82 @@ export function HomeActivityToggle() {
     transform: [{ scale: compassScale.value }],
   }));
 
+  const bottomOffset = Math.max(insets.bottom, scale(12)) + scale(LIFT);
+
+  // 부모(온보딩)가 펼쳐 두라고 하거나, 튜토리얼이 펼친 버튼을 짚는 단계면 펼친다.
+  // 그 밖에는(사용자가 직접 연 게 아니라면) 접는다
+  const wantOpen = expanded || tourStep === 'bongging' || tourStep === 'walking';
+  useEffect(() => {
+    if (wantOpen) {
+      play(true);
+    } else if (!open && walk.value > 0) {
+      play(false);
+    }
+    // play·open 은 렌더마다 새로 만들어지는 값이라 wantOpen 이 바뀔 때만 돌린다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantOpen]);
+
+  // 튜토리얼 중에는 짚은 버튼만 눌린다. 봉그깅·걷기는 실제 화면으로 들어가 설명을 본다.
+  const pressAction = (action: Action, index: number) => {
+    if (!tourStep) {
+      go(action.href);
+      return;
+    }
+    if (index !== TOUR_STEPS[tourStep].action) {
+      return;
+    }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const screen = tourStep === 'walking' ? 'walking' : 'bongging';
+    tutorial.enterScreen(screen);
+    router.push(action.href);
+  };
+
+  const pressCompass = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (tourStep) {
+      if (tourStep === 'compass') {
+        tutorial.goTo('bongging');
+      }
+      return;
+    }
+    const next = !open;
+    setOpen(next);
+    play(next);
+  };
+
+  const target =
+    tourStep !== null
+      ? activityTarget(
+          TOUR_STEPS[tourStep].action === null ? 'compass' : ACTIONS[TOUR_STEPS[tourStep].action].label,
+          scale,
+          insets.bottom,
+        )
+      : null;
+
   return (
     <>
-      {open ? (
+      {tourStep !== null && target ? (
+        <>
+          {/* 구멍 밖 터치를 막는다. 토글(zIndex 40) 아래, 헤더(20) 위 */}
+          <View onStartShouldSetResponder={() => true} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 38 }} />
+          <TutorialOverlay
+            step={TOUR_STEPS[tourStep].number}
+            title={TOUR_STEPS[tourStep].title}
+            body={TOUR_STEPS[tourStep].body}
+            hint={TOUR_STEPS[tourStep].hint}
+            hole={(box) => ({
+              centerX: box.width - target.fromRight,
+              centerY: box.height - target.fromBottom,
+              radius: target.size / 2 + scale(8),
+            })}
+            placement="above"
+            tailFromRight={target.fromRight}
+            blockOutside={false}
+            onSkip={tutorial.skip}
+          />
+        </>
+      ) : null}
+      {open && !tour ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="활동 닫기"
@@ -101,7 +238,7 @@ export function HomeActivityToggle() {
         style={{
           position: 'absolute',
           right: scale(12),
-          bottom: Math.max(insets.bottom, scale(12)) + scale(LIFT),
+          bottom: bottomOffset,
           width: scale(AREA),
           height: scale(AREA),
           zIndex: 40,
@@ -120,8 +257,8 @@ export function HomeActivityToggle() {
             fromX={scale(FAB_CENTER - centerX)}
             fromY={scale(FAB_CENTER - centerY)}
             progress={progresses[index]}
-            interactive={open}
-            onPress={() => go(action.href)}
+            interactive={tourStep ? TOUR_STEPS[tourStep].action === index : open}
+            onPress={() => pressAction(action, index)}
           />
         );
       })}
@@ -131,12 +268,8 @@ export function HomeActivityToggle() {
           label={open ? '활동 닫기' : '활동 열기'}
           source={fabOpen}
           size={scale(FAB_SIZE)}
-          onPress={() => {
-            const next = !open;
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setOpen(next);
-            play(next);
-          }}
+          disabled={tourStep !== null && tourStep !== 'compass'}
+          onPress={pressCompass}
         />
       </Animated.View>
     </View>
@@ -191,17 +324,21 @@ function ImageButton({
   label,
   source,
   size,
+  disabled = false,
   onPress,
 }: {
   label: string;
   source: ImageSource;
   size: number;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         width: size,

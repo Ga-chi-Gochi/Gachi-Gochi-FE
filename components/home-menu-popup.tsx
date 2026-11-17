@@ -31,6 +31,7 @@ const DRAWN_BORDER = '#6B5A3E';
 const RESET_ARROW = '#8B7355';
 
 const CLOSE_PATTERN = ['X...X', '.X.X.', '..X..', '.X.X.', 'X...X'];
+const GUIDE_PATTERN = ['XXXXXXX', 'X.....X', 'X.XXX.X', 'X.....X', 'XXXXXXX', '...X...', '...X...'];
 const RESET_PATTERN = ['.X.....', 'XXXXX..', '.X...X.', '......X', 'X.....X', 'X.....X', '.X...X.', '..XXX..'];
 
 const profileIcon = require('@/assets/pixel/icon-profile.png') as ImageSource;
@@ -40,6 +41,7 @@ const soundIcon = require('@/assets/pixel/icon-sound.png') as ImageSource;
 export type HomeMenuActions = {
   onProfile?: () => void;
   onSettings?: () => void;
+  onGuide?: () => void;
   onToggleSound?: () => void;
   soundOn?: boolean;
   onReset?: () => Promise<void> | void;
@@ -53,6 +55,7 @@ export function HomeMenuPopup({
   onClose,
   onProfile,
   onSettings,
+  onGuide,
   onToggleSound,
   soundOn = true,
   onReset,
@@ -85,6 +88,7 @@ export function HomeMenuPopup({
   const closeProgress = useSharedValue(0);
   const profileProgress = useSharedValue(0);
   const settingsProgress = useSharedValue(0);
+  const guideProgress = useSharedValue(0);
   const soundProgress = useSharedValue(0);
   const resetProgress = useSharedValue(0);
   const hasReset = Boolean(onReset);
@@ -102,7 +106,7 @@ export function HomeMenuPopup({
     if (!open) {
       return;
     }
-    const count = hasReset ? 5 : 4;
+    const count = hasReset ? 6 : 5;
     const timer = setTimeout(() => {
       setSettled(true);
       setBackdropEnabled(true);
@@ -115,8 +119,8 @@ export function HomeMenuPopup({
       return;
     }
     const values = hasReset
-      ? [closeProgress, profileProgress, settingsProgress, soundProgress, resetProgress]
-      : [closeProgress, profileProgress, settingsProgress, soundProgress];
+      ? [closeProgress, profileProgress, settingsProgress, guideProgress, soundProgress, resetProgress]
+      : [closeProgress, profileProgress, settingsProgress, guideProgress, soundProgress];
     values.forEach((progress, index) => {
       const order = open ? index : values.length - 1 - index;
       progress.value = withDelay(
@@ -132,7 +136,7 @@ export function HomeMenuPopup({
     }
     const timer = setTimeout(() => setShown(false), CLOSE_MS + STAGGER_MS * (values.length - 1) + 40);
     return () => clearTimeout(timer);
-  }, [closeProgress, hasReset, open, profileProgress, resetProgress, settingsProgress, shown, soundProgress]);
+  }, [closeProgress, guideProgress, hasReset, open, profileProgress, resetProgress, settingsProgress, shown, soundProgress]);
 
   const showPending = (label: string) =>
     notice.show({ title: '준비 중', message: `${label}은(는) 준비 중이에요.` });
@@ -262,6 +266,16 @@ export function HomeMenuPopup({
                 <MenuGlyph source={settingsIcon} size={buttonSize} />
               </MenuHit>
               <MenuHit
+                label="가이드"
+                size={buttonSize}
+                settled={settled}
+                onPress={() => run('가이드', onGuide)}
+                progress={guideProgress}
+                fromX={iconCenterX - buttonSize / 2}
+                fromY={iconCenterY - (firstRowY + rowStep * 2)}>
+                <GuideIconButton size={buttonSize} />
+              </MenuHit>
+              <MenuHit
                 label={soundOn ? '소리 켜짐' : '소리 꺼짐'}
                 size={buttonSize}
                 role="switch"
@@ -274,7 +288,7 @@ export function HomeMenuPopup({
                 }}
                 progress={soundProgress}
                 fromX={iconCenterX - buttonSize / 2}
-                fromY={iconCenterY - (firstRowY + rowStep * 2)}>
+                fromY={iconCenterY - (firstRowY + rowStep * 3)}>
                 <MenuGlyph source={soundIcon} size={buttonSize} />
               </MenuHit>
               {onReset ? (
@@ -285,7 +299,7 @@ export function HomeMenuPopup({
                   onPress={confirmReset}
                   progress={resetProgress}
                   fromX={iconCenterX - buttonSize / 2}
-                  fromY={iconCenterY - (firstRowY + rowStep * 3)}>
+                  fromY={iconCenterY - (firstRowY + rowStep * 4)}>
                   <ResetIconButton size={buttonSize} />
                 </MenuHit>
               ) : null}
@@ -384,6 +398,16 @@ function DropItem({
 
 function MenuGlyph({ source, size }: { source: ImageSource; size: number }) {
   return <Image source={source} style={{ width: size, height: size, ...pixelImageStyle }} contentFit="contain" />;
+}
+
+function GuideIconButton({ size }: { size: number }) {
+  const { scale } = useResponsive();
+
+  return (
+    <DrawnFrame size={size} border={scale(2)} bottom={scale(4)}>
+      <PixelGlyph pattern={GUIDE_PATTERN} cell={scale(3)} color={DRAWN_BORDER} />
+    </DrawnFrame>
+  );
 }
 
 function ResetIconButton({ size }: { size: number }) {

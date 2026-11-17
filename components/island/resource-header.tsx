@@ -15,6 +15,7 @@ type ResourceHeaderProps = {
   onToggleSound: () => void;
   onProfile: () => void;
   onSettings: () => void;
+  onReplayGuide: () => void;
   onShop: () => void;
   onCodex: () => void;
   islandVersion: 1 | 2 | 3;
@@ -67,6 +68,7 @@ export function ResourceHeader({
   onToggleSound,
   onProfile,
   onSettings,
+  onReplayGuide,
   islandVersion,
   onPickIslandVersion,
 }: ResourceHeaderProps) {
@@ -104,7 +106,7 @@ export function ResourceHeader({
       <HomeTopIcons
         top={insets.top + scale(8)}
         side={scale(14)}
-        menuActions={{ onProfile, onSettings, onToggleSound, soundOn, onReset: resetLocalData }}
+        menuActions={{ onProfile, onSettings, onGuide: onReplayGuide, onToggleSound, soundOn, onReset: resetLocalData }}
       />
     </View>
   );

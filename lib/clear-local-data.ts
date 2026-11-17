@@ -8,6 +8,11 @@ const LOCAL_STORAGE_KEYS = [
   'walking/reward',
   'walking/intro-seen',
   'walking/privacy-consent',
+  'onboarding/seen',
+  'onboarding/name',
+  'onboarding/tour-seen',
+  'onboarding/tour-step',
+  'onboarding/tour-reward',
 ] as const;
 
 export async function clearLocalGameData(): Promise<void> {

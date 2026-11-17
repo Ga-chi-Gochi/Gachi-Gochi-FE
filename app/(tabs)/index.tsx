@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
@@ -11,9 +11,13 @@ import { GrowthReveal } from '@/components/island/growth-reveal';
 import { HomeActivityToggle } from '@/components/island/home-activity-toggle';
 import { HomeSheet } from '@/components/island/home-sheet';
 import { ResourceHeader } from '@/components/island/resource-header';
+import { GUIDE_OTHER_PAGE, OnboardingFlow } from '@/components/onboarding/onboarding-flow';
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
+import { TutorialHomeCards } from '@/components/tutorial/tutorial-home-cards';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { useResponsive } from '@/hooks/use-responsive';
+import { hasSeenOnboarding, readCreatureName } from '@/lib/onboarding-state';
 
 /** 프로필에 보여줄 목 닉네임 */
 const PROFILE_NAME = '가치';
@@ -33,6 +37,7 @@ export default function IslandHomeScreen() {
     claimExploreEgg,
     acknowledgeExploreEggReveal,
   } = usePlayState();
+  const { start: startTutorial } = useTutorial();
   const [claiming, setClaiming] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
@@ -40,6 +45,30 @@ export default function IslandHomeScreen() {
   const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
   const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
+  const [nickname, setNickname] = useState(PROFILE_NAME);
+  const [creatureName, setCreatureName] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
+  const [guidePage, setGuidePage] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [seen, saved] = await Promise.all([hasSeenOnboarding(), readCreatureName()]);
+      if (!alive) {
+        return;
+      }
+      if (saved) {
+        setNickname(saved);
+        setCreatureName(saved);
+      }
+      if (!seen) {
+        setShowGuide(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
   const openPet = () => {
     if (zoneUnlockReveal || pendingPlaceItemId) {
       return;
@@ -67,6 +96,7 @@ export default function IslandHomeScreen() {
           onToggleSound={() => setSoundOn((current) => !current)}
           onProfile={() => setSheet({ title: '프로필', body: '' })}
           onSettings={() => setSheet({ title: '설정', body: '준비 중' })}
+          onReplayGuide={() => setShowGuide(true)}
           onShop={() => router.push('/(tabs)/shop' as Href)}
           onCodex={() => router.push('/collection' as Href)}
           islandVersion={islandVersion}
@@ -99,13 +129,13 @@ export default function IslandHomeScreen() {
           </View>
         ) : null}
 
-        <HomeActivityToggle />
+        <HomeActivityToggle expanded={showGuide && guidePage === GUIDE_OTHER_PAGE} tourEnabled={!showGuide} />
 
         <HomeSheet open={sheet != null} title={sheet?.title ?? ''} onClose={() => setSheet(null)}>
           {sheet?.title === '프로필' ? (
             <View style={{ gap: scale(8) }}>
               <PixelText size={14} weight="500">
-                {PROFILE_NAME ? `닉네임 ${PROFILE_NAME}` : '이름 없는 귤새'}
+                {nickname ? `닉네임 ${nickname}` : '이름 없는 귤새'}
               </PixelText>
               <PixelText size={14} weight="500">
                 {`귤새 ${growthStage.label}`}
@@ -128,6 +158,22 @@ export default function IslandHomeScreen() {
           />
         ) : null}
       </View>
+      {showGuide ? (
+        <OnboardingFlow
+          initialName={creatureName}
+          onPageChange={setGuidePage}
+          onDone={(name) => {
+            if (name) {
+              setNickname(name);
+              setCreatureName(name);
+            }
+            setShowGuide(false);
+            // 가이드(다시 보기 포함)가 끝나면 튜토리얼이 처음부터 이어진다
+            startTutorial();
+          }}
+        />
+      ) : null}
+      <TutorialHomeCards enabled={!showGuide} />
       {ash.block ? (
         // 화산재가 화면을 덮는 동안은 버튼도 못 누르게 막는다 (예전 VolcanoGas 가 맨 위에서 터치를 받던 것과 같다)
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80 }} />

@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FigButton } from '@/components/fig-button';
 import { FigScreen } from '@/components/fig-screen';
@@ -10,6 +11,8 @@ import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { TopBar } from '@/components/top-bar';
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { WalkingConsentFlow } from '@/components/walking-consent-flow';
 import { WalkingGyulsae } from '@/components/walking-gyulsae';
 import { WALKING_INTRO_MESSAGES, WalkingIntroPopup, walkingRewardNotice } from '@/components/walking-popup';
@@ -28,7 +31,17 @@ import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward'
 // 허용했거나 개인정보 수집에 동의한 경우에만 걸음을 불러온다. 거부했으면 동의 흐름을 보여 준다.
 export default function WalkingScreen() {
   const { scale } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const tutorial = useTutorial();
+  const { leaveScreen } = tutorial;
+  // 튜토리얼 중에는 동의·권한·걸음 수 확인 없이 설명용 화면만 보여 준다
+  const guided = tutorial.step === 'walking-screen';
   const { status, permission, consented, agree, setMockPermission, resetConsent } = useHealthAccess();
+
+  // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
+  useFocusEffect(
+    useCallback(() => () => leaveScreen('walking'), [leaveScreen]),
+  );
 
   const devTools = __DEV__ ? (
     <View style={{ gap: scale(8) }}>
@@ -46,15 +59,77 @@ export default function WalkingScreen() {
   ) : null;
 
   return (
-    <FigScreen colors={[palette.cream, palette.cream]}>
-      {status === 'checking' ? (
-        <TopBar title="걷기" />
-      ) : status === 'ready' ? (
-        <WalkingContent devTools={devTools} />
-      ) : (
-        <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
-      )}
-    </FigScreen>
+    <View style={{ flex: 1 }}>
+      <FigScreen colors={[palette.cream, palette.cream]}>
+        {guided ? (
+          <WalkingTutorialView />
+        ) : status === 'checking' ? (
+          <TopBar title="걷기" />
+        ) : status === 'ready' ? (
+          <WalkingContent devTools={devTools} />
+        ) : (
+          <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
+        )}
+      </FigScreen>
+      {guided ? (
+        <TutorialOverlay
+          step={3}
+          title="걷기는 이렇게 해요"
+          body="걸은 만큼 귤과 경험치를 받아요. 이 경험치로도 고치가 자라요."
+          hint="아래 '섬으로 돌아가기'를 눌러 돌아가요"
+          hole={(box) => ({
+            left: scale(24) - scale(4),
+            top: box.height - (insets.bottom + scale(8)) - scale(58) - scale(4),
+            width: box.width - scale(48) + scale(8),
+            height: scale(58) + scale(8),
+            radius: scale(24),
+          })}
+          placement="above"
+          onSkip={() => {
+            tutorial.skip();
+            router.replace('/(tabs)');
+          }}
+          zIndex={100}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+// 튜토리얼 중에 보여 주는 걷기 화면. 실제 화면과 같은 모양이지만 걸음 수를 읽거나 보상을 주지 않는다.
+function WalkingTutorialView() {
+  const { scale } = useResponsive();
+  const { coins } = usePlayState();
+  const { iconsInset, iconsHeight } = useHomeTopLayout();
+
+  return (
+    <>
+      <View
+        style={{
+          paddingLeft: scale(16),
+          paddingRight: scale(16) + iconsInset,
+          paddingTop: scale(8),
+          paddingBottom: scale(10),
+          minHeight: scale(18) + iconsHeight,
+          zIndex: 10,
+        }}>
+        <HomeTopBar />
+        <HomeTopIcons top={scale(8)} side={scale(16)} />
+      </View>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
+        <View style={{ alignItems: 'center', gap: scale(6) }}>
+          <Text accessibilityLabel="오늘 0 걸음" style={{ color: pixel.ink, fontWeight: '800' }}>
+            <Text style={{ fontSize: scale(44) }}>0</Text>
+            <Text style={{ fontSize: scale(18) }}> 걸음</Text>
+          </Text>
+        </View>
+        <WalkingGyulsae size={scale(200)} />
+        <WalkingRewardBoard steps={0} claimedSteps={[]} coins={coins} />
+      </ScrollView>
+      <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+        <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
+      </View>
+    </>
   );
 }
 

@@ -88,11 +88,14 @@ export function PixelButton({
   onPress,
   disabled,
   tone = 'orange',
+  large = false,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   tone?: 'orange' | 'green' | 'ghost';
+  /** 화면의 주 버튼용. 기본 44px 대신 56px */
+  large?: boolean;
 }) {
   const { scale } = useResponsive();
   const backgroundColor = disabled
@@ -105,10 +108,11 @@ export function PixelButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
       style={{
-        minHeight: scale(44),
+        minHeight: scale(large ? 56 : 44),
         paddingHorizontal: scale(14),
         paddingVertical: scale(10),
         backgroundColor,
@@ -117,7 +121,7 @@ export function PixelButton({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      <PixelText size={13} color={tone === 'ghost' && !disabled ? pixel.ink : pixel.white}>
+      <PixelText size={large ? 16 : 13} color={tone === 'ghost' && !disabled ? pixel.ink : pixel.white}>
         {label}
       </PixelText>
     </Pressable>

@@ -3,13 +3,15 @@ import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useIsFocused } from 'expo-router';
+import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { usePlayState } from '@/components/play-state';
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -20,6 +22,12 @@ export default function CameraScreen() {
   const { scale, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { stageBonggingCertification } = usePlayState();
+  const tutorial = useTutorial();
+  const { leaveScreen } = tutorial;
+  // 튜토리얼 중에는 권한 요청과 실제 카메라를 켜지 않고, 설명만 보여 준다
+  const guided = tutorial.step === 'bongging-screen';
+  const [leavingTutorial, setLeavingTutorial] = useState(false);
+  const holdCamera = guided || leavingTutorial;
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
   const askedForPermission = useRef(false);
@@ -32,27 +40,32 @@ export default function CameraScreen() {
   const [stageHeight, setStageHeight] = useState(0);
 
   const granted = permission?.granted === true;
-  const previewFacing = isFocused && granted ? facing : null;
+  const previewFacing = isFocused && granted && !holdCamera ? facing : null;
   if (readyFacing && readyFacing !== previewFacing) {
     setReadyFacing(null);
   }
   const ready = previewFacing !== null && readyFacing === previewFacing;
 
   useEffect(() => {
-    if (!isFocused || !permission || permission.granted || !permission.canAskAgain || askedForPermission.current) {
+    if (holdCamera || !isFocused || !permission || permission.granted || !permission.canAskAgain || askedForPermission.current) {
       return;
     }
     askedForPermission.current = true;
     void requestPermission();
-  }, [isFocused, permission, requestPermission]);
+  }, [holdCamera, isFocused, permission, requestPermission]);
 
   useEffect(() => {
-    if (!isFocused || askedForLocation.current) {
+    if (holdCamera || !isFocused || askedForLocation.current) {
       return;
     }
     askedForLocation.current = true;
     void requestLocationPermissionIfNeeded();
-  }, [isFocused]);
+  }, [holdCamera, isFocused]);
+
+  // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
+  useFocusEffect(
+    useCallback(() => () => leaveScreen('bongging'), [leaveScreen]),
+  );
 
   async function allowCamera() {
     if (permission && !permission.canAskAgain) {
@@ -158,7 +171,7 @@ export default function CameraScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: palette.ink }}>
       {isFocused ? <StatusBar style="light" /> : null}
-      {isFocused && granted ? (
+      {isFocused && granted && !holdCamera ? (
         <CameraView
           ref={cameraRef}
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
@@ -202,8 +215,8 @@ export default function CameraScreen() {
         </View>
         <View
           onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}
-          style={{ flex: 1, alignItems: 'center', justifyContent: granted ? 'center' : 'flex-start', paddingTop: granted ? 0 : scale(16), paddingHorizontal: scale(24), overflow: 'hidden' }}>
-          {granted ? (
+          style={{ flex: 1, alignItems: 'center', justifyContent: granted || guided ? 'center' : 'flex-start', paddingTop: granted || guided ? 0 : scale(16), paddingHorizontal: scale(24), overflow: 'hidden' }}>
+          {granted || guided ? (
             <View style={{ width: finder, height: finder, borderRadius: scale(24), borderWidth: 3, borderColor: palette.white }} />
           ) : (
             <View style={{ alignSelf: 'stretch', backgroundColor: palette.white, borderRadius: scale(20), padding: scale(20), gap: scale(12) }}>
@@ -264,6 +277,26 @@ export default function CameraScreen() {
           </Pressable>
         </View>
       </View>
+      {guided ? (
+        <TutorialOverlay
+          step={2}
+          title="봉그깅은 이렇게 해요"
+          body="쓰레기를 사진으로 찍어 인증하면 경험치를 얻어요. 경험치가 쌓이면 고치가 자라요."
+          hint="왼쪽 위 ✕ 버튼을 눌러 돌아가요"
+          hole={() => ({
+            centerX: Math.max(insets.left, scale(16)) + scale(21),
+            centerY: insets.top + scale(8) + scale(23),
+            radius: scale(21) + scale(8),
+          })}
+          placement="below"
+          onSkip={() => {
+            setLeavingTutorial(true);
+            tutorial.skip();
+            router.back();
+          }}
+          zIndex={100}
+        />
+      ) : null}
     </View>
   );
 }

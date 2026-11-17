@@ -52,6 +52,18 @@ export function useHomeTopLayout() {
   };
 }
 
+/**
+ * 오른쪽 위 아이콘 줄에서 '상점' 아이콘의 중심(화면 오른쪽 끝에서의 거리, 위쪽 끝에서의 거리)과 크기.
+ * ResourceHeader 가 HomeTopIcons 에 top=inset+8, side=14 로 놓는 것과 같은 계산이라, 가이드가 이 아이콘을 짚을 때 쓴다.
+ */
+export function homeShopIconCenter(scale: (value: number) => number, insetTop: number) {
+  return {
+    fromRight: scale(14) + scale(ICON_SIZE) / 2,
+    fromTop: insetTop + scale(8) + scale(ICON_SIZE) + scale(ICON_GAP) + scale(ICON_SIZE) / 2,
+    size: scale(ICON_SIZE),
+  };
+}
+
 function TopBarIcon({
   label,
   source,

@@ -131,25 +131,3 @@ npx eas-cli build --platform all --profile production
 npx eas-cli submit --platform ios --profile production
 npx eas-cli submit --platform android --profile production
 ```
-
-## 개발 기록
-
-### 2026-09-28
-
-- 저장소를 처음 만들었습니다.
-
-### 2026-10-01
-
-- Expo로 앱을 열었습니다. 앱 이름은 Gachi Gochi, 번들 ID는 `com.gachigochi.app`입니다.
-- 맥과 윈도우에서 같이 작업하도록 Node 22.23.3, npm, LF 줄바꿈, `.gitignore`를 맞췄습니다.
-
-### 2026-10-03
-
-- 피그마 와이어프레임을 기준으로 기초 화면을 만들었습니다.
-- 앱은 섬 홈에서 시작합니다.
-
-### 2026-11
-
-- 온보딩·강제 튜토리얼·기능별 `?` 도움말을 붙였습니다.
-- 걷기는 HealthKit(iOS) / Health Connect(Android)로 오늘 걸음을 읽도록 연결했습니다.
-- Expo SDK 58 기준으로 맞췄습니다.

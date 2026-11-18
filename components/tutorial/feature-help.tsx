@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { BackHandler, Pressable, View } from 'react-native';
 
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
-import { FEATURE_HELP, type FeatureHelpTopic } from '@/constants/feature-help';
+import { getFeatureHelp, type FeatureHelpTopic } from '@/constants/feature-help';
 import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
 
@@ -62,7 +62,7 @@ export function FeatureHelpOverlay({
   zIndex?: number;
 }) {
   const { scale } = useResponsive();
-  const help = FEATURE_HELP[topic];
+  const help = getFeatureHelp(topic);
 
   // 안드로이드 뒤로가기는 앱을 닫지 않고 도움말만 닫는다
   useEffect(() => {

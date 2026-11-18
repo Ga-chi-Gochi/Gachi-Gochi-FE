@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { WALKING_REWARD_TIERS, type WalkingDrops, type WalkingReward, type WalkingRewardTier } from '@/constants/walking-reward';
+import { WALKING_GOAL, WALKING_REWARD_TIERS, type WalkingDrops, type WalkingRewardGain, type WalkingRewardTier } from '@/constants/walking-reward';
 
 const WALKING_REWARD_KEY = 'walking/reward';
 const WALKING_INTRO_KEY = 'walking/intro-seen';
@@ -21,7 +21,7 @@ export type WalkingRewardSnapshot = {
 
 export type WalkingRewardClaim = WalkingRewardSnapshot & {
   // 이번에 새로 지급된 보상. 없으면 null.
-  reward: WalkingReward | null;
+  reward: WalkingRewardGain | null;
 };
 
 // 저장소 읽기·쓰기를 한 줄로 세워서, 같은 단계가 동시에 두 번 지급되지 않게 한다.
@@ -124,6 +124,9 @@ export function nextWalkingTier(steps: number): WalkingRewardTier | null {
   return WALKING_REWARD_TIERS.find((tier) => steps < tier.steps) ?? null;
 }
 
-function sumReward(tiers: WalkingRewardTier[]): WalkingReward {
-  return tiers.reduce<WalkingReward>((sum, tier) => ({ coins: sum.coins + tier.coins, xp: sum.xp + tier.xp }), { coins: 0, xp: 0 });
+function sumReward(tiers: WalkingRewardTier[]): WalkingRewardGain {
+  return tiers.reduce<WalkingRewardGain>(
+    (sum, tier) => ({ coins: sum.coins + tier.coins, xp: sum.xp + tier.xp, reachedGoal: sum.reachedGoal || tier.steps >= WALKING_GOAL }),
+    { coins: 0, xp: 0, reachedGoal: false },
+  );
 }

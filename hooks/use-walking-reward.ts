@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { usePlayState } from '@/components/play-state';
-import type { WalkingReward } from '@/constants/walking-reward';
+import type { WalkingRewardGain } from '@/constants/walking-reward';
 import { sendWalkingRecord, type WalkingDataSource } from '@/lib/walking-api';
 import {
   claimWalkingRewards,
@@ -17,21 +17,23 @@ type UseWalkingRewardInput = {
   source: WalkingDataSource;
 };
 
+export type WalkingRewardEvent = WalkingRewardGain & { fromXp: number };
+
 export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRewardInput) {
-  const { addCoins, addXp } = usePlayState();
-  const grantRef = useRef({ addCoins, addXp });
+  const { addCoins, addXp, xp } = usePlayState();
+  const grantRef = useRef({ addCoins, addXp, xp });
   // 오늘 이미 보상을 받은 단계의 걸음 수 기준값.
   const [claimedSteps, setClaimedSteps] = useState<number[]>([]);
-  // 방금 새로 지급되어 아직 팝업으로 확인하지 않은 보상.
-  const [reward, setReward] = useState<WalkingReward | null>(null);
+  // 방금 새로 지급되어 아직 팝업이나 빵빠레로 확인하지 않은 보상.
+  const [reward, setReward] = useState<WalkingRewardEvent | null>(null);
   const [saveError, setSaveError] = useState(false);
   // 값을 바꾸면 같은 걸음 수로 지급을 다시 시도한다.
   const [attempt, setAttempt] = useState(0);
   const [mockSaveFailure, setMockSaveFailureState] = useState(isMockWalkingSaveFailure);
 
   useEffect(() => {
-    grantRef.current = { addCoins, addXp };
-  }, [addCoins, addXp]);
+    grantRef.current = { addCoins, addXp, xp };
+  }, [addCoins, addXp, xp]);
 
   useEffect(() => {
     claimWalkingRewards(steps)
@@ -42,9 +44,14 @@ export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRe
         if (!gained) {
           return;
         }
+        const fromXp = grantRef.current.xp;
         grantRef.current.addCoins(gained.coins);
         void grantRef.current.addXp(gained.xp);
-        setReward((current) => (current ? { coins: current.coins + gained.coins, xp: current.xp + gained.xp } : gained));
+        setReward((current) =>
+          current
+            ? { coins: current.coins + gained.coins, xp: current.xp + gained.xp, reachedGoal: current.reachedGoal || gained.reachedGoal, fromXp: current.fromXp }
+            : { ...gained, fromXp },
+        );
       })
       .catch(() => setSaveError(true));
   }, [steps, attempt]);

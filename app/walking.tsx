@@ -9,10 +9,11 @@ import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-to
 import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
+import { RewardFanfare } from '@/components/reward-fanfare';
 import { TopBar } from '@/components/top-bar';
 import { WalkingConsentFlow } from '@/components/walking-consent-flow';
 import { WalkingGyulsae } from '@/components/walking-gyulsae';
-import { WALKING_INTRO_MESSAGES, WalkingIntroPopup, walkingRewardNotice } from '@/components/walking-popup';
+import { WALKING_INTRO_MESSAGES, WalkingIntroPopup, WalkingRewardPopup } from '@/components/walking-popup';
 import { WalkingRewardBoard } from '@/components/walking-reward-board';
 import { palette } from '@/constants/palette';
 import { pixel } from '@/constants/pixel-theme';
@@ -62,6 +63,9 @@ const KCAL_PER_STEP = 0.04;
 const STEP_LENGTH_METERS = 0.7;
 const DEV_STEP_INCREMENT = 100;
 const STEP_SOURCE: WalkingDataSource = 'mock';
+const RETURN_BUTTON_HEIGHT = 58;
+const RETURN_BUTTON_GAP = 8;
+const SCROLL_END_SPACE = 24;
 
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
 function WalkingContent({ devTools }: { devTools: ReactNode }) {
@@ -73,7 +77,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
   const isLoaded = stepStatus !== 'loading';
   const unreadable = stepStatus === 'unavailable' && devSteps === 0;
   const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source: STEP_SOURCE });
-  const { coins } = usePlayState();
+  const { coins, growthStacks } = usePlayState();
   const { iconsInset, iconsHeight } = useHomeTopLayout();
   const { show: showNotice, element: noticeElement } = usePixelNotice();
   const [introStep, setIntroStep] = useState<number | null>(null);
@@ -112,13 +116,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
 
   const showIntro = introStep != null;
 
-  useEffect(() => {
-    if (!introChecked || showIntro || !reward) {
-      return;
-    }
-    showNotice(walkingRewardNotice(reward));
-    dismissReward();
-  }, [dismissReward, introChecked, reward, showIntro, showNotice]);
+  const celebration = introChecked && !showIntro ? reward : null;
 
   const deniedNoticeShown = useRef(false);
   useEffect(() => {
@@ -126,7 +124,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
       deniedNoticeShown.current = false;
       return;
     }
-    if (!introChecked || showIntro || deniedNoticeShown.current) {
+    if (!introChecked || showIntro || celebration || deniedNoticeShown.current) {
       return;
     }
     deniedNoticeShown.current = true;
@@ -135,7 +133,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
       message: '설정 > 개인정보 보호 및 보안 > 동작 및 피트니스에서 가치고치를 허용해 주세요.',
       buttons: [{ label: '닫기' }, { label: '다시 확인', onPress: () => void refresh() }],
     });
-  }, [introChecked, refresh, showIntro, showNotice, stepStatus]);
+  }, [celebration, introChecked, refresh, showIntro, showNotice, stepStatus]);
 
   return (
     <>
@@ -151,7 +149,9 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         <HomeTopBar />
         <HomeTopIcons top={scale(8)} side={scale(16)} />
       </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(RETURN_BUTTON_HEIGHT + RETURN_BUTTON_GAP + SCROLL_END_SPACE), gap: scale(14) }}>
         {stepStatus === 'ready' && steps === 0 ? (
           <NoticeCard
             icon="directions-walk"
@@ -199,10 +199,20 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         ) : null}
         {devTools}
       </ScrollView>
-      <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: scale(RETURN_BUTTON_GAP), flexDirection: 'row', paddingHorizontal: scale(24) }}>
         <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
       </View>
       {showIntro ? <WalkingIntroPopup step={introStep} onNext={nextIntro} /> : null}
+      {celebration && !celebration.reachedGoal ? <WalkingRewardPopup reward={celebration} onClose={dismissReward} /> : null}
+      {celebration?.reachedGoal ? (
+        <RewardFanfare
+          fromXp={celebration.fromXp}
+          toXp={celebration.fromXp + celebration.xp}
+          fromGrowth={growthStacks}
+          toGrowth={growthStacks}
+          onDone={dismissReward}
+        />
+      ) : null}
       {noticeElement}
     </>
   );

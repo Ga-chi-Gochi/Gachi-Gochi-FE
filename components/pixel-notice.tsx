@@ -1,10 +1,16 @@
 import { useCallback, useState } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
-import { pixel } from '@/constants/pixel-theme';
-import { useResponsive } from '@/hooks/use-responsive';
+import {
+  PixelImageButton,
+  PixelPopupActions,
+  PixelPopupButton,
+  PixelPopupFrame,
+  PixelPopupMessage,
+  PixelPopupOverlay,
+  PixelPopupTitle,
+} from '@/components/pixel-popup';
 
 export type PixelNoticeButton = {
   label: string;
@@ -18,48 +24,43 @@ export type PixelNoticeOptions = {
   buttons?: PixelNoticeButton[];
 };
 
-const DEFAULT_BUTTONS: PixelNoticeButton[] = [{ label: '확인' }];
+const CONFIRM_LABEL = '확인';
 
 export function PixelNotice({ notice, onClose }: { notice: PixelNoticeOptions | null; onClose: () => void }) {
-  const { scale } = useResponsive();
-  const buttons = notice?.buttons?.length ? notice.buttons.slice(0, 2) : DEFAULT_BUTTONS;
+  const buttons = notice?.buttons?.length ? notice.buttons.slice(0, 2) : null;
 
-  const press = (button: PixelNoticeButton) => {
+  const press = (button?: PixelNoticeButton) => {
     onClose();
-    button.onPress?.();
+    button?.onPress?.();
   };
+
+  const confirmOnly = !buttons || (buttons.length === 1 && buttons[0].label === CONFIRM_LABEL);
 
   return (
     <Modal visible={notice !== null} transparent animationType="fade" onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: scale(24) }}>
-        <Pressable
-          accessibilityLabel="닫기"
-          onPress={onClose}
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(26, 21, 32, 0.45)' }}
-        />
-        {notice ? (
-          <PixelPanel style={{ width: '100%', maxWidth: scale(320), gap: scale(12) }}>
-            <PixelText size={17}>{notice.title}</PixelText>
-            {notice.message ? (
-              <PixelText size={13} color={pixel.muted}>
-                {notice.message}
-              </PixelText>
-            ) : null}
-            <View style={{ flexDirection: 'row', gap: scale(8) }}>
-              {buttons.map((button, index) => (
-                <View key={button.label} style={{ flex: 1 }}>
-                  <PixelButton
-                    label={button.label}
-                    tone={button.tone ?? (buttons.length > 1 && index === 0 ? 'ghost' : 'orange')}
-                    onPress={() => press(button)}
-                  />
-                </View>
-              ))}
-            </View>
-          </PixelPanel>
-        ) : null}
-      </View>
+        <PixelPopupOverlay onBackdropPress={onClose}>
+          {notice ? (
+            <PixelPopupFrame>
+              <PixelPopupTitle>{notice.title}</PixelPopupTitle>
+              {notice.message ? <PixelPopupMessage>{notice.message}</PixelPopupMessage> : null}
+              <PixelPopupActions>
+                {confirmOnly || !buttons ? (
+                  <PixelImageButton kind="confirm" onPress={() => press(buttons?.[0])} />
+                ) : (
+                  buttons.map((button, index) => (
+                    <PixelPopupButton
+                      key={button.label}
+                      label={button.label}
+                      tone={button.tone === 'ghost' || (!button.tone && buttons.length > 1 && index === 0) ? 'beige' : 'green'}
+                      onPress={() => press(button)}
+                    />
+                  ))
+                )}
+              </PixelPopupActions>
+            </PixelPopupFrame>
+          ) : null}
+        </PixelPopupOverlay>
       </GestureHandlerRootView>
     </Modal>
   );

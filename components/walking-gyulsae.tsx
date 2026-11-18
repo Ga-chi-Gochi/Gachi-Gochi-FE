@@ -1,26 +1,67 @@
-import { Image } from 'expo-image';
+import { useIsFocused } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { PixelRatio, View } from 'react-native';
 
-const GYULSAE_ART_PIXELS = 32;
-const GYULSAE_EMPTY_TOP_PIXELS = 9;
+import { createSheetFrame, SheetSprite } from '@/components/island/sheet-sprite';
+import { usePlayState } from '@/components/play-state';
+import { MOTION_SEQ, MOTION_STAGES, type MotionStageId } from '@/constants/island-motion';
 
-function getCrispSize(target: number) {
+const GYULSAE_STAGE_LABELS: Record<MotionStageId, string> = {
+  egg: '알',
+  juvenile: '어린 귤새',
+  adult: '다 자란 귤새',
+};
+
+function stageIdFor(level: number): MotionStageId {
+  if (level <= 1) {
+    return 'egg';
+  }
+  if (level >= 4) {
+    return 'adult';
+  }
+  return 'juvenile';
+}
+
+function getCrispSize(target: number, artSize: number) {
   const ratio = PixelRatio.get();
-  const multiple = Math.max(1, Math.round((target * ratio) / GYULSAE_ART_PIXELS));
-  return (multiple * GYULSAE_ART_PIXELS) / ratio;
+  const multiple = Math.max(1, Math.round((target * ratio) / artSize));
+  return (multiple * artSize) / ratio;
 }
 
 export function WalkingGyulsae({ size }: { size: number }) {
-  const crispSize = getCrispSize(size);
-  const emptyTop = (crispSize / GYULSAE_ART_PIXELS) * GYULSAE_EMPTY_TOP_PIXELS;
+  const { growthStage } = usePlayState();
+  const focused = useIsFocused();
+  const stageId = stageIdFor(growthStage.level);
+  const seq = MOTION_SEQ[MOTION_STAGES[stageId].rest];
+  const crispSize = getCrispSize(size, seq.artSize);
+  const [frame] = useState(createSheetFrame);
+
+  useEffect(() => {
+    frame.set(0, 0);
+    if (!focused || seq.sheet.frameCount <= 1) {
+      return;
+    }
+    let index = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      timer = setTimeout(() => {
+        index = (index + 1) % seq.sheet.frameCount;
+        frame.set(index % seq.sheet.cols, Math.floor(index / seq.sheet.cols));
+        tick();
+      }, seq.frameMs[index] ?? seq.frameMs[0]);
+    };
+    tick();
+    return () => clearTimeout(timer);
+  }, [focused, frame, seq]);
 
   return (
-    <View accessibilityLabel="귤새" style={{ alignItems: 'center', height: crispSize - emptyTop, overflow: 'hidden' }}>
-      <Image
-        source={require('@/assets/pixel/gyulsae-juvenile.png')}
-        style={{ width: crispSize, height: crispSize, marginTop: -emptyTop }}
-        contentFit="fill"
-      />
+    <View accessibilityRole="image" accessibilityLabel={`귤새 (${GYULSAE_STAGE_LABELS[stageId]})`} style={{ alignItems: 'center' }}>
+      <View style={{ width: crispSize, height: crispSize }}>
+        {seq.sheet.shadow ? (
+          <SheetSprite source={seq.sheet.shadow} cols={seq.sheet.cols} rows={seq.sheet.rows} size={crispSize} frame={frame} style={{ position: 'absolute', left: 0, top: 0 }} />
+        ) : null}
+        <SheetSprite source={seq.sheet.body} cols={seq.sheet.cols} rows={seq.sheet.rows} size={crispSize} frame={frame} style={{ position: 'absolute', left: 0, top: 0 }} />
+      </View>
     </View>
   );
 }

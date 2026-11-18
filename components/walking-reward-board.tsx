@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { PixelText } from '@/components/pixel/pixel-ui';
 import { palette } from '@/constants/palette';
 import { pixel } from '@/constants/pixel-theme';
-import { WALKING_GOAL_STEPS, WALKING_REWARD_TIERS, type WalkingRewardTier } from '@/constants/walking-reward';
+import { WALKING_GOAL, WALKING_REWARD_TIERS, type WalkingRewardTier } from '@/constants/walking-reward';
 import { useResponsive } from '@/hooks/use-responsive';
 
 function formatNumber(value: number) {
@@ -13,7 +13,7 @@ function formatNumber(value: number) {
 
 export function WalkingRewardBoard({ steps, claimedSteps, coins }: { steps: number; claimedSteps: number[]; coins: number }) {
   const { scale } = useResponsive();
-  const progress = Math.min(1, Math.max(0, steps / WALKING_GOAL_STEPS));
+  const progress = Math.min(1, Math.max(0, steps / WALKING_GOAL));
 
   return (
     <View style={{ backgroundColor: palette.line, padding: scale(16), gap: scale(14) }}>
@@ -21,13 +21,13 @@ export function WalkingRewardBoard({ steps, claimedSteps, coins }: { steps: numb
         <View
           accessibilityRole="progressbar"
           accessibilityLabel="오늘 걸음 진행"
-          accessibilityValue={{ min: 0, max: WALKING_GOAL_STEPS, now: Math.min(steps, WALKING_GOAL_STEPS) }}
+          accessibilityValue={{ min: 0, max: WALKING_GOAL, now: Math.min(steps, WALKING_GOAL) }}
           style={{ height: scale(16), borderWidth: scale(2), borderColor: pixel.ink, backgroundColor: pixel.white }}>
           <View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: pixel.tangerine }} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <PixelText size={11} color={pixel.muted}>0걸음</PixelText>
-          <PixelText size={11} color={pixel.muted}>{formatNumber(WALKING_GOAL_STEPS)}걸음</PixelText>
+          <PixelText size={11} color={pixel.muted}>{formatNumber(WALKING_GOAL)}걸음</PixelText>
         </View>
       </View>
       <PixelText size={16} center>이만큼 획득했수다!</PixelText>

@@ -1,7 +1,7 @@
 // constants/island-motion.ts 를 그대로 옮겼다. 그림은 require 대신 게임 텍스처 이름(game/assets/motion/*.png, 1/8 크기)이다.
 type ImageSource = string;
 
-export type MotionSeqId = 'sea-shore' | 'sea-shallow' | 'sea-deep' | 'egg-still' | 'egg-hop' | 'juvenile-idle' | 'juvenile-fly-struggle' | 'juvenile-takeoff' | 'juvenile-land' | 'adult-idle' | 'adult-waddle';
+export type MotionSeqId = 'sea-shore' | 'sea-shallow' | 'sea-deep' | 'egg-still' | 'egg-idle-a' | 'egg-hop' | 'juvenile-idle' | 'juvenile-fly-struggle' | 'juvenile-takeoff' | 'juvenile-land' | 'adult-idle' | 'adult-waddle';
 
 export type MotionSheet = {
   frameCount: number;
@@ -81,6 +81,19 @@ export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
       rows: 1,
       body: 'egg-still',
       shadow: 'egg-still-shadow',
+    },
+  },
+  'egg-idle-a': {
+    frameMs: [1500, 70, 50, 70, 1100, 70, 700],
+    motion: [0, 0, 0, 0, 0, 0, 0],
+    lift: [0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 7,
+      cols: 7,
+      rows: 1,
+      body: 'egg-idle-a',
+      shadow: 'egg-idle-a-shadow',
     },
   },
   'egg-hop': {
@@ -177,7 +190,7 @@ export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
 };
 
 export const MOTION_STAGES: Record<MotionStageId, MotionStage> = {
-  egg: { rest: 'egg-still', move: 'egg-hop', kind: 'move', size: 52 },
+  egg: { rest: 'egg-idle-a', move: 'egg-hop', kind: 'move', size: 52 },
   juvenile: { rest: 'juvenile-idle', move: 'juvenile-fly-struggle', takeoff: 'juvenile-takeoff', land: 'juvenile-land', kind: 'flight', size: 64 },
   adult: { rest: 'adult-idle', move: 'adult-waddle', kind: 'move', size: 84 },
 };

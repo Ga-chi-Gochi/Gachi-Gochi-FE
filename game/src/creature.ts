@@ -71,7 +71,9 @@ function pickTarget(points: WalkPoint[], from: WalkPoint, plan?: Planner): WalkP
   if (points.length === 1) {
     return routeTo(points[0]);
   }
-  const fallback = points[Math.floor(Math.random() * points.length)];
+  const away = points.filter((p) => Math.hypot(p.x - from.x, p.y - from.y) > PICK_MIN_GAP);
+  const pool = away.length > 0 ? away : points;
+  const fallback = pool[Math.floor(Math.random() * pool.length)];
   for (let i = 0; i < PICK_RETRIES; i += 1) {
     const candidate = points[Math.floor(Math.random() * points.length)];
     if (Math.hypot(candidate.x - from.x, candidate.y - from.y) > PICK_MIN_GAP) {

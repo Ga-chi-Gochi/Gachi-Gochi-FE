@@ -4,12 +4,10 @@ import Phaser from 'phaser';
 
 import type { IslandZoneId } from '@/constants/island-zones';
 import { ISLAND_ZONES } from '@/constants/island-zones';
-import { nearestWalkPoint } from '@/constants/island-terrain';
-import { largestRegion } from '@/components/island/walk-route';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
-import { embedded, listen, send, type GameState, type ToGame } from './bridge';
+import { embedded, listen, send, type GameState, type ToGame, type ZoneBoxes } from './bridge';
 import {
   CLEAR_MS,
   CLOUD,
@@ -27,6 +25,13 @@ import {
 import {
   CELL,
   DEEP_SHEET,
+  GRASS_CENTER_COLOR,
+  ISLAND_SHAPE,
+  SEA_ANIMATED,
+  SEA_PLAIN_COLOR,
+  SEA_PLAIN_SPAN,
+  SHORE_TUCK,
+  SOFT_SHORE_SHEET,
   RAMP_COLORS,
   RAMP_PX,
   RAMP_SHEETS,
@@ -40,10 +45,12 @@ import {
   TILE_BLEED,
   VOLCANO_COLS,
   VOLCANO_ROWS,
+  blockWalkPoints,
+  blockZoneFrame,
+  buildBlockIsland,
   buildIslandCells,
   craterCloudPoint,
-  islandFrame,
-  isWalkable,
+  islandCenterCol,
   landShape,
   revealDelay,
   shoreHeight,
@@ -54,6 +61,8 @@ import {
   spills,
   surgeFill,
   volcanoOrigin,
+  type BlockIsland,
+  type BlockTile,
   type IslandCell,
   type RampBlock,
   type Reveal,
@@ -63,20 +72,17 @@ import {
 } from './shape';
 import {
   MAX_TICK_MS,
-  ON_LAND_RADIUS,
   advance,
   createEngine,
   currentLift,
-  planRoute,
   stageIdFor,
   startRest,
-  startTravel,
   type Engine,
   type Planner,
-  type WalkGrid,
 } from './creature';
 import { MOTION_RULES, MOTION_SEQ, type MotionSheet } from './motion';
 import { SPARKLE_ON_FRAMES, SeaClock, waveLag } from './seaClock';
+import { keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
 
 import grassLawnUrl from '../assets/grass-lawn.png';
 import sandFillUrl from '../assets/sand-fill.png';
@@ -95,6 +101,8 @@ const SEA_CHUNK_COLS = 64;
 
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+
+const tileUrls = import.meta.glob('../assets/tiles-v2/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 // ------------------------------------------------------------------ 카메라 (island-camera.tsx)
 const MIN_ZOOM = 0.62;
@@ -226,6 +234,7 @@ export class IslandScene extends Phaser.Scene {
     points: [] as { x: number; y: number }[],
     pointsKey: '',
     plan: undefined as Planner | undefined,
+    setup: null as WalkSetup | null,
     size: 36,
     shown: 32,
     unit: 36 / 32,
@@ -255,6 +264,12 @@ export class IslandScene extends Phaser.Scene {
     for (const [path, url] of Object.entries(motionUrls)) {
       const name = /([\w-]+)\.png$/.exec(path)?.[1];
       if (name) this.load.spritesheet(name, url, { frameWidth: 32, frameHeight: 32 });
+    }
+    for (const [path, url] of Object.entries(tileUrls)) {
+      const name = /([\w-]+)\.png$/.exec(path)?.[1];
+      if (!name) continue;
+      if (name === 'sea-shore-soft') this.load.spritesheet(`tile-${name}`, url, { frameWidth: 32, frameHeight: 32 });
+      else this.load.image(`tile-${name}`, url);
     }
     this.load.image('grass-lawn', grassLawnUrl);
     this.load.image('sand-fill', sandFillUrl);
@@ -313,13 +328,13 @@ export class IslandScene extends Phaser.Scene {
 
     // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
     const main = this.cameras.main;
-    main.setBackgroundColor('#1C8481');
+    main.setBackgroundColor(SEA_ANIMATED ? '#1C8481' : SEA_PLAIN_COLOR);
     this.worldCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.fixedCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     main.ignore([this.world, this.overlay]);
     this.worldCam.ignore([this.overlay]);
     this.fixedCam.ignore([this.world]);
-    for (const c of [main, this.worldCam, this.fixedCam]) c.setRoundPixels(true);
+    for (const c of [main, this.worldCam, this.fixedCam]) c.setRoundPixels(false);
     this.applyFixedCams();
     this.applyCamera(true);
 
@@ -344,11 +359,18 @@ export class IslandScene extends Phaser.Scene {
     const y0 = Math.floor((-1.2 * this.H) / CELL) * CELL;
     const x1 = Math.ceil((2.2 * this.W) / CELL) * CELL;
     const y1 = Math.ceil((2.2 * this.H) / CELL) * CELL;
-    this.centerCol = Math.floor(islandFrame(this.W, this.H).cx / CELL);
+    this.centerCol = islandCenterCol(this.W, this.H);
     this.seaCol0 = x0 / CELL;
     const old = this.seaChunks.map((c) => c.tex.key);
     this.sea.removeAll(true);
     this.seaChunks = [];
+    if (!SEA_ANIMATED) {
+      const px0 = Math.floor(x0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
+      const py0 = Math.floor(y0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
+      this.sea.add(this.add.tileSprite(px0, py0, x1 - px0, y1 - py0, 'tile-sea-plain-2x2').setOrigin(0));
+      for (const key of old) this.textures.remove(key);
+      return;
+    }
     const totalCols = (x1 - x0) / CELL;
     const bandH = SEA_BAND_ROWS * CELL;
     for (let c = 0; c < totalCols; c += SEA_CHUNK_COLS) {
@@ -427,10 +449,29 @@ export class IslandScene extends Phaser.Scene {
     this.worldCam.setSize(this.scale.width, this.scale.height);
   }
 
+  private viewZoom() {
+    return Math.max(1, Math.round(this.dpr * this.cam.z * CELL)) / CELL;
+  }
+
+  private shownZoom() {
+    return this.viewZoom() / this.dpr;
+  }
+
+  private snap(v: number) {
+    const z = this.worldCam.zoom;
+    return Math.round(v * z) / z;
+  }
+
   private applyCamera(force = false) {
-    const { z, x, y } = this.cam;
-    this.worldCam.setZoom(this.dpr * z);
-    this.worldCam.centerOn(this.W / 2 - x / z, this.H / 2 - y / z);
+    const { x, y } = this.cam;
+    const Z = this.viewZoom();
+    const zoom = Z / this.dpr;
+    const Wd = this.scale.width;
+    const Hd = this.scale.height;
+    const qx = Math.round((this.W / 2 - x / zoom) * Z - Wd / 2);
+    const qy = Math.round((this.H / 2 - y / zoom) * Z - Hd / 2);
+    this.worldCam.setZoom(Z);
+    this.worldCam.setScroll((qx + Wd / 2) / Z - Wd / 2, (qy + Hd / 2) / Z - Hd / 2);
     this.camDirty = true;
     if (force) this.flushCamera(true);
   }
@@ -440,13 +481,28 @@ export class IslandScene extends Phaser.Scene {
     if (!this.camDirty || (!force && now - this.camSentAt < 60)) return;
     this.camDirty = false;
     this.camSentAt = now;
-    send({ type: 'camera', zoom: this.cam.z, x: this.cam.x, y: this.cam.y, w: this.W, h: this.H });
+    send({ type: 'camera', zoom: this.shownZoom(), x: this.cam.x, y: this.cam.y, w: this.W, h: this.H, zones: this.blockZoneBoxes() });
+  }
+
+  private blockZoneBoxes(): ZoneBoxes | undefined {
+    if (ISLAND_SHAPE !== 'blocks') return undefined;
+    const boxes: ZoneBoxes = {};
+    for (const zone of ISLAND_ZONES) {
+      const frame = blockZoneFrame(zone.id, this.W, this.H);
+      if (frame) boxes[zone.id] = frame;
+    }
+    return boxes;
   }
 
   private onResize() {
     const W = this.scale.width / this.dpr;
     const H = this.scale.height / this.dpr;
     if (Math.abs(W - this.W) < 0.5 && Math.abs(H - this.H) < 0.5) return;
+    if (this.walk.engine) {
+      const from = volcanoOrigin(this.W, this.H);
+      const to = volcanoOrigin(W, H);
+      shiftEngine(this.walk.engine, (to.x - from.x) * CELL, (to.y - from.y) * CELL);
+    }
     this.W = W;
     this.H = H;
     this.layoutSea();
@@ -594,6 +650,11 @@ export class IslandScene extends Phaser.Scene {
   private buildTerrain() {
     const { W, H } = this;
     const s = this.state;
+    if (ISLAND_SHAPE === 'blocks') {
+      this.buildBlocks(buildBlockIsland(W, H, s.zones, s.growing));
+      this.placeVolcano();
+      return;
+    }
     const island = buildIslandCells(W, H, s.zones, s.growing, s.look);
     const { cells, grains } = island;
 
@@ -652,9 +713,12 @@ export class IslandScene extends Phaser.Scene {
     }
 
     this.buildWater(island);
+    this.placeVolcano();
+  }
 
+  private placeVolcano() {
     // 화산 칸 (휴화산 4×3)
-    const origin = volcanoOrigin(W, H);
+    const origin = volcanoOrigin(this.W, this.H);
     this.volcanoAt = { x: origin.x * CELL, y: origin.y * CELL };
     this.volcano.removeAll(true);
     for (let r = 0; r < VOLCANO_ROWS; r += 1) {
@@ -666,6 +730,87 @@ export class IslandScene extends Phaser.Scene {
         this.volcano.add(img);
       }
     }
+  }
+
+  private buildBlocks(island: BlockIsland) {
+    const still = island.tiles.filter((t) => t.riseDelay == null);
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const t of still) {
+      x0 = Math.min(x0, t.x * CELL);
+      y0 = Math.min(y0, t.y * CELL);
+      x1 = Math.max(x1, (t.x + 1) * CELL + TILE_BLEED);
+      y1 = Math.max(y1, (t.y + 1) * CELL + TILE_BLEED);
+    }
+    const oldKey = this.terrain.texture.key;
+    const size = CELL + TILE_BLEED;
+    if (Number.isFinite(x0)) {
+      const key = `terrain-${(this.terrainSeq += 1)}`;
+      const tex = this.textures.createCanvas(key, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+      if (tex) {
+        const ctx = tex.getContext();
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = GRASS_CENTER_COLOR;
+        for (const t of still) {
+          if (t.grass === 'flat') ctx.fillRect(t.x * CELL - x0, t.y * CELL - y0, size, size);
+        }
+        const draw = (texture: string, t: BlockTile) => {
+          const img = this.textures.get(texture).getSourceImage() as CanvasImageSource;
+          ctx.drawImage(img, t.x * CELL - x0, t.y * CELL - y0, size, size);
+        };
+        for (const t of still) {
+          if (t.grass === 'flat') continue;
+          if (t.sand) draw(t.sand, t);
+          if (t.grass) draw(t.grass, t);
+        }
+        tex.refresh();
+        this.terrain.setTexture(key).setPosition(x0, y0).setVisible(true);
+      }
+    } else {
+      this.terrain.setVisible(false);
+    }
+    if (oldKey.startsWith('terrain-')) this.textures.remove(oldKey);
+
+    this.tweens.killTweensOf(this.rising.list);
+    this.rising.removeAll(true);
+    for (const t of island.tiles) {
+      if (t.riseDelay != null) this.rising.add(this.risingBlock(t));
+    }
+
+    this.tweens.killTweensOf(this.water.list);
+    this.water.removeAll(true);
+    this.rampBlocks = [];
+    this.shoreStrips = [];
+    this.sparkles = [];
+    const shoreKey = SOFT_SHORE_SHEET.body as unknown as string;
+    for (const cell of island.shore) {
+      const lag = waveLag(cell.x, this.centerCol);
+      const img = this.add.image(cell.x * CELL, cell.y * CELL - SHORE_TUCK, shoreKey, this.seaClock.shown(lag)).setOrigin(0);
+      this.rampBlocks.push({ img, lag });
+      this.water.add(img);
+    }
+    this.stepWater();
+  }
+
+  private risingBlock(tile: BlockTile) {
+    const half = CELL / 2;
+    const size = CELL + TILE_BLEED;
+    const box = this.add.container(tile.x * CELL + half, tile.y * CELL + half);
+    if (tile.sand) box.add(this.add.image(-half, -half, tile.sand).setOrigin(0).setDisplaySize(size, size));
+    if (tile.grass === 'flat') box.add(this.add.rectangle(-half, -half, size, size, hex(GRASS_CENTER_COLOR)).setOrigin(0));
+    else if (tile.grass) box.add(this.add.image(-half, -half, tile.grass).setOrigin(0).setDisplaySize(size, size));
+    box.setScale(0.45).setAlpha(0);
+    this.tweens.add({
+      targets: box,
+      scale: 1,
+      alpha: 1,
+      duration: REVEAL_MS,
+      delay: tile.riseDelay ?? 0,
+      ease: 'Cubic.Out',
+    });
+    return box;
   }
 
   /**
@@ -839,8 +984,8 @@ export class IslandScene extends Phaser.Scene {
     this.spilled = false;
     // AshCloud 는 분화가 시작될 때 자리를 잡는다 (그때 카메라 기준 화구 위치)
     const mouth = craterCloudPoint(this.W, this.H);
-    const originX = this.W / 2 + (mouth.x - this.W / 2) * this.cam.z + this.cam.x;
-    const originY = this.H / 2 + (mouth.y - this.H / 2) * this.cam.z + this.cam.y;
+    const originX = this.W / 2 + (mouth.x - this.W / 2) * this.shownZoom() + this.cam.x;
+    const originY = this.H / 2 + (mouth.y - this.H / 2) * this.shownZoom() + this.cam.y;
     this.gasState = {
       started: this.time.now,
       originX,
@@ -995,6 +1140,8 @@ export class IslandScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ 장식 (BeachPlay decor + PlacedDecorDrop)
   private frameBox(id: IslandZoneId) {
+    const block = blockZoneFrame(id, this.W, this.H);
+    if (block) return block;
     const f = ZONE_FRAME[id];
     return { left: f.x * this.W, top: f.y * this.H, width: f.w * this.W, height: f.h * this.H };
   }
@@ -1101,6 +1248,8 @@ export class IslandScene extends Phaser.Scene {
     const { W, H } = this;
     if (W === 0 || H === 0) return [];
     if (this.state.level <= 1) return [{ x: sandStandX(W, H), y: sandStandY(W, H) }];
+    const block = blockWalkPoints(this.openZones(this.state), W, H);
+    if (block) return block;
     const points: { x: number; y: number }[] = [];
     for (const id of this.openZones(this.state)) {
       const frame = this.frameBox(id);
@@ -1111,21 +1260,6 @@ export class IslandScene extends Phaser.Scene {
       }
     }
     return points;
-  }
-
-  /** beach-play walkGrid: 걸을 수 있는 32칸(화산·물가 제외) 중 가장 큰 덩어리. 알은 길찾기 없음 */
-  private walkGrid(): WalkGrid | undefined {
-    const { W, H } = this;
-    if (this.state.level <= 1 || W === 0 || H === 0) return undefined;
-    const zones = this.openZones(this.state);
-    const canWalk = (x: number, y: number) => isWalkable(x, y, W, H, zones);
-    const cells: { col: number; row: number }[] = [];
-    for (let row = 0; row < Math.ceil(H / CELL); row += 1) {
-      for (let col = 0; col < Math.ceil(W / CELL); col += 1) {
-        if (canWalk((col + 0.5) * CELL, (row + 0.5) * CELL)) cells.push({ col, row });
-      }
-    }
-    return { cell: CELL, cells: largestRegion(cells), canWalk };
   }
 
   private updateWalkers() {
@@ -1141,14 +1275,10 @@ export class IslandScene extends Phaser.Scene {
 
     const footOffset = w.size / 2;
     const raw = this.rawWalkPoints();
-    const grid = this.walkGrid();
-    let points = raw;
-    if (grid && grid.cells.length > 0) {
-      const cellPoints = grid.cells.map((c) => ({ x: (c.col + 0.5) * grid.cell, y: (c.row + 0.5) * grid.cell - footOffset }));
-      const first = raw[0] ? nearestWalkPoint(cellPoints, raw[0]) : null;
-      points = first ? [first, ...cellPoints.filter((p) => p !== first)] : cellPoints;
-    }
-    w.plan = grid ? (from, to) => planRoute(grid, footOffset, from, to) : undefined;
+    const setup = walkSetup(this.W, this.H, this.openZones(s), s.level <= 1, footOffset, raw);
+    const points = setup.points;
+    w.setup = setup;
+    w.plan = setup.plan;
 
     const visible = !s.placing && !s.petOpen && points.length > 0;
     const wasVisible = this.creature.visible;
@@ -1162,19 +1292,17 @@ export class IslandScene extends Phaser.Scene {
     }
 
     const key = JSON.stringify(points);
-    if (w.engine && key === w.pointsKey) return;
+    if (w.engine && key === w.pointsKey) {
+      keepOnLand(w.engine, setup);
+      return;
+    }
     w.points = points;
     w.pointsKey = key;
     if (!w.engine) {
       w.engine = createEngine(stageIdFor(s.level), points[0]);
       return;
     }
-    // 땅이 바뀌면: 가까운 점이 멀면 그쪽으로 이동한다 (WanderingCreature walkPoints effect)
-    const engine = w.engine;
-    const nearest = nearestWalkPoint(points, engine);
-    if (!nearest) return;
-    const onLand = points.some((p) => Math.hypot(p.x - engine.x, p.y - engine.y) < ON_LAND_RADIUS);
-    if (!onLand) startTravel(engine, w.plan?.(engine, nearest) ?? [nearest]);
+    settleOnLand(w.engine, setup);
   }
 
   private drawCreature(delta: number) {
@@ -1187,6 +1315,7 @@ export class IslandScene extends Phaser.Scene {
       startRest(engine, MOTION_RULES.firstRestMs);
     }
     advance(engine, Math.min(MAX_TICK_MS, Math.max(0, delta)), w.unit, w.points, false, w.plan);
+    if (w.setup) keepOnLand(engine, w.setup);
     const sheet = MOTION_SEQ[engine.seqId].sheet;
     const body = sheet.body as unknown as string;
     if (this.creatureBody.texture.key !== body) this.creatureBody.setTexture(body);
@@ -1202,8 +1331,9 @@ export class IslandScene extends Phaser.Scene {
     this.creatureBody.setFlipX(flip);
     this.creatureShadow.setFlipX(flip);
     // 몸만 위로 뜨고(lift) 그림자는 땅에 그대로
-    this.creature.setPosition(engine.x, engine.y);
-    this.creatureBody.y = currentLift(engine, w.unit);
+    const half = w.shown / 2;
+    this.creature.setPosition(this.snap(engine.x - half) + half, this.snap(engine.y - half) + half);
+    this.creatureBody.y = this.snap(currentLift(engine, w.unit));
     this.creatureShadow.y = 0;
   }
 

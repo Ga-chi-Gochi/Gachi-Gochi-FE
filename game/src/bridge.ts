@@ -23,11 +23,14 @@ export type GameState = {
   look: 1 | 2 | 3;
 };
 
+export type ZoneBox = { left: number; top: number; width: number; height: number };
+export type ZoneBoxes = Partial<Record<IslandZoneId, ZoneBox>>;
+
 export type ToGame = ({ type: 'state' } & GameState) | { type: 'erupt' } | { type: 'camera-reset' };
 
 export type FromGame =
   | { type: 'ready' }
-  | { type: 'camera'; zoom: number; x: number; y: number; w: number; h: number }
+  | { type: 'camera'; zoom: number; x: number; y: number; w: number; h: number; zones?: ZoneBoxes }
   /** 화산재 진하기: 상단 바(top) · 토스트(mid) · 왼쪽 아래 버튼(bottom). block 이면 RN 터치를 막는다 */
   | { type: 'ash'; top: number; mid: number; bottom: number; block: boolean }
   | { type: 'tapCreature' }

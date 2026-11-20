@@ -274,7 +274,256 @@ export const CRATER_PIXELS: CraterPixel[] = CRATER_SPANS.flatMap((span, row) => 
   return pixels;
 });
 
+type IslandShape = 'round' | 'blocks';
+export const ISLAND_SHAPE = 'blocks' as IslandShape;
+export const SEA_ANIMATED = false;
+export const SEA_PLAIN_SPAN = CELL * 2;
+export const SEA_PLAIN_COLOR = '#2ca6a4';
+export const GRASS_CENTER_COLOR = '#3f9a5a';
+export const SHORE_TUCK = 4;
+export const SOFT_SHORE_SHEET: MotionSheet = { ...MOTION_SEQ['sea-shore'].sheet, body: 'tile-sea-shore-soft' };
+
+type CellRect = { x0: number; y0: number; x1: number; y1: number };
+
+const BLOCK_ZONES: Record<IslandZoneId, CellRect> = {
+  core: { x0: -4, y0: 0, x1: 3, y1: 6 },
+  north: { x0: -3, y0: -3, x1: 2, y1: -1 },
+  south: { x0: -3, y0: 7, x1: 2, y1: 9 },
+  west: { x0: -6, y0: 1, x1: -5, y1: 4 },
+  east: { x0: 4, y0: 2, x1: 5, y1: 5 },
+};
+const BLOCK_CORE_MIN_TOP = 4;
+const BLOCK_BEACH_FROM_CORE = 10;
+const BLOCK_BEACH_ROWS = 2;
+const BLOCK_ROWS_BELOW_BEACH = 4;
+const BLOCK_BEACH_OVERHANG = 0.4;
+
+export type BlockLayout = {
+  center: number;
+  coreTop: number;
+  beachTop: number;
+  beachBottom: number;
+  shoreRow: number;
+  minCol: number;
+  maxCol: number;
+  visibleCols: number;
+};
+
+export function blockLayout(width: number, height: number): BlockLayout {
+  const rows = Math.floor(height / CELL);
+  const coreTop = Math.max(BLOCK_CORE_MIN_TOP, rows - BLOCK_ROWS_BELOW_BEACH - BLOCK_BEACH_ROWS - BLOCK_BEACH_FROM_CORE);
+  const beachTop = coreTop + BLOCK_BEACH_FROM_CORE;
+  const fullCols = Math.ceil(width / CELL);
+  const overhang = Math.ceil(fullCols * BLOCK_BEACH_OVERHANG);
+  return {
+    center: Math.round(width / 2 / CELL),
+    coreTop,
+    beachTop,
+    beachBottom: beachTop + BLOCK_BEACH_ROWS - 1,
+    shoreRow: beachTop + BLOCK_BEACH_ROWS,
+    minCol: -overhang,
+    maxCol: fullCols - 1 + overhang,
+    visibleCols: Math.floor(width / CELL),
+  };
+}
+
+function blockZoneRect(layout: BlockLayout, zoneId: IslandZoneId): CellRect {
+  const rect = BLOCK_ZONES[zoneId];
+  return {
+    x0: layout.center + rect.x0,
+    y0: layout.coreTop + rect.y0,
+    x1: layout.center + rect.x1,
+    y1: layout.coreTop + rect.y1,
+  };
+}
+
+function isBeachRow(layout: BlockLayout, y: number) {
+  return y >= layout.beachTop && y <= layout.beachBottom;
+}
+
+function blockLandSet(layout: BlockLayout, zones: readonly IslandZoneId[]) {
+  const land = new Set<string>();
+  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
+    const rect = blockZoneRect(layout, zoneId);
+    for (let y = rect.y0; y <= rect.y1; y += 1) {
+      for (let x = rect.x0; x <= rect.x1; x += 1) {
+        land.add(keyOf(x, y));
+      }
+    }
+  }
+  return land;
+}
+
+let blockLandCache: { key: string; land: Set<string> } | null = null;
+
+function cachedBlockLand(width: number, height: number, layout: BlockLayout, zones: readonly IslandZoneId[]) {
+  const key = `${width}x${height}:${[...zones].sort().join(',')}`;
+  if (blockLandCache?.key !== key) {
+    blockLandCache = { key, land: blockLandSet(layout, zones) };
+  }
+  return blockLandCache.land;
+}
+
+function blockLandAt(layout: BlockLayout, land: Set<string>, x: number, y: number) {
+  return isBeachRow(layout, y) || land.has(keyOf(x, y));
+}
+
+export function blockZoneFrame(zoneId: IslandZoneId, width: number, height: number) {
+  if (ISLAND_SHAPE !== 'blocks' || width <= 0 || height <= 0) {
+    return null;
+  }
+  const rect = blockZoneRect(blockLayout(width, height), zoneId);
+  return {
+    left: rect.x0 * CELL,
+    top: rect.y0 * CELL,
+    width: (rect.x1 - rect.x0 + 1) * CELL,
+    height: (rect.y1 - rect.y0 + 1) * CELL,
+  };
+}
+
+export function blockWalkPoints(zones: readonly IslandZoneId[], width: number, height: number) {
+  if (ISLAND_SHAPE !== 'blocks' || width <= 0 || height <= 0) {
+    return null;
+  }
+  const layout = blockLayout(width, height);
+  const points: { x: number; y: number }[] = [];
+  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
+    const rect = blockZoneRect(layout, zoneId);
+    for (let y = rect.y0; y <= rect.y1; y += 1) {
+      for (let x = rect.x0; x <= rect.x1; x += 1) {
+        const px = (x + 0.5) * CELL;
+        const py = (y + 0.5) * CELL;
+        if (isWalkable(px, py, width, height, zones)) {
+          points.push({ x: px, y: py });
+        }
+      }
+    }
+  }
+  return points;
+}
+
+export type GrassPiece = string | 'flat';
+
+export type BlockTile = {
+  key: string;
+  x: number;
+  y: number;
+  sand: string | null;
+  grass: GrassPiece | null;
+  riseDelay?: number;
+};
+
+function sandPiece(n: boolean, s: boolean, w: boolean, e: boolean): string {
+  if (!n && !w && s && e) return 'tile-sand-corner-top-left';
+  if (!n && !e && s && w) return 'tile-sand-corner-top-right';
+  if (!s && !w && n && e) return 'tile-sand-corner-bottom-left';
+  if (!s && !e && n && w) return 'tile-sand-corner-bottom-right';
+  return 'sand-fill';
+}
+
+type Around = { n: boolean; s: boolean; w: boolean; e: boolean; nw: boolean; ne: boolean; sw: boolean; se: boolean };
+
+function grassPiece({ n, s, w, e, nw, ne, sw, se }: Around): GrassPiece {
+  if (!n && !w) return 'tile-grass-corner-top-left';
+  if (!n && !e) return 'tile-grass-corner-top-right';
+  if (!s && !w) return 'tile-grass-corner-bottom-left';
+  if (!s && !e) return 'tile-grass-corner-bottom-right';
+  if (!n) return 'tile-grass-side-top';
+  if (!s) return 'tile-grass-side-bottom';
+  if (!w) return 'tile-grass-side-left';
+  if (!e) return 'tile-grass-side-right';
+  if (!nw) return 'tile-grass-inner-top-left';
+  if (!ne) return 'tile-grass-inner-top-right';
+  if (!sw) return 'tile-grass-inner-bottom-left';
+  if (!se) return 'tile-grass-inner-bottom-right';
+  return 'flat';
+}
+
+export type BlockIsland = { tiles: BlockTile[]; shore: IslandCell[]; layout: BlockLayout };
+
+export function buildBlockIsland(width: number, height: number, zones: readonly IslandZoneId[], growingZoneId: IslandZoneId | null): BlockIsland {
+  const layout = blockLayout(width, height);
+  const growing = growingZoneId && growingZoneId !== 'core' ? growingZoneId : null;
+  const settledZones = zones.filter((zoneId) => zoneId !== growing);
+  const fullZones = growing ? [...settledZones, growing] : settledZones;
+  const settled = blockLandSet(layout, settledZones);
+  const land = growing ? blockLandSet(layout, fullZones) : settled;
+  const landAt = (x: number, y: number) => blockLandAt(layout, land, x, y);
+  const grassAt = (x: number, y: number) => {
+    if (isBeachRow(layout, y) || !land.has(keyOf(x, y))) {
+      return false;
+    }
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (!landAt(x + dx, y + dy)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  const origin = { cx: layout.center * CELL, cy: (layout.coreTop + 3.5) * CELL };
+  const tiles: BlockTile[] = [];
+  const place = (x: number, y: number) => {
+    const n = landAt(x, y - 1);
+    const s = landAt(x, y + 1);
+    const w = landAt(x - 1, y);
+    const e = landAt(x + 1, y);
+    const grass = grassAt(x, y)
+      ? grassPiece({
+          n: grassAt(x, y - 1),
+          s: grassAt(x, y + 1),
+          w: grassAt(x - 1, y),
+          e: grassAt(x + 1, y),
+          nw: grassAt(x - 1, y - 1),
+          ne: grassAt(x + 1, y - 1),
+          sw: grassAt(x - 1, y + 1),
+          se: grassAt(x + 1, y + 1),
+        })
+      : null;
+    const fresh = growing != null && !isBeachRow(layout, y) && !settled.has(keyOf(x, y));
+    tiles.push({
+      key: keyOf(x, y),
+      x,
+      y,
+      sand: grass === 'flat' ? null : sandPiece(n, s, w, e),
+      grass,
+      riseDelay: fresh ? delayFor(x, y, origin.cx, origin.cy) : undefined,
+    });
+  };
+  for (const key of land) {
+    const [x, y] = key.split(',').map(Number);
+    if (!isBeachRow(layout, y)) {
+      place(x, y);
+    }
+  }
+  for (let y = layout.beachTop; y <= layout.beachBottom; y += 1) {
+    for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
+      place(x, y);
+    }
+  }
+  const shore: IslandCell[] = [];
+  for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
+    shore.push({ key: `shore-${x}`, x, y: layout.shoreRow, kind: 'coast', coastRow: 0 });
+  }
+  return { tiles, shore, layout };
+}
+
+export function islandCenterCol(width: number, height: number) {
+  if (ISLAND_SHAPE === 'blocks') {
+    return blockLayout(width, height).center;
+  }
+  return Math.floor(islandFrame(width, height).cx / CELL);
+}
+
 export function volcanoOrigin(width: number, height: number) {
+  if (ISLAND_SHAPE === 'blocks') {
+    const layout = blockLayout(width, height);
+    return {
+      x: layout.center - Math.floor(VOLCANO_COLS / 2),
+      y: layout.coreTop + 2,
+    };
+  }
   const { cx, cy } = islandFrame(width, height);
   return {
     x: Math.floor(cx / CELL) - Math.floor(VOLCANO_COLS / 2),
@@ -283,6 +532,10 @@ export function volcanoOrigin(width: number, height: number) {
 }
 
 export function volcanoMouthPoint(width: number, height: number) {
+  if (ISLAND_SHAPE === 'blocks') {
+    const origin = volcanoOrigin(width, height);
+    return { x: (origin.x + VOLCANO_COLS / 2) * CELL, y: (origin.y + VOLCANO_ROWS - 1) * CELL };
+  }
   const { cx, cy } = islandFrame(width, height);
   return { x: cx, y: cy - CELL * 0.5 };
 }
@@ -305,11 +558,21 @@ export function isWalkable(px: number, py: number, width: number, height: number
   }
   const x = Math.floor(px / CELL);
   const y = Math.floor(py / CELL);
-  if (x < 0 || y < 0 || x >= Math.ceil(width / CELL)) {
-    return false;
-  }
-  if (!landCell(x, y, landShape(width, height), zones)) {
-    return false;
+  if (ISLAND_SHAPE === 'blocks') {
+    const layout = blockLayout(width, height);
+    if (x < 0 || y < 0 || x >= layout.visibleCols) {
+      return false;
+    }
+    if (!blockLandAt(layout, cachedBlockLand(width, height, layout, zones), x, y)) {
+      return false;
+    }
+  } else {
+    if (x < 0 || y < 0 || x >= Math.ceil(width / CELL)) {
+      return false;
+    }
+    if (!landCell(x, y, landShape(width, height), zones)) {
+      return false;
+    }
   }
   const origin = volcanoOrigin(width, height);
   const nearVolcano = x >= origin.x - 1 && x <= origin.x + VOLCANO_COLS && y >= origin.y - 1 && y <= origin.y + VOLCANO_ROWS;

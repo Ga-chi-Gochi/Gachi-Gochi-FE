@@ -11,7 +11,7 @@ import { GrowthReveal } from '@/components/island/growth-reveal';
 import { HomeActivityToggle } from '@/components/island/home-activity-toggle';
 import { HomeSheet } from '@/components/island/home-sheet';
 import { ResourceHeader } from '@/components/island/resource-header';
-import { GUIDE_OTHER_PAGE, OnboardingFlow } from '@/components/onboarding/onboarding-flow';
+import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
@@ -52,7 +52,6 @@ export default function IslandHomeScreen() {
   const [showGuide, setShowGuide] = useState(false);
   // 메뉴에서 온보딩을 다시 연 경우에만 true. 끝나면 튜토리얼도 다시 보기로 이어진다
   const [guideReplay, setGuideReplay] = useState(false);
-  const [guidePage, setGuidePage] = useState(0);
   const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
@@ -154,7 +153,7 @@ export default function IslandHomeScreen() {
           </View>
         ) : null}
 
-        <HomeActivityToggle expanded={showGuide && guidePage === GUIDE_OTHER_PAGE} tourEnabled={!showGuide} />
+        <HomeActivityToggle tourEnabled={!showGuide} />
 
         <HomeSheet
           open={sheet != null}
@@ -224,7 +223,6 @@ export default function IslandHomeScreen() {
       {showGuide ? (
         <OnboardingFlow
           initialName={creatureName}
-          onPageChange={setGuidePage}
           onDone={(name) => {
             if (name) {
               setNickname(name);

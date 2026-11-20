@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   GuideBackdrop,
   GuideChip,
-  GuideChoices,
   GuideFrame,
   GuideHeader,
   GuideSpeech,
@@ -17,15 +16,12 @@ import {
 } from '@/components/guide/guide-controls';
 import { GuidePager } from '@/components/guide/guide-pager';
 import { GuideSpotlight } from '@/components/guide/guide-spotlight';
-import { homeShopIconCenter } from '@/components/home-top-bar';
-import { activityTarget } from '@/components/island/home-activity-toggle';
 import { PixelButton, PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { pixel } from '@/constants/pixel-theme';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { useResponsive } from '@/hooks/use-responsive';
 import { markOnboardingSeen, saveCreatureName } from '@/lib/onboarding-state';
-import { saveWalkingConsent } from '@/lib/walking-consent';
 
 const EGG = require('@/assets/pixel/gyulsae-egg.png');
 const JUVENILE = require('@/assets/pixel/gyulsae-juvenile.png');
@@ -37,21 +33,17 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 const NAME_CHIPS = ['귤돌이', '하르방', '봉봉이'] as const;
 const RANDOM_NAMES = ['귤돌이', '하르방', '봉봉이', '새콤이', '감귤이', '돌하르'];
 const TAP_GOAL = 3;
-const PAGE_COUNT = 6;
+const PAGE_COUNT = 4;
 const LAST_PAGE = PAGE_COUNT - 1;
-/** 장마다 위쪽 글자 색. 어둡힘이 깔리는 장(성장, 걸음, 대안)만 밝은 글자 */
-const TONES: GuideTone[] = ['dark', 'dark', 'light', 'light', 'light', 'dark'];
+/** 장마다 위쪽 글자 색. 어둡힘이 깔리는 장(성장)만 밝은 글자 */
+const TONES: GuideTone[] = ['dark', 'dark', 'light', 'dark'];
 
 /** 섬 그림의 중심 높이(화면 높이 대비). 섬은 가로 가운데, 이 높이쯤에 놓인다 */
 const ISLAND_CENTER_Y = 0.48;
-/** 활동 버튼을 펼쳐서 보여 주는 장(OtherStep) */
-export const GUIDE_OTHER_PAGE = 4;
 
 type OnboardingFlowProps = {
   initialName?: string;
   onDone: (name: string | null) => void;
-  /** 지금 보이는 장이 바뀔 때 알려 준다. 홈이 이 장에서 활동 버튼을 펼쳐 두는 데 쓴다 */
-  onPageChange?: (index: number) => void;
 };
 
 function hasBatchim(name: string) {
@@ -158,23 +150,7 @@ function Enter({
   );
 }
 
-/** 다섯 번째 장: 펼친 나침반의 봉그깅과 오른쪽 위 상점을 짚는 두 구멍과 카드 자리 */
-function otherLayout(scale: (value: number) => number, insets: { top: number; bottom: number }, width: number, height: number) {
-  const plog = activityTarget('봉그깅', scale, insets.bottom);
-  const shop = homeShopIconCenter(scale, insets.top);
-  const plogRadius = plog.size / 2 + scale(6);
-  const shopRadius = shop.size / 2 + scale(3);
-  return {
-    plog,
-    plogRadius,
-    holes: [
-      { centerX: width - plog.fromRight, centerY: height - plog.fromBottom, radius: plogRadius },
-      { centerX: width - shop.fromRight, centerY: shop.fromTop, radius: shopRadius },
-    ],
-  };
-}
-
-export function OnboardingFlow({ initialName = '', onDone, onPageChange }: OnboardingFlowProps) {
+export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps) {
   const { width, height, scale } = useResponsive();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
@@ -183,12 +159,7 @@ export function OnboardingFlow({ initialName = '', onDone, onPageChange }: Onboa
   const [taps, setTaps] = useState(0);
   const [name, setName] = useState(initialName);
   const [tilt, setTilt] = useState(0);
-  const [allowed, setAllowed] = useState(false);
   const finishing = useRef(false);
-
-  useEffect(() => {
-    onPageChange?.(index);
-  }, [index, onPageChange]);
 
   const creature = name.trim() || '귤새';
   const topic = withParticle(creature, '은', '는');
@@ -236,17 +207,6 @@ export function OnboardingFlow({ initialName = '', onDone, onPageChange }: Onboa
     setName(pool[Math.floor(Math.random() * pool.length)] ?? '귤돌이');
   };
 
-  const allowSteps = () => {
-    void saveWalkingConsent();
-    setAllowed(true);
-    setIndex(4);
-  };
-
-  const laterSteps = () => {
-    setAllowed(false);
-    setIndex(4);
-  };
-
   const padTop = insets.top + scale(8);
   const padBottom = insets.bottom + scale(16);
   const contentTop = padTop + scale(44) + scale(8);
@@ -264,16 +224,6 @@ export function OnboardingFlow({ initialName = '', onDone, onPageChange }: Onboa
             centerY={height * ISLAND_CENTER_Y}
             radius={Math.min(width * 0.42, height * 0.22)}
           />
-        </DimLayer>
-      ) : null}
-      {Math.abs(index - 3) <= 1 ? (
-        <DimLayer on={index === 3}>
-          <View style={{ flex: 1, backgroundColor: pixel.dim }} />
-        </DimLayer>
-      ) : null}
-      {Math.abs(index - 4) <= 1 ? (
-        <DimLayer on={index === 4}>
-          <GuideSpotlight width={width} height={height} holes={otherLayout(scale, insets, width, height).holes} />
         </DimLayer>
       ) : null}
       <GuidePager index={index} width={width} height={height} onIndexChange={setIndex}>
@@ -302,16 +252,7 @@ export function OnboardingFlow({ initialName = '', onDone, onPageChange }: Onboa
             { icon: BONGGING, title: '봉그깅하면 산소방울' },
             { icon: LOCAL_SHOP, title: '상점에서 귤코인' },
           ]}
-          onNext={() => setIndex(3)}
-        />
-        <StepsStep active={index === 3} padBottom={padBottom} onLater={laterSteps} onAllow={allowSteps} />
-        <OtherStep
-          active={index === 4}
-          width={width}
-          height={height}
-          body={allowed ? `좋아요!\n봉그깅이나 상점으로도\n더 키울 수 있어요` : `괜찮아요.\n봉그깅이나 상점으로도\n키울 수 있어요`}
-          onLook={() => setIndex(LAST_PAGE)}
-          onPlog={() => finish(name, '/camera' as Href)}
+          onNext={() => setIndex(LAST_PAGE)}
         />
         <SaveStep
           active={index === LAST_PAGE}
@@ -546,106 +487,6 @@ function GrowStep({
           <PixelButton large label="다음" onPress={onNext} />
         </Enter>
       </GuideFrame>
-    </View>
-  );
-}
-
-function StepsStep({
-  active,
-  padBottom,
-  onLater,
-  onAllow,
-}: {
-  active: boolean;
-  padBottom: number;
-  onLater: () => void;
-  onAllow: () => void;
-}) {
-  const { scale } = useResponsive();
-  const border = scale(pixel.border);
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flex: 1 }} />
-      {/* 시트가 아래에서 올라오고, 안의 내용이 위에서부터 차례로 들어온다 */}
-      <Enter active={active} distance={56}>
-        <GuideFrame
-          style={{
-            backgroundColor: pixel.panel,
-            borderTopWidth: border,
-            borderLeftWidth: border,
-            borderRightWidth: border,
-            borderColor: pixel.ink,
-            paddingHorizontal: scale(24),
-            paddingTop: scale(24),
-            paddingBottom: padBottom,
-            alignItems: 'center',
-            gap: scale(12),
-          }}>
-          <Enter active={active} delay={90} distance={10}>
-            <Image source={WALK} contentFit="contain" style={{ width: scale(56), height: scale(56), ...pixelImageStyle }} />
-          </Enter>
-          <Enter active={active} delay={150} distance={10}>
-            <PixelText size={20} center>
-              걸음 수를 가져올까요?
-            </PixelText>
-          </Enter>
-          <Enter active={active} delay={210} distance={10}>
-            <View style={{ gap: scale(4) }}>
-              <PixelText size={15} weight="500" center>
-                걸은 만큼 물방울이 쌓여요
-              </PixelText>
-              <PixelText size={13} weight="500" color={pixel.muted} center>
-                걸음 수만 읽어요. 설정에서 언제든 끌 수 있어요
-              </PixelText>
-            </View>
-          </Enter>
-          <Enter active={active} delay={270} distance={10} style={{ alignSelf: 'stretch', marginTop: scale(4) }}>
-            <GuideChoices left="나중에" right="허용" onLeft={onLater} onRight={onAllow} />
-          </Enter>
-        </GuideFrame>
-      </Enter>
-    </View>
-  );
-}
-
-/**
- * 펼쳐진 나침반의 봉그깅 아이콘과 오른쪽 위의 상점 아이콘을 구멍으로 짚는다.
- * 카드는 봉그깅 구멍 바로 위에 작게 놓고 꼬리가 그 구멍을 가리킨다. (펼친 모습은 홈이 expanded 로 그려 주고,
- * 구멍 뚫린 어둡힘은 OnboardingFlow 의 고정 층이 그린다)
- */
-function OtherStep({
-  active,
-  width,
-  height,
-  body,
-  onLook,
-  onPlog,
-}: {
-  active: boolean;
-  width: number;
-  height: number;
-  body: string;
-  onLook: () => void;
-  onPlog: () => void;
-}) {
-  const { scale } = useResponsive();
-  const insets = useSafeAreaInsets();
-  const { plog, plogRadius } = otherLayout(scale, insets, width, height);
-  const edge = scale(12);
-  return (
-    <View style={{ flex: 1 }}>
-      <View
-        pointerEvents="box-none"
-        style={{ position: 'absolute', left: edge, right: edge, bottom: plog.fromBottom + plogRadius + scale(4), alignItems: 'flex-end' }}>
-        <Enter active={active} delay={120} distance={16} style={{ width: '100%', maxWidth: scale(320) }}>
-          <GuideSpeech tailInset={plog.fromRight - edge}>
-            <PixelText size={16} center>
-              {body}
-            </PixelText>
-            <GuideChoices large={false} left="둘러보기" right="봉그깅 하기" onLeft={onLook} onRight={onPlog} />
-          </GuideSpeech>
-        </Enter>
-      </View>
     </View>
   );
 }

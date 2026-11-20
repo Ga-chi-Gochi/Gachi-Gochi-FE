@@ -1,9 +1,6 @@
-import {
-  isHealthDataAvailableAsync,
-  queryStatisticsForQuantity,
-  requestAuthorization,
-} from '@kingstinct/react-native-healthkit';
 import { Linking } from 'react-native';
+
+import { canUseHealthKitNative } from '@/lib/health-native-gate';
 
 export type HealthStepsPermission = 'granted' | 'denied' | 'unavailable';
 
@@ -15,6 +12,8 @@ export type TodayHealthSteps = {
   source: HealthStepsSource | null;
 };
 
+type HealthKitModule = typeof import('@kingstinct/react-native-healthkit');
+
 const READ_TYPES = [
   'HKQuantityTypeIdentifierStepCount',
   'HKQuantityTypeIdentifierDistanceWalkingRunning',
@@ -23,6 +22,26 @@ const READ_TYPES = [
 /** 읽기 권한은 허용/거부를 앱에 안 알려 주므로, 요청 성공 여부만 세션에 기억한다. */
 let healthReady = false;
 
+/** NitroModules 가 없는 바이너리에서는 HealthKit 패키지를 아예 열지 않는다. */
+let healthKit: HealthKitModule | null | undefined;
+
+function loadHealthKit(): HealthKitModule | null {
+  if (healthKit !== undefined) {
+    return healthKit;
+  }
+  if (!canUseHealthKitNative()) {
+    healthKit = null;
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    healthKit = require('@kingstinct/react-native-healthkit') as HealthKitModule;
+  } catch {
+    healthKit = null;
+  }
+  return healthKit;
+}
+
 function startOfToday(now = new Date()): Date {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -30,12 +49,16 @@ function startOfToday(now = new Date()): Date {
 }
 
 export function getHealthStepsSource(): HealthStepsSource | null {
-  return 'healthkit';
+  return canUseHealthKitNative() ? 'healthkit' : null;
 }
 
 export async function isHealthStepsAvailable(): Promise<boolean> {
+  const kit = loadHealthKit();
+  if (!kit) {
+    return false;
+  }
   try {
-    return await isHealthDataAvailableAsync();
+    return await kit.isHealthDataAvailableAsync();
   } catch {
     return false;
   }
@@ -49,12 +72,12 @@ export async function getHealthStepsPermission(): Promise<HealthStepsPermission>
 }
 
 export async function requestHealthStepsPermission(): Promise<HealthStepsPermission> {
-  if (!(await isHealthStepsAvailable())) {
+  const kit = loadHealthKit();
+  if (!kit || !(await isHealthStepsAvailable())) {
     return 'unavailable';
   }
   try {
-    // 시스템 건강 권한 시트가 여기서 뜬다.
-    await requestAuthorization({ toRead: [...READ_TYPES] });
+    await kit.requestAuthorization({ toRead: [...READ_TYPES] });
     healthReady = true;
     return 'granted';
   } catch {
@@ -64,6 +87,10 @@ export async function requestHealthStepsPermission(): Promise<HealthStepsPermiss
 }
 
 export async function readTodayHealthSteps(): Promise<TodayHealthSteps> {
+  const kit = loadHealthKit();
+  if (!kit) {
+    return { steps: 0, distanceMeters: null, source: null };
+  }
   if (!healthReady) {
     const permission = await requestHealthStepsPermission();
     if (permission !== 'granted') {
@@ -77,14 +104,16 @@ export async function readTodayHealthSteps(): Promise<TodayHealthSteps> {
 
   try {
     const [stepsStats, distanceStats] = await Promise.all([
-      queryStatisticsForQuantity('HKQuantityTypeIdentifierStepCount', ['cumulativeSum'], {
+      kit.queryStatisticsForQuantity('HKQuantityTypeIdentifierStepCount', ['cumulativeSum'], {
         filter,
         unit: 'count',
       }),
-      queryStatisticsForQuantity('HKQuantityTypeIdentifierDistanceWalkingRunning', ['cumulativeSum'], {
-        filter,
-        unit: 'm',
-      }).catch(() => null),
+      kit
+        .queryStatisticsForQuantity('HKQuantityTypeIdentifierDistanceWalkingRunning', ['cumulativeSum'], {
+          filter,
+          unit: 'm',
+        })
+        .catch(() => null),
     ]);
 
     return {

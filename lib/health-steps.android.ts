@@ -1,13 +1,6 @@
 import { Linking } from 'react-native';
-import {
-  SdkAvailabilityStatus,
-  aggregateRecord,
-  getGrantedPermissions,
-  getSdkStatus,
-  initialize,
-  openHealthConnectSettings,
-  requestPermission,
-} from 'react-native-health-connect';
+
+import { canUseHealthConnectNative } from '@/lib/health-native-gate';
 
 export type HealthStepsPermission = 'granted' | 'denied' | 'unavailable';
 
@@ -19,10 +12,32 @@ export type TodayHealthSteps = {
   source: HealthStepsSource | null;
 };
 
+type HealthConnectModule = typeof import('react-native-health-connect');
+
 const ANDROID_PERMISSIONS = [
   { accessType: 'read' as const, recordType: 'Steps' as const },
   { accessType: 'read' as const, recordType: 'Distance' as const },
 ];
+
+/** 네이티브가 없으면 Health Connect 패키지를 아예 열지 않는다. */
+let healthConnect: HealthConnectModule | null | undefined;
+
+function loadHealthConnect(): HealthConnectModule | null {
+  if (healthConnect !== undefined) {
+    return healthConnect;
+  }
+  if (!canUseHealthConnectNative()) {
+    healthConnect = null;
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    healthConnect = require('react-native-health-connect') as HealthConnectModule;
+  } catch {
+    healthConnect = null;
+  }
+  return healthConnect;
+}
 
 function startOfToday(now = new Date()): Date {
   const start = new Date(now);
@@ -31,36 +46,41 @@ function startOfToday(now = new Date()): Date {
 }
 
 export function getHealthStepsSource(): HealthStepsSource | null {
-  return 'healthconnect';
+  return canUseHealthConnectNative() ? 'healthconnect' : null;
 }
 
 export async function isHealthStepsAvailable(): Promise<boolean> {
+  const hc = loadHealthConnect();
+  if (!hc) {
+    return false;
+  }
   try {
-    const status = await getSdkStatus();
-    // 설치만 필요하면 설정/스토어로 보낼 수 있게 available 로 취급하지 않는다.
-    return status === SdkAvailabilityStatus.SDK_AVAILABLE;
+    const status = await hc.getSdkStatus();
+    return status === hc.SdkAvailabilityStatus.SDK_AVAILABLE;
   } catch {
     return false;
   }
 }
 
 async function ensureReady(): Promise<boolean> {
-  if (!(await isHealthStepsAvailable())) {
+  const hc = loadHealthConnect();
+  if (!hc || !(await isHealthStepsAvailable())) {
     return false;
   }
   try {
-    return await initialize();
+    return await hc.initialize();
   } catch {
     return false;
   }
 }
 
 export async function getHealthStepsPermission(): Promise<HealthStepsPermission> {
-  if (!(await ensureReady())) {
+  const hc = loadHealthConnect();
+  if (!hc || !(await ensureReady())) {
     return 'unavailable';
   }
   try {
-    const granted = await getGrantedPermissions();
+    const granted = await hc.getGrantedPermissions();
     const hasSteps = granted.some(
       (item) => 'recordType' in item && item.recordType === 'Steps' && item.accessType === 'read',
     );
@@ -71,11 +91,12 @@ export async function getHealthStepsPermission(): Promise<HealthStepsPermission>
 }
 
 export async function requestHealthStepsPermission(): Promise<HealthStepsPermission> {
-  if (!(await ensureReady())) {
+  const hc = loadHealthConnect();
+  if (!hc || !(await ensureReady())) {
     return 'unavailable';
   }
   try {
-    const granted = await requestPermission(ANDROID_PERMISSIONS);
+    const granted = await hc.requestPermission(ANDROID_PERMISSIONS);
     const hasSteps = granted.some(
       (item) => 'recordType' in item && item.recordType === 'Steps' && item.accessType === 'read',
     );
@@ -86,6 +107,10 @@ export async function requestHealthStepsPermission(): Promise<HealthStepsPermiss
 }
 
 export async function readTodayHealthSteps(): Promise<TodayHealthSteps> {
+  const hc = loadHealthConnect();
+  if (!hc) {
+    return { steps: 0, distanceMeters: null, source: null };
+  }
   const permission = await getHealthStepsPermission();
   if (permission !== 'granted') {
     return { steps: 0, distanceMeters: null, source: 'healthconnect' };
@@ -103,14 +128,16 @@ export async function readTodayHealthSteps(): Promise<TodayHealthSteps> {
   };
 
   try {
-    const steps = await aggregateRecord({
+    const steps = await hc.aggregateRecord({
       recordType: 'Steps',
       timeRangeFilter,
     });
-    const distance = await aggregateRecord({
-      recordType: 'Distance',
-      timeRangeFilter,
-    }).catch(() => null);
+    const distance = await hc
+      .aggregateRecord({
+        recordType: 'Distance',
+        timeRangeFilter,
+      })
+      .catch(() => null);
 
     return {
       steps: Math.max(0, Math.round(steps.COUNT_TOTAL ?? 0)),
@@ -124,8 +151,9 @@ export async function readTodayHealthSteps(): Promise<TodayHealthSteps> {
 }
 
 export function openHealthStepsSettings(): void {
+  const hc = loadHealthConnect();
   try {
-    openHealthConnectSettings();
+    hc?.openHealthConnectSettings();
   } catch {
     void Linking.openSettings();
   }

@@ -24,6 +24,17 @@ export function getGrowthStage(water: number, xp = 0): GrowthStage {
   return { level: stage.level, label: stage.label };
 }
 
+/** 지정한 레벨이 되려면 지금보다 경험치가 얼마나 더 필요한지. 이미 넘었으면 0 */
+export function xpToReachLevel(level: number, water: number, xp: number): number {
+  const stage = GROWTH_STAGES.find((entry) => entry.level === level);
+  if (!stage) {
+    return 0;
+  }
+  const missingProgress = stage.minProgress - Math.max(0, water);
+  const targetXp = Math.max(0, missingProgress) * XP_TO_PROGRESS_DIVISOR;
+  return Math.max(0, targetXp - Math.max(0, xp));
+}
+
 export function getGrowthRevealCopy(from: GrowthStage, to: GrowthStage): { title: string; body: string } {
   if (from.level === 1 && to.level >= 2) {
     return {

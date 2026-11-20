@@ -17,5 +17,7 @@ export const pixel = {
   white: '#FFFDF8',
   muted: '#6E6875',
   panel: '#FFF8EC',
+  /** 화면 전체를 덮는 어둡힘. 성장 연출(growth-reveal)과 같은 0.72 */
+  dim: 'rgba(26,21,32,0.72)',
   border: 3,
 };

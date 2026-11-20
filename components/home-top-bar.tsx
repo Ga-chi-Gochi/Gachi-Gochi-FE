@@ -16,6 +16,7 @@ import {
 } from "@/components/home-menu-popup";
 import { PixelText } from "@/components/pixel/pixel-ui";
 import { usePlayState } from "@/components/play-state";
+import { FeatureHelpButton } from "@/components/tutorial/feature-help";
 import { getGrowthProgress, getGrowthStage } from "@/constants/growth";
 import { pixel } from "@/constants/pixel-theme";
 import { useResponsive } from "@/hooks/use-responsive";
@@ -49,6 +50,18 @@ export function useHomeTopLayout() {
   return {
     iconsInset: iconSize + scale(ICON_COLUMN_MARGIN),
     iconsHeight: iconSize * 3 + gap * 2,
+  };
+}
+
+/**
+ * 오른쪽 위 아이콘 줄에서 '상점' 아이콘의 중심(화면 오른쪽 끝에서의 거리, 위쪽 끝에서의 거리)과 크기.
+ * ResourceHeader 가 HomeTopIcons 에 top=inset+8, side=14 로 놓는 것과 같은 계산이라, 가이드가 이 아이콘을 짚을 때 쓴다.
+ */
+export function homeShopIconCenter(scale: (value: number) => number, insetTop: number) {
+  return {
+    fromRight: scale(14) + scale(ICON_SIZE) / 2,
+    fromTop: insetTop + scale(8) + scale(ICON_SIZE) + scale(ICON_GAP) + scale(ICON_SIZE) / 2,
+    size: scale(ICON_SIZE),
   };
 }
 
@@ -103,10 +116,13 @@ export function HomeTopIcons({
   top,
   side,
   menuActions,
+  onHelp,
 }: {
   top: number;
   side: number;
   menuActions?: HomeMenuActions;
+  /** 있으면 도감 아래에 공통 '?' 버튼을 둔다 */
+  onHelp?: () => void;
 }) {
   const { scale } = useResponsive();
   const pathname = usePathname();
@@ -172,6 +188,7 @@ export function HomeTopIcons({
             active={pathname === "/collection"}
             onPress={() => router.push(COLLECTION_ROUTE)}
           />
+          {onHelp ? <FeatureHelpButton size={ICON_SIZE} onPress={onHelp} /> : null}
         </View>
       </View>
     </View>

@@ -2,11 +2,10 @@ import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { BeachHome, VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
+import { VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
+import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
+import { IslandPlayOverlay } from '@/components/island/island-play-overlay';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
-import { VolcanoGas } from '@/components/island/volcano-gas';
-import { IslandCamera } from '@/components/island/island-camera';
-import { BeachIsland } from '@/components/island/beach-island';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { GrowthReveal } from '@/components/island/growth-reveal';
 import { HomeActivityToggle } from '@/components/island/home-activity-toggle';
@@ -39,6 +38,8 @@ export default function IslandHomeScreen() {
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
   const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
+  const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
+  const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
   const openPet = () => {
     if (zoneUnlockReveal || pendingPlaceItemId) {
       return;
@@ -48,9 +49,19 @@ export default function IslandHomeScreen() {
 
   return (
     <VolcanoEruptionProvider>
-    <IslandCamera
-      overlay={
-        <>
+    <View style={{ flex: 1 }}>
+      {/* 섬 그림은 게임(웹뷰)이 그린다. 확대·이동·귤새 탭도 게임이 받는다. */}
+      <IslandGame
+        look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1}
+        petOpen={petOpen}
+        onTapCreature={openPet}
+        onCamera={setCamera}
+        onAsh={setAsh}
+      />
+      <IslandPlayOverlay camera={camera} ash={ash} petOpen={petOpen} onClosePet={() => setPetOpen(false)} />
+      <View
+        pointerEvents="box-none"
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 1 - ash.top }}>
         <ResourceHeader
           soundOn={soundOn}
           onToggleSound={() => setSoundOn((current) => !current)}
@@ -116,12 +127,13 @@ export default function IslandHomeScreen() {
             onDone={acknowledgeExploreEggReveal}
           />
         ) : null}
-        <VolcanoGas />
-        </>
-      }>
-      <BeachHome look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1} />
-      <BeachIsland petOpen={petOpen} onPet={openPet} onClosePet={() => setPetOpen(false)} />
-    </IslandCamera>
+      </View>
+      {ash.block ? (
+        // 화산재가 화면을 덮는 동안은 버튼도 못 누르게 막는다 (예전 VolcanoGas 가 맨 위에서 터치를 받던 것과 같다)
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80 }} />
+      ) : null}
+    </View>
     </VolcanoEruptionProvider>
   );
 }
+

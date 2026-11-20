@@ -73,6 +73,34 @@ export const grassDarkField = require('@/assets/images/beach/grass-dark.png') as
 /** 해변 모래. 칸마다 같은 결이 이어진다. */
 export const sandBeach = require('@/assets/images/beach/sand.png') as ImageSource;
 
+export const SEA_PLAIN_COLOR = '#2ca6a4';
+export const GRASS_CENTER_COLOR = '#3f9a5a';
+
+export const blockTiles = {
+  sandCorner: {
+    topLeft: require('@/assets/images/beach/tiles-v2/sand-corner-top-left.png') as ImageSource,
+    topRight: require('@/assets/images/beach/tiles-v2/sand-corner-top-right.png') as ImageSource,
+    bottomLeft: require('@/assets/images/beach/tiles-v2/sand-corner-bottom-left.png') as ImageSource,
+    bottomRight: require('@/assets/images/beach/tiles-v2/sand-corner-bottom-right.png') as ImageSource,
+  },
+  grassSide: {
+    top: require('@/assets/images/beach/tiles-v2/grass-side-top.png') as ImageSource,
+    bottom: require('@/assets/images/beach/tiles-v2/grass-side-bottom.png') as ImageSource,
+    left: require('@/assets/images/beach/tiles-v2/grass-side-left.png') as ImageSource,
+    right: require('@/assets/images/beach/tiles-v2/grass-side-right.png') as ImageSource,
+  },
+  grassCorner: {
+    topLeft: require('@/assets/images/beach/tiles-v2/grass-corner-top-left.png') as ImageSource,
+    topRight: require('@/assets/images/beach/tiles-v2/grass-corner-top-right.png') as ImageSource,
+    bottomLeft: require('@/assets/images/beach/tiles-v2/grass-corner-bottom-left.png') as ImageSource,
+    bottomRight: require('@/assets/images/beach/tiles-v2/grass-corner-bottom-right.png') as ImageSource,
+  },
+  grassCenter: require('@/assets/images/beach/tiles-v2/grass-center.png') as ImageSource,
+  seaPlain: require('@/assets/images/beach/tiles-v2/sea-plain.png') as ImageSource,
+  seaPlainDouble: require('@/assets/images/beach/tiles-v2/sea-plain-2x2.png') as ImageSource,
+  seaShoreSoft: require('@/assets/images/beach/tiles-v2/sea-shore-soft.png') as ImageSource,
+};
+
 /** 휴화산. 참고 모양을 가로 4칸, 세로 3칸으로 나눈 요소다. */
 export const volcanoCellRows = [
   [

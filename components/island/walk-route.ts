@@ -135,6 +135,29 @@ function linked(open: Set<string>, col: number, row: number, dc: number, dr: num
   return dc === 0 || dr === 0 || (open.has(keyOf(col + dc, row)) && open.has(keyOf(col, row + dr)));
 }
 
+export function regionAround(cells: readonly GridCell[], start: GridCell): GridCell[] {
+  const open = new Set(cells.map((cell) => keyOf(cell.col, cell.row)));
+  if (!open.has(keyOf(start.col, start.row))) {
+    return [];
+  }
+  const seen = new Set<string>([keyOf(start.col, start.row)]);
+  const region: GridCell[] = [];
+  const queue: GridCell[] = [start];
+  for (let head = 0; head < queue.length; head += 1) {
+    const current = queue[head];
+    region.push(current);
+    for (const [dc, dr] of NEIGHBORS) {
+      const key = keyOf(current.col + dc, current.row + dr);
+      if (seen.has(key) || !linked(open, current.col, current.row, dc, dr)) {
+        continue;
+      }
+      seen.add(key);
+      queue.push({ col: current.col + dc, row: current.row + dr });
+    }
+  }
+  return region;
+}
+
 export function largestRegion(cells: readonly GridCell[]): GridCell[] {
   const open = new Set(cells.map((cell) => keyOf(cell.col, cell.row)));
   const seen = new Set<string>();

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 
-import { isWalkable, sandStandX, sandStandY } from '@/components/island/beach-home';
+import { blockWalkPoints, blockZoneFrame, isWalkable, sandStandX, sandStandY } from '@/components/island/beach-home';
 import { CELL } from '@/components/island/beach-tiles';
 import { useIslandCameraStyle } from '@/components/island/island-camera';
 
@@ -13,7 +13,7 @@ import {
   PlaceZoneTarget,
   PlacedDecorDrop,
 } from '@/components/island/place-mode';
-import { largestRegion, type WalkGrid } from '@/components/island/walk-route';
+import { largestRegion, regionAround, type WalkGrid } from '@/components/island/walk-route';
 import { WanderingCreature, type WalkPoint } from '@/components/island/wandering-creature';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelText } from '@/components/pixel/pixel-ui';
@@ -128,8 +128,10 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         }
       }
     }
-    return { cell: CELL, cells: largestRegion(cells), canWalk };
-  }, [box, eggStage, openZones]);
+    const home = walkPoints[0];
+    const homeRegion = home ? regionAround(cells, { col: Math.floor(home.x / CELL), row: Math.floor(home.y / CELL) }) : [];
+    return { cell: CELL, cells: homeRegion.length > 0 ? homeRegion : largestRegion(cells), canWalk };
+  }, [box, eggStage, openZones, walkPoints]);
 
   return (
     <View
@@ -289,6 +291,10 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
 }
 
 function frameBox(id: IslandZoneId, box: Box) {
+  const blockFrame = blockZoneFrame(id, box.width, box.height);
+  if (blockFrame) {
+    return blockFrame;
+  }
   const frame = ZONE_FRAME[id];
   return {
     left: frame.x * box.width,
@@ -301,6 +307,10 @@ function frameBox(id: IslandZoneId, box: Box) {
 function pointsOnBeach(zones: IslandZoneId[], box: Box): WalkPoint[] {
   if (box.width === 0 || box.height === 0) {
     return [];
+  }
+  const blockPoints = blockWalkPoints(zones, box.width, box.height);
+  if (blockPoints) {
+    return blockPoints;
   }
   const points: WalkPoint[] = [];
   for (const id of zones) {

@@ -6,9 +6,13 @@ import Reanimated from 'react-native-reanimated';
 import { useIslandCameraStyle } from '@/components/island/island-camera';
 import { useVolcanoEruption, LAVA_BOIL_MS, LAVA_FILL_MS, LAVA_SPILL_MS } from '@/components/island/volcano-eruption';
 import {
+  blockTiles,
   CELL,
   coastTiles,
+  GRASS_CENTER_COLOR,
   grassLawn,
+  SEA_PLAIN_COLOR,
+  sandBeach,
   sandCornerSe,
   sandCornerSw,
   sandEdgeE,
@@ -30,8 +34,15 @@ const DEEP_SHEET: MotionSheet = SEA_TINT_SHEETS.deep;
 const SHORE_SHEET = MOTION_SEQ['sea-shore'].sheet;
 const SHALLOW_SHEET = MOTION_SEQ['sea-shallow'].sheet;
 
-type ShoreStyle = 'tiles' | 'pixel' | 'slices' | 'ramp';
-const SHORE_STYLE = 'ramp' as ShoreStyle;
+type ShoreStyle = 'tiles' | 'pixel' | 'slices' | 'ramp' | 'none';
+const SHORE_STYLE = 'none' as ShoreStyle;
+
+type IslandShape = 'round' | 'blocks';
+const ISLAND_SHAPE = 'blocks' as IslandShape;
+const SEA_ANIMATED = false;
+const SEA_PLAIN_SPAN = CELL * 2;
+const SHORE_TUCK = 4;
+const SOFT_SHORE_SHEET: MotionSheet = { ...MOTION_SEQ['sea-shore'].sheet, body: blockTiles.seaShoreSoft };
 const SLICE_PX = 8;
 const SLICE_OVERLAP = 4;
 const SLICE_FADE_PX = 24;
@@ -316,7 +327,223 @@ const CRATER_PIXELS: CraterPixel[] = CRATER_SPANS.flatMap((span, row) => {
   return pixels;
 });
 
+type CellRect = { x0: number; y0: number; x1: number; y1: number };
+
+const BLOCK_ZONES: Record<IslandZoneId, CellRect> = {
+  core: { x0: -4, y0: 0, x1: 3, y1: 6 },
+  north: { x0: -3, y0: -3, x1: 2, y1: -1 },
+  south: { x0: -3, y0: 7, x1: 2, y1: 9 },
+  west: { x0: -6, y0: 1, x1: -5, y1: 4 },
+  east: { x0: 4, y0: 2, x1: 5, y1: 5 },
+};
+const BLOCK_CORE_MIN_TOP = 4;
+const BLOCK_BEACH_FROM_CORE = 10;
+const BLOCK_BEACH_ROWS = 2;
+const BLOCK_ROWS_BELOW_BEACH = 4;
+const BLOCK_BEACH_OVERHANG = 0.4;
+
+type BlockLayout = {
+  center: number;
+  coreTop: number;
+  beachTop: number;
+  beachBottom: number;
+  shoreRow: number;
+  minCol: number;
+  maxCol: number;
+  visibleCols: number;
+};
+
+function blockLayout(width: number, height: number): BlockLayout {
+  const rows = Math.floor(height / CELL);
+  const coreTop = Math.max(BLOCK_CORE_MIN_TOP, rows - BLOCK_ROWS_BELOW_BEACH - BLOCK_BEACH_ROWS - BLOCK_BEACH_FROM_CORE);
+  const beachTop = coreTop + BLOCK_BEACH_FROM_CORE;
+  const fullCols = Math.ceil(width / CELL);
+  const overhang = Math.ceil(fullCols * BLOCK_BEACH_OVERHANG);
+  return {
+    center: Math.round(width / 2 / CELL),
+    coreTop,
+    beachTop,
+    beachBottom: beachTop + BLOCK_BEACH_ROWS - 1,
+    shoreRow: beachTop + BLOCK_BEACH_ROWS,
+    minCol: -overhang,
+    maxCol: fullCols - 1 + overhang,
+    visibleCols: Math.floor(width / CELL),
+  };
+}
+
+function blockZoneRect(layout: BlockLayout, zoneId: IslandZoneId): CellRect {
+  const rect = BLOCK_ZONES[zoneId];
+  return {
+    x0: layout.center + rect.x0,
+    y0: layout.coreTop + rect.y0,
+    x1: layout.center + rect.x1,
+    y1: layout.coreTop + rect.y1,
+  };
+}
+
+function isBeachRow(layout: BlockLayout, y: number) {
+  return y >= layout.beachTop && y <= layout.beachBottom;
+}
+
+function blockLandSet(layout: BlockLayout, zones: readonly IslandZoneId[]) {
+  const land = new Set<string>();
+  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
+    const rect = blockZoneRect(layout, zoneId);
+    for (let y = rect.y0; y <= rect.y1; y += 1) {
+      for (let x = rect.x0; x <= rect.x1; x += 1) {
+        land.add(keyOf(x, y));
+      }
+    }
+  }
+  return land;
+}
+
+let blockLandCache: { key: string; land: Set<string> } | null = null;
+
+function cachedBlockLand(width: number, height: number, layout: BlockLayout, zones: readonly IslandZoneId[]) {
+  const key = `${width}x${height}:${[...zones].sort().join(',')}`;
+  if (blockLandCache?.key !== key) {
+    blockLandCache = { key, land: blockLandSet(layout, zones) };
+  }
+  return blockLandCache.land;
+}
+
+function blockLandAt(layout: BlockLayout, land: Set<string>, x: number, y: number) {
+  return isBeachRow(layout, y) || land.has(keyOf(x, y));
+}
+
+export function blockZoneFrame(zoneId: IslandZoneId, width: number, height: number) {
+  if (ISLAND_SHAPE !== 'blocks' || width <= 0 || height <= 0) {
+    return null;
+  }
+  const rect = blockZoneRect(blockLayout(width, height), zoneId);
+  return {
+    left: rect.x0 * CELL,
+    top: rect.y0 * CELL,
+    width: (rect.x1 - rect.x0 + 1) * CELL,
+    height: (rect.y1 - rect.y0 + 1) * CELL,
+  };
+}
+
+export function blockWalkPoints(zones: readonly IslandZoneId[], width: number, height: number) {
+  if (ISLAND_SHAPE !== 'blocks' || width <= 0 || height <= 0) {
+    return null;
+  }
+  const layout = blockLayout(width, height);
+  const points: { x: number; y: number }[] = [];
+  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
+    const rect = blockZoneRect(layout, zoneId);
+    for (let y = rect.y0; y <= rect.y1; y += 1) {
+      for (let x = rect.x0; x <= rect.x1; x += 1) {
+        const px = (x + 0.5) * CELL;
+        const py = (y + 0.5) * CELL;
+        if (isWalkable(px, py, width, height, zones)) {
+          points.push({ x: px, y: py });
+        }
+      }
+    }
+  }
+  return points;
+}
+
+type GrassPiece = ImageSource | 'flat';
+
+type BlockTile = {
+  key: string;
+  x: number;
+  y: number;
+  sand: ImageSource | null;
+  grass: GrassPiece | null;
+  riseDelay?: number;
+};
+
+function sandPiece(n: boolean, s: boolean, w: boolean, e: boolean): ImageSource {
+  if (!n && !w && s && e) return blockTiles.sandCorner.topLeft;
+  if (!n && !e && s && w) return blockTiles.sandCorner.topRight;
+  if (!s && !w && n && e) return blockTiles.sandCorner.bottomLeft;
+  if (!s && !e && n && w) return blockTiles.sandCorner.bottomRight;
+  return sandBeach;
+}
+
+function grassPiece(n: boolean, s: boolean, w: boolean, e: boolean): GrassPiece {
+  if (!n && !w) return blockTiles.grassCorner.topLeft;
+  if (!n && !e) return blockTiles.grassCorner.topRight;
+  if (!s && !w) return blockTiles.grassCorner.bottomLeft;
+  if (!s && !e) return blockTiles.grassCorner.bottomRight;
+  if (!n) return blockTiles.grassSide.top;
+  if (!s) return blockTiles.grassSide.bottom;
+  if (!w) return blockTiles.grassSide.left;
+  if (!e) return blockTiles.grassSide.right;
+  return 'flat';
+}
+
+type BlockIsland = { tiles: BlockTile[]; shore: IslandCell[]; layout: BlockLayout };
+
+function buildBlockIsland(width: number, height: number, zones: readonly IslandZoneId[], growingZoneId: IslandZoneId | null): BlockIsland {
+  const layout = blockLayout(width, height);
+  const growing = growingZoneId && growingZoneId !== 'core' ? growingZoneId : null;
+  const settledZones = zones.filter((zoneId) => zoneId !== growing);
+  const fullZones = growing ? [...settledZones, growing] : settledZones;
+  const settled = blockLandSet(layout, settledZones);
+  const land = growing ? blockLandSet(layout, fullZones) : settled;
+  const landAt = (x: number, y: number) => blockLandAt(layout, land, x, y);
+  const grassAt = (x: number, y: number) => {
+    if (isBeachRow(layout, y) || !land.has(keyOf(x, y))) {
+      return false;
+    }
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (!landAt(x + dx, y + dy)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  const origin = { cx: layout.center * CELL, cy: (layout.coreTop + 3.5) * CELL };
+  const tiles: BlockTile[] = [];
+  const place = (x: number, y: number) => {
+    const n = landAt(x, y - 1);
+    const s = landAt(x, y + 1);
+    const w = landAt(x - 1, y);
+    const e = landAt(x + 1, y);
+    const grass = grassAt(x, y) ? grassPiece(grassAt(x, y - 1), grassAt(x, y + 1), grassAt(x - 1, y), grassAt(x + 1, y)) : null;
+    const fresh = growing != null && !isBeachRow(layout, y) && !settled.has(keyOf(x, y));
+    tiles.push({
+      key: keyOf(x, y),
+      x,
+      y,
+      sand: grass === 'flat' ? null : sandPiece(n, s, w, e),
+      grass,
+      riseDelay: fresh ? delayFor(x, y, origin.cx, origin.cy) : undefined,
+    });
+  };
+  for (const key of land) {
+    const [x, y] = key.split(',').map(Number);
+    if (!isBeachRow(layout, y)) {
+      place(x, y);
+    }
+  }
+  for (let y = layout.beachTop; y <= layout.beachBottom; y += 1) {
+    for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
+      place(x, y);
+    }
+  }
+  const shore: IslandCell[] = [];
+  for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
+    shore.push({ key: `shore-${x}`, x, y: layout.shoreRow, kind: 'coast', coastRow: 0 });
+  }
+  return { tiles, shore, layout };
+}
+
 function volcanoOrigin(width: number, height: number) {
+  if (ISLAND_SHAPE === 'blocks') {
+    const layout = blockLayout(width, height);
+    return {
+      x: layout.center - Math.floor(VOLCANO_COLS / 2),
+      y: layout.coreTop + 2,
+    };
+  }
   const { cx, cy } = islandFrame(width, height);
   return {
     x: Math.floor(cx / CELL) - Math.floor(VOLCANO_COLS / 2),
@@ -325,6 +552,10 @@ function volcanoOrigin(width: number, height: number) {
 }
 
 export function volcanoMouthPoint(width: number, height: number) {
+  if (ISLAND_SHAPE === 'blocks') {
+    const origin = volcanoOrigin(width, height);
+    return { x: (origin.x + VOLCANO_COLS / 2) * CELL, y: (origin.y + VOLCANO_ROWS - 1) * CELL };
+  }
   const { cx, cy } = islandFrame(width, height);
   return { x: cx, y: cy - CELL * 0.5 };
 }
@@ -347,11 +578,21 @@ export function isWalkable(px: number, py: number, width: number, height: number
   }
   const x = Math.floor(px / CELL);
   const y = Math.floor(py / CELL);
-  if (x < 0 || y < 0 || x >= Math.ceil(width / CELL)) {
-    return false;
-  }
-  if (!landCell(x, y, landShape(width, height), zones)) {
-    return false;
+  if (ISLAND_SHAPE === 'blocks') {
+    const layout = blockLayout(width, height);
+    if (x < 0 || y < 0 || x >= layout.visibleCols) {
+      return false;
+    }
+    if (!blockLandAt(layout, cachedBlockLand(width, height, layout, zones), x, y)) {
+      return false;
+    }
+  } else {
+    if (x < 0 || y < 0 || x >= Math.ceil(width / CELL)) {
+      return false;
+    }
+    if (!landCell(x, y, landShape(width, height), zones)) {
+      return false;
+    }
   }
   const origin = volcanoOrigin(width, height);
   const nearVolcano = x >= origin.x - 1 && x <= origin.x + VOLCANO_COLS && y >= origin.y - 1 && y <= origin.y + VOLCANO_ROWS;
@@ -1277,9 +1518,14 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [box, setBox] = useState({ width: windowWidth, height: windowHeight });
   const growingZoneId = zoneUnlockReveal?.zoneId ?? null;
+  const blocks = ISLAND_SHAPE === 'blocks';
   const island = useMemo(
-    () => buildIslandCells(box.width, box.height, unlockedZones, growingZoneId, look),
-    [box.height, box.width, growingZoneId, look, unlockedZones],
+    () => (blocks ? { cells: [], grains: [] } : buildIslandCells(box.width, box.height, unlockedZones, growingZoneId, look)),
+    [blocks, box.height, box.width, growingZoneId, look, unlockedZones],
+  );
+  const blockIsland = useMemo(
+    () => (blocks && box.width > 0 && box.height > 0 ? buildBlockIsland(box.width, box.height, unlockedZones, growingZoneId) : null),
+    [blocks, box.height, box.width, growingZoneId, unlockedZones],
   );
   const cells = island.cells;
   const { landGrains, foamSegments } = useMemo(() => {
@@ -1331,7 +1577,7 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
       ),
     };
   }, [box.height, box.width]);
-  const centerCol = Math.floor(islandFrame(box.width, box.height).cx / CELL);
+  const centerCol = blockIsland ? blockIsland.layout.center : Math.floor(islandFrame(box.width, box.height).cx / CELL);
   const revealOrigin = useMemo(() => {
     const { cx, cy } = landShape(box.width, box.height);
     return { cx, cy };
@@ -1347,12 +1593,17 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
       }}>
       <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} pointerEvents="none">
         <FlatLayer>
-          <SeaFill centerCol={centerCol} />
+          {SEA_ANIMATED ? <SeaFill centerCol={centerCol} /> : <PlainSeaFill />}
         </FlatLayer>
       </View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
         <Quake active={shaking}>
           <FlatLayer>
+            {blockIsland ? (
+              <View pointerEvents="none" style={{ position: 'absolute', top: -SHORE_TUCK, right: 0, bottom: 0, left: 0 }}>
+                <SeaBand cells={blockIsland.shore} sheet={SOFT_SHORE_SHEET} centerCol={centerCol} />
+              </View>
+            ) : null}
             <SeaBand cells={coastBands.shore} sheet={SHORE_SHEET} centerCol={centerCol} />
             <SeaBand cells={coastBands.shallow} sheet={SHALLOW_SHEET} centerCol={centerCol} />
             <SeaBand cells={coastBands.deep} sheet={DEEP_SHEET} centerCol={centerCol} />
@@ -1371,6 +1622,7 @@ export function BeachHome({ look = 1 }: { look?: IslandLook }) {
       </Reanimated.View>
       <Reanimated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }, cameraStyle]}>
         <Quake active={shaking}>
+        {blockIsland ? <BlockTiles tiles={blockIsland.tiles} /> : null}
         {cells.map((cell) =>
           animatedSheet(cell) || ((cell.kind === 'sand' || cell.fine) && cell.riseDelay == null) ? null : cell.riseDelay == null ? (
             <Image
@@ -1897,7 +2149,7 @@ function RisingSheet({ cell, children }: { cell: IslandCell; children: ReactNode
   );
 }
 
-function RisingCell({ cell }: { cell: IslandCell }) {
+function RisingCell({ cell, children }: { cell: IslandCell; children?: ReactNode }) {
   const rise = useRise(cell.riseDelay ?? null);
   return (
     <Animated.View
@@ -1910,13 +2162,139 @@ function RisingCell({ cell }: { cell: IslandCell }) {
         height: CELL,
         ...rise,
       }}>
-      <Image
-        source={tileSource(cell)}
-        transition={0}
-        style={{ width: CELL, height: CELL, ...pixelImageStyle }}
-        contentFit="fill"
-      />
+      {children ?? (
+        <Image
+          source={tileSource(cell)}
+          transition={0}
+          style={{ width: CELL, height: CELL, ...pixelImageStyle }}
+          contentFit="fill"
+        />
+      )}
     </Animated.View>
+  );
+}
+
+function BlockPieces({ tile, left, top }: { tile: BlockTile; left: number; top: number }) {
+  const size = CELL + TILE_BLEED;
+  return (
+    <>
+      {tile.sand ? (
+        <Image
+          source={tile.sand}
+          pointerEvents="none"
+          transition={0}
+          contentFit="fill"
+          style={{ position: 'absolute', left, top, width: size, height: size, ...pixelImageStyle }}
+        />
+      ) : null}
+      {tile.grass === 'flat' ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left, top, width: size, height: size, backgroundColor: GRASS_CENTER_COLOR }} />
+      ) : tile.grass ? (
+        <Image
+          source={tile.grass}
+          pointerEvents="none"
+          transition={0}
+          contentFit="fill"
+          style={{ position: 'absolute', left, top, width: size, height: size, ...pixelImageStyle }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+type FlatRun = { key: string; x: number; y: number; length: number };
+
+const BlockTiles = memo(function BlockTiles({ tiles }: { tiles: BlockTile[] }) {
+  const { pieces, runs, rising } = useMemo(() => {
+    const flat = new Set<string>();
+    const still: BlockTile[] = [];
+    const moving: BlockTile[] = [];
+    for (const tile of tiles) {
+      if (tile.riseDelay != null) {
+        moving.push(tile);
+      } else if (tile.grass === 'flat' && !tile.sand) {
+        flat.add(keyOf(tile.x, tile.y));
+      } else {
+        still.push(tile);
+      }
+    }
+    const merged: FlatRun[] = [];
+    const done = new Set<string>();
+    const ordered = [...flat].map((key) => key.split(',').map(Number) as [number, number]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    for (const [x, y] of ordered) {
+      if (done.has(keyOf(x, y))) {
+        continue;
+      }
+      let length = 0;
+      while (flat.has(keyOf(x + length, y))) {
+        done.add(keyOf(x + length, y));
+        length += 1;
+      }
+      merged.push({ key: `flat-${x},${y}`, x, y, length });
+    }
+    return { pieces: still, runs: merged, rising: moving };
+  }, [tiles]);
+
+  return (
+    <>
+      {runs.map((run) => (
+        <View
+          key={run.key}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: run.x * CELL,
+            top: run.y * CELL,
+            width: run.length * CELL + TILE_BLEED,
+            height: CELL + TILE_BLEED,
+            backgroundColor: GRASS_CENTER_COLOR,
+          }}
+        />
+      ))}
+      {pieces.map((tile) => (
+        <BlockPieces key={tile.key} tile={tile} left={tile.x * CELL} top={tile.y * CELL} />
+      ))}
+      {rising.map((tile) => (
+        <RisingCell key={tile.key} cell={{ key: tile.key, x: tile.x, y: tile.y, kind: 'sand', riseDelay: tile.riseDelay }}>
+          <BlockPieces tile={tile} left={0} top={0} />
+        </RisingCell>
+      ))}
+    </>
+  );
+});
+
+function PlainSeaFill() {
+  const { width, height: windowHeight } = useWindowDimensions();
+  const [measured, setMeasured] = useState(0);
+  const height = Math.max(windowHeight, measured);
+  const cols = Math.max(1, Math.ceil(width / SEA_PLAIN_SPAN));
+  const rows = Math.max(1, Math.ceil(height / SEA_PLAIN_SPAN));
+
+  return (
+    <View
+      style={{ flex: 1, backgroundColor: SEA_PLAIN_COLOR }}
+      onLayout={(event) => {
+        const next = Math.ceil(event.nativeEvent.layout.height);
+        setMeasured((current) => (current === next ? current : next));
+      }}>
+      {Array.from({ length: rows * cols }, (_, index) => (
+        <Image
+          key={index}
+          source={blockTiles.seaPlainDouble}
+          pointerEvents="none"
+          transition={0}
+          contentFit="fill"
+          style={{
+            position: 'absolute',
+            left: (index % cols) * SEA_PLAIN_SPAN,
+            top: Math.floor(index / cols) * SEA_PLAIN_SPAN,
+            width: SEA_PLAIN_SPAN,
+            height: SEA_PLAIN_SPAN,
+            ...pixelImageStyle,
+          }}
+        />
+      ))}
+    </View>
   );
 }
 

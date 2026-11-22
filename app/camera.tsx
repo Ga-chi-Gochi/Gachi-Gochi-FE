@@ -1,4 +1,3 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -6,18 +5,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
 import { usePlayState } from '@/components/play-state';
 import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
-import { art } from '@/constants/art';
 import { palette } from '@/constants/palette';
+import { uiButtons, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
 import { confirmOfflineCertification } from '@/lib/confirm-offline-certification';
 import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
+
+const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
 export default function CameraScreen() {
   const { scale, height } = useResponsive();
@@ -197,36 +199,34 @@ export default function CameraScreen() {
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <View style={{ marginTop: scale(8), minHeight: scale(46), justifyContent: 'center' }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="닫기"
-            onPress={() => router.back()}
-            style={{ position: 'absolute', left: Math.max(insets.left, scale(16)), top: '50%', marginTop: -scale(21), width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
-          </Pressable>
+          <View style={{ position: 'absolute', left: Math.max(insets.left, scale(12)), top: '50%', marginTop: -scale(16) }}>
+            <AssetImageButton source={uiCamera.close} label="닫기" width={32} height={32} onPress={() => router.back()} />
+          </View>
           {guided ? null : (
-            <View style={{ position: 'absolute', right: Math.max(insets.right, scale(16)), top: '50%', marginTop: -scale(21) }}>
+            <View style={{ position: 'absolute', right: Math.max(insets.right, scale(12)), top: '50%', marginTop: -scale(21) }}>
               <FeatureHelpButton onPress={() => setHelpOpen(true)} />
             </View>
           )}
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(16), paddingVertical: scale(10) }}>
-              <MaterialIcons name="delete-outline" size={scale(20)} color={palette.ink} />
-              <Text style={{ color: palette.ink, fontWeight: '700', fontSize: scale(16) }}>봉그깅</Text>
-            </View>
+            <Image source={uiCamera.tagPickup} style={{ width: scale(100), height: scale(28), ...pixelImageStyle }} contentFit="contain" />
           </View>
         </View>
-        <View style={{ marginTop: scale(16), marginHorizontal: scale(48), backgroundColor: palette.white, borderRadius: scale(18), padding: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-          <Image source={art.egg} style={{ width: scale(28), height: scale(32) }} contentFit="contain" />
-          <Text style={{ flex: 1, color: palette.ink, fontWeight: '700', fontSize: scale(14) }}>카메라를 켜고 쓰레기를 봉가줍서!</Text>
+        <View style={{ marginTop: scale(12), alignItems: 'center' }}>
+          <Image source={uiCamera.bubbleGuide} style={{ width: scale(220), height: scale(36), ...pixelImageStyle }} contentFit="contain" />
         </View>
         <View
           onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}
           style={{ flex: 1, alignItems: 'center', justifyContent: granted || guided ? 'center' : 'flex-start', paddingTop: granted || guided ? 0 : scale(16), paddingHorizontal: scale(24), overflow: 'hidden' }}>
           {granted || guided ? (
-            <View style={{ width: finder, height: finder, borderRadius: scale(24), borderWidth: 3, borderColor: palette.white }} />
+            <View style={{ width: finder, height: finder, alignItems: 'center', justifyContent: 'center' }}>
+              <Image
+                source={uiCamera.corners}
+                style={{ position: 'absolute', width: finder, height: finder, ...pixelImageStyle }}
+                contentFit="contain"
+              />
+            </View>
           ) : (
-            <View style={{ alignSelf: 'stretch', backgroundColor: palette.white, borderRadius: scale(20), padding: scale(20), gap: scale(12) }}>
+            <View style={{ alignSelf: 'stretch', backgroundColor: palette.white, borderRadius: scale(12), padding: scale(20), gap: scale(12) }}>
               <Text style={{ color: palette.ink, fontSize: scale(18), fontWeight: '800' }}>
                 {permission ? '카메라 권한이 필요해요' : '카메라를 준비하고 있어요'}
               </Text>
@@ -234,35 +234,40 @@ export default function CameraScreen() {
                 쓰레기 사진을 찍거나, 갤러리에서 고를 수 있어요.
               </Text>
               {permission ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={permission.canAskAgain ? '카메라 허용하기' : '설정에서 허용하기'}
+                <AssetImageButton
+                  source={uiButtons.greenAllow}
+                  label={permission.canAskAgain ? '허락허쿠다' : '설정에서 허용하기'}
+                  width={80}
+                  height={20}
                   onPress={() => {
                     void allowCamera();
                   }}
-                  style={{ minHeight: scale(48), borderRadius: scale(16), backgroundColor: palette.tangerine, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: palette.white, fontSize: scale(16), fontWeight: '800' }}>
-                    {permission.canAskAgain ? '카메라 허용하기' : '설정에서 허용하기'}
-                  </Text>
-                </Pressable>
+                />
               ) : null}
             </View>
           )}
         </View>
-        <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(14), marginBottom: scale(8) }}>
-          {notice ?? '위치를 확인하고 있어요'}
-        </Text>
+        <View style={{ alignItems: 'center', marginBottom: scale(8) }}>
+          <Image
+            source={notice ? uiCamera.locationWait : uiCamera.location}
+            style={{ width: scale(180), height: scale(24), ...pixelImageStyle }}
+            contentFit="contain"
+          />
+          {notice ? (
+            <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(12), marginTop: scale(4) }}>{notice}</Text>
+          ) : null}
+        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: Math.max(insets.bottom, scale(12)) }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="갤러리에서 선택"
+          <AssetImageButton
+            source={uiCamera.gallery}
+            label="갤러리에서 선택"
+            width={40}
+            height={40}
             disabled={busy}
             onPress={() => {
               void pickFromGallery();
             }}
-            style={{ width: scale(48), height: scale(48), borderRadius: scale(12), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1 }}>
-            <MaterialIcons name="photo-library" size={scale(22)} color={palette.ink} />
-          </Pressable>
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="촬영"
@@ -271,17 +276,17 @@ export default function CameraScreen() {
             onPress={() => {
               void shoot();
             }}
-            style={{ width: scale(80), height: scale(80), borderRadius: scale(40), borderWidth: scale(4), borderColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: shutterDisabled ? 0.5 : 1 }}>
-            <View style={{ width: scale(62), height: scale(62), borderRadius: scale(31), backgroundColor: palette.white }} />
+            style={{ opacity: shutterDisabled ? 0.5 : 1 }}>
+            <Image source={uiCamera.shutter} style={{ width: scale(72), height: scale(72), ...pixelImageStyle }} contentFit="contain" />
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="카메라 전환"
+          <AssetImageButton
+            source={uiCamera.flip}
+            label="카메라 전환"
+            width={40}
+            height={40}
             disabled={!granted || busy}
             onPress={flipCamera}
-            style={{ width: scale(48), height: scale(48), borderRadius: scale(24), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: !granted || busy ? 0.5 : 1 }}>
-            <MaterialIcons name="flip-camera-ios" size={scale(22)} color={palette.ink} />
-          </Pressable>
+          />
         </View>
       </View>
       {guided ? (

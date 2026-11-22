@@ -59,16 +59,19 @@ type GameMessage =
 
 type IslandGameProps = {
   look: 1 | 2 | 3;
+  /** preview: 웰컴용. 파도만 보이고 탭·핀치·화산 입력은 막는다 */
+  mode?: 'play' | 'preview';
   petOpen: boolean;
   onTapCreature: () => void;
   onCamera: (camera: IslandCameraState) => void;
   onAsh: (ash: IslandAsh) => void;
 };
 
-export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: IslandGameProps) {
+export function IslandGame({ look, mode = 'play', petOpen, onTapCreature, onCamera, onAsh }: IslandGameProps) {
   const play = usePlayState();
   const { token, phase, calm, openFog, finish } = useVolcanoEruption();
   const { factor } = useResponsive();
+  const preview = mode === 'preview';
   const [source, setSource] = useState<GameSource | null>(null);
   const [webKey, setWebKey] = useState(0);
   const webRef = useRef<WebViewHandle>(null);
@@ -115,10 +118,13 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
           .filter((entry) => entry.sprite),
         lastPlaced: play.lastPlaced,
         placing: Boolean(play.pendingPlaceItemId),
-        petOpen,
-        locked: Boolean(play.zoneUnlockReveal || play.pendingPlaceItemId),
+        petOpen: preview ? false : petOpen,
+        // preview 는 게임 쪽 locked 로 핀치·탭을 막고, RN 은 pointerEvents none 으로 한 번 더 막는다
+        locked: preview || Boolean(play.zoneUnlockReveal || play.pendingPlaceItemId),
         explore:
-          play.exploreForestUnlocked && play.isExploring ? { level: exploreGochiLevel(play.exploringGochiId) } : null,
+          !preview && play.exploreForestUnlocked && play.isExploring
+            ? { level: exploreGochiLevel(play.exploringGochiId) }
+            : null,
         look,
       }),
     [
@@ -134,6 +140,7 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
       play.pendingPlaceItemId,
       play.unlockedZones,
       play.zoneUnlockReveal,
+      preview,
     ],
   );
 
@@ -144,10 +151,10 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
 
   // "섬 넓히기" → 분화 시작 (VolcanoEruptionProvider 의 token 이 오른다)
   useEffect(() => {
-    if (token <= 0) return;
+    if (preview || token <= 0) return;
     if (readyRef.current) post(JSON.stringify({ type: 'erupt' }));
     else pendingEruptRef.current = true;
-  }, [post, token]);
+  }, [post, preview, token]);
 
   const onGameMessage = useCallback(
     (raw: unknown) => {
@@ -162,7 +169,9 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
         case 'ready':
           readyRef.current = true;
           if (stateRef.current) post(stateRef.current);
-          if (pendingEruptRef.current) {
+          if (preview) {
+            post(JSON.stringify({ type: 'camera-reset' }));
+          } else if (pendingEruptRef.current) {
             pendingEruptRef.current = false;
             post(JSON.stringify({ type: 'erupt' }));
           } else if (h.phase !== 'idle') {
@@ -199,7 +208,7 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
           break;
       }
     },
-    [post],
+    [post, preview],
   );
 
   // 웹: iframe 이 보낸 메시지만 받는다
@@ -252,5 +261,11 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
     );
   }
 
-  return <View style={{ flex: 1, backgroundColor: ISLAND_SEA }}>{body}</View>;
+  return (
+    <View
+      pointerEvents={preview ? 'none' : 'auto'}
+      style={{ flex: 1, backgroundColor: ISLAND_SEA }}>
+      {body}
+    </View>
+  );
 }

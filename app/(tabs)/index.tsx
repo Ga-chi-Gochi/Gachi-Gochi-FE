@@ -2,7 +2,7 @@ import { router, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
+import { VISIBLE_ISLAND_LOOKS } from '@/components/island/beach-home';
 import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
 import { IslandPlayOverlay } from '@/components/island/island-play-overlay';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
@@ -10,7 +10,9 @@ import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { GrowthReveal } from '@/components/island/growth-reveal';
 import { HomeActivityToggle } from '@/components/island/home-activity-toggle';
 import { HomeSheet } from '@/components/island/home-sheet';
+import { IslandSideButtons } from '@/components/island/island-side-buttons';
 import { ResourceHeader } from '@/components/island/resource-header';
+import { ValuePracticePopup } from '@/components/gachi-ui';
 import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
@@ -18,6 +20,7 @@ import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialHomeCards } from '@/components/tutorial/tutorial-home-cards';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { pixel } from '@/constants/pixel-theme';
+import { useIslandLook } from '@/hooks/use-island-look';
 import { useResponsive } from '@/hooks/use-responsive';
 import { hasSeenOnboarding, readCreatureName } from '@/lib/onboarding-state';
 
@@ -44,7 +47,7 @@ export default function IslandHomeScreen() {
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
-  const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
+  const { look: islandVersion, setLook: setIslandVersion } = useIslandLook();
   const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
   const [nickname, setNickname] = useState(PROFILE_NAME);
@@ -53,6 +56,7 @@ export default function IslandHomeScreen() {
   // 메뉴에서 온보딩을 다시 연 경우에만 true. 끝나면 튜토리얼도 다시 보기로 이어진다
   const [guideReplay, setGuideReplay] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [practiceOpen, setPracticeOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -153,7 +157,16 @@ export default function IslandHomeScreen() {
           </View>
         ) : null}
 
-        <HomeActivityToggle tourEnabled={!showGuide} />
+        <IslandSideButtons ashBottom={ash.bottom} />
+        <HomeActivityToggle tourEnabled={!showGuide} onPracticeRequest={() => setPracticeOpen(true)} />
+        <ValuePracticePopup
+          open={practiceOpen}
+          onClose={() => setPracticeOpen(false)}
+          onStart={(kind) => {
+            setPracticeOpen(false);
+            router.push((kind === 'walk' ? '/walking' : '/camera') as Href);
+          }}
+        />
 
         <HomeSheet
           open={sheet != null}

@@ -106,9 +106,11 @@ type HomeActivityToggleProps = {
   tourEnabled?: boolean;
   /** true 면 사용자가 누르지 않아도 활동 버튼을 펼쳐 둔다(온보딩이 펼친 모습을 짚을 때) */
   expanded?: boolean;
+  /** 튜토리얼이 아닐 때 나침반을 누르면 가치 실천 팝업을 연다 */
+  onPracticeRequest?: () => void;
 };
 
-export function HomeActivityToggle({ tourEnabled = true, expanded = false }: HomeActivityToggleProps) {
+export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPracticeRequest }: HomeActivityToggleProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
   const tutorial = useTutorial();
@@ -186,6 +188,10 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false }: Hom
       if (tourStep === 'compass') {
         tutorial.goTo('bongging');
       }
+      return;
+    }
+    if (onPracticeRequest) {
+      onPracticeRequest();
       return;
     }
     const next = !open;

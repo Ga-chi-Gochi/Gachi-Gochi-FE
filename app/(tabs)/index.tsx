@@ -1,5 +1,5 @@
-import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { VISIBLE_ISLAND_LOOKS } from '@/components/island/beach-home';
@@ -41,7 +41,16 @@ export default function IslandHomeScreen() {
     exploreEggReveal,
     claimExploreEgg,
     acknowledgeExploreEggReveal,
+    setHomeActive,
   } = usePlayState();
+
+  // 홈에 있을 때만 대기 중인 성장/섬 연출을 재생한다
+  useFocusEffect(
+    useCallback(() => {
+      setHomeActive(true);
+      return () => setHomeActive(false);
+    }, [setHomeActive]),
+  );
   const {
     start: startTutorial,
     startHelp,

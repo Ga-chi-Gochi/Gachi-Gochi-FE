@@ -255,10 +255,10 @@ export function OnboardingFlow({ initialName = '', onDone, onEggNotice }: Onboar
           contentTop={contentTop}
           padBottom={padBottom}
           title="이 알은 이렇게 키워요"
-          body="가치를 실천하며 돌보면, 알에서 깨어나 쑥쑥 자라요."
+          body="가치를 실천해 경험치를 모으면, 알에서 깨어나고 섬도 넓어져요."
           rows={[
-            { icon: WALK, title: '걸으면 물방울을 모아요' },
-            { icon: BONGGING, title: '봉그깅하면 산소방울을 모아요' },
+            { icon: WALK, title: '걸으면 경험치를 모아요' },
+            { icon: BONGGING, title: '봉그깅하면 경험치를 모아요' },
             { icon: LOCAL_SHOP, title: '상점에서 귤코인으로 돌봐요' },
           ]}
           onNext={() => finish(name)}

@@ -90,11 +90,31 @@ export function IslandGame({
   const stateRef = useRef('');
   /** 게임이 뜨기 전에 누른 "섬 넓히기". 뜨자마자 보낸다 */
   const pendingEruptRef = useRef(false);
-  const handlersRef = useRef({ onTapCreature, onCamera, onAsh, calm, openFog, finish, phase, reveal: play.revealExpandedZone });
+  const handlersRef = useRef({
+    onTapCreature,
+    onCamera,
+    onAsh,
+    calm,
+    openFog,
+    finish,
+    phase,
+    reveal: play.revealExpandedZone,
+    releaseExpand: play.releaseIslandExpandAttempt,
+  });
 
   useEffect(() => {
-    handlersRef.current = { onTapCreature, onCamera, onAsh, calm, openFog, finish, phase, reveal: play.revealExpandedZone };
-  }, [calm, finish, onAsh, onCamera, onTapCreature, openFog, phase, play.revealExpandedZone]);
+    handlersRef.current = {
+      onTapCreature,
+      onCamera,
+      onAsh,
+      calm,
+      openFog,
+      finish,
+      phase,
+      reveal: play.revealExpandedZone,
+      releaseExpand: play.releaseIslandExpandAttempt,
+    };
+  }, [calm, finish, onAsh, onCamera, onTapCreature, openFog, phase, play.releaseIslandExpandAttempt, play.revealExpandedZone]);
 
   useEffect(() => {
     let alive = true;
@@ -214,6 +234,8 @@ export function IslandGame({
           break;
         case 'done':
           h.finish();
+          // 연출이 끝나면 busy 를 풀어, 다음 XP 확장도 같은 경로로 돌 수 있게 한다
+          h.releaseExpand();
           break;
         case 'fps':
           reportGameFrames(msg);

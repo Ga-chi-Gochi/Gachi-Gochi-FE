@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Alert, Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,8 +40,23 @@ async function confirmReset(resetLocalData: () => Promise<void>) {
 export function IslandSideButtons({ ashBottom = 0 }: IslandSideButtonsProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { growCreature, resetLocalData } = usePlayState();
+  const { growCreature, resetLocalData, homeExpandSignal, releaseIslandExpandAttempt, growLocked } = usePlayState();
   const { erupt } = useVolcanoEruption();
+  const lastExpandSignal = useRef(homeExpandSignal);
+
+  // XP 임계 → 예전「섬 넓히기」와 동일하게 erupt 만 호출 (해금은 게임 reveal)
+  useEffect(() => {
+    if (homeExpandSignal === lastExpandSignal.current) {
+      return;
+    }
+    lastExpandSignal.current = homeExpandSignal;
+    if (homeExpandSignal <= 0) {
+      return;
+    }
+    if (!erupt()) {
+      releaseIslandExpandAttempt();
+    }
+  }, [erupt, homeExpandSignal, releaseIslandExpandAttempt]);
 
   return (
     <View
@@ -55,8 +71,7 @@ export function IslandSideButtons({ ashBottom = 0 }: IslandSideButtonsProps) {
         opacity: 1 - ashBottom,
       }}>
       <PixelButton label="로컬 데이터 초기화" tone="ghost" onPress={() => void confirmReset(resetLocalData)} />
-      <PixelButton label="키우기" tone="green" onPress={() => void growCreature()} />
-      <PixelButton label="섬 넓히기" onPress={erupt} />
+      <PixelButton label="키우기" tone="green" disabled={growLocked} onPress={() => void growCreature()} />
     </View>
   );
 }

@@ -107,11 +107,12 @@ export function GachiLogo({ style }: GachiLogoProps) {
 
 type GachiHudProps = {
   coins: number;
+  /** 통합 XP 진행 비율 */
   xpRatio: number;
   style?: StyleProp<ViewStyle>;
 };
 
-/** 홈 좌측 상단 HUD 묶음 */
+/** 홈 좌측 상단 HUD — 통합 XP 바 + 귤코인 */
 export function GachiHud({ coins, xpRatio, style }: GachiHudProps) {
   const { scale } = useResponsive();
   return (

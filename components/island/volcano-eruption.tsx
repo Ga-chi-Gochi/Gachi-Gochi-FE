@@ -14,7 +14,8 @@ type VolcanoEruptionValue = {
   shaking: boolean;
   /** 분화구 안 용암 픽셀이 차오르고 넘치는 동안이다. */
   boiling: boolean;
-  erupt: () => void;
+  /** 이미 분화 중이면 false */
+  erupt: () => boolean;
   /** 구름이 터지면 흔들림을 멈춘다. */
   calm: () => void;
   /** 넘침이 끝나면 화산재가 퍼진다. */
@@ -32,12 +33,13 @@ export function VolcanoEruptionProvider({ children }: { children: ReactNode }) {
 
   const erupt = useCallback(() => {
     if (phase !== 'idle') {
-      return;
+      return false;
     }
     setToken((count) => count + 1);
     setShaking(true);
     setBoiling(true);
     setPhase('erupt');
+    return true;
   }, [phase]);
 
   const calm = useCallback(() => {

@@ -103,7 +103,8 @@ export function GuidePager({ index, width, height, onIndexChange, children }: Gu
         }
         idle.current = setTimeout(() => settle(x), IDLE_MS);
       }}
-      style={{ width, height }}>
+      style={{ width, height, backgroundColor: 'transparent' }}
+      contentContainerStyle={{ backgroundColor: 'transparent' }}>
       {children.map((child, page) => {
         const hidden = page !== index;
         return (
@@ -112,7 +113,7 @@ export function GuidePager({ index, width, height, onIndexChange, children }: Gu
             aria-hidden={hidden}
             accessibilityElementsHidden={hidden}
             importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'}
-            style={{ width, height }}>
+            style={{ width, height, backgroundColor: 'transparent' }}>
             {child}
           </View>
         );

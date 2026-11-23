@@ -52,33 +52,12 @@ const ACTIONS: Action[] = [
   { label: '로컬 상점', href: '/store', source: require('@/assets/pixel/icon-local-shop.png'), top: 127, left: 5, size: 70 },
 ];
 
-/**
- * 홈에서 짚어 주는 단계: 나침반 → 봉그깅 → 걷기. action 은 ACTIONS 의 번호(나침반은 null).
- * 봉그깅·걷기는 눌러서 실제 화면으로 들어가 설명을 보고, 뒤로 나오면 다음 단계로 넘어간다.
- */
-const TOUR_STEPS = {
-  compass: { number: 1, action: null, title: '나침반을 눌러 보세요', body: '활동 버튼이 펼쳐져요', hint: undefined },
-  bongging: {
-    number: 2,
-    action: 1,
-    title: '봉그깅부터 볼게요',
-    body: '쓰레기를 주워 인증하면 경험치를 얻어요',
-    hint: '봉그깅 버튼을 눌러 보세요',
-  },
-  walking: {
-    number: 3,
-    action: 0,
-    title: '이번엔 걷기예요',
-    body: '걸은 만큼 귤과 경험치를 받아요',
-    hint: '걷기 버튼을 눌러 보세요',
-  },
+/** 홈 나침반 단계만 여기서 짚는다. 봉그깅·걷기는 가치 실천 팝업에서 이어진다. */
+const COMPASS_TOUR = {
+  number: 1,
+  title: '나침반을 눌러 보세요',
+  body: '가치 실천 창이 열려요',
 } as const;
-
-type HomeTourStep = keyof typeof TOUR_STEPS;
-
-function isHomeTourStep(step: string | null): step is HomeTourStep {
-  return step === 'compass' || step === 'bongging' || step === 'walking';
-}
 
 /**
  * 나침반과 펼쳐진 활동 버튼의 중심 위치(화면 오른쪽·아래 끝에서의 거리)와 크기. 이미 scale 이 적용된 값.
@@ -115,8 +94,9 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
   const insets = useSafeAreaInsets();
   const tutorial = useTutorial();
   const [open, setOpen] = useState(false);
-  const tourStep: HomeTourStep | null = tourEnabled && isHomeTourStep(tutorial.step) ? tutorial.step : null;
-  const tour = tourStep !== null;
+  // 나침반 단계만 FAB 위에서 안내. 봉그깅·걷기는 팝업이 맡는다.
+  const compassTour = tourEnabled && tutorial.step === 'compass';
+  const tourBusy = tourEnabled && tutorial.step != null;
   const walk = useSharedValue(0);
   const bongging = useSharedValue(0);
   const shop = useSharedValue(0);
@@ -154,40 +134,34 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
 
   const bottomOffset = Math.max(insets.bottom, scale(12)) + scale(LIFT);
 
-  // 부모(온보딩)가 펼쳐 두라고 하거나, 튜토리얼이 펼친 버튼을 짚는 단계면 펼친다.
-  // 그 밖에는(사용자가 직접 연 게 아니라면) 접는다
-  const wantOpen = expanded || tourStep === 'bongging' || tourStep === 'walking';
+  // 부모(온보딩)가 펼쳐 두라고 하거나, 사용자가 연 상태면 펼친다
+  const wantOpen = expanded || open;
   useEffect(() => {
     if (wantOpen) {
       play(true);
-    } else if (!open && walk.value > 0) {
+    } else if (walk.value > 0) {
       play(false);
     }
-    // play·open 은 렌더마다 새로 만들어지는 값이라 wantOpen 이 바뀔 때만 돌린다
+    // play 는 렌더마다 새로 만들어지는 값이라 wantOpen 이 바뀔 때만 돌린다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantOpen]);
 
-  // 튜토리얼 중에는 짚은 버튼만 눌린다. 봉그깅·걷기는 실제 화면으로 들어가 설명을 본다.
-  const pressAction = (action: Action, index: number) => {
-    if (!tourStep) {
-      go(action.href);
+  const pressAction = (action: Action) => {
+    if (tourBusy) {
       return;
     }
-    if (index !== TOUR_STEPS[tourStep].action) {
-      return;
-    }
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const screen = tourStep === 'walking' ? 'walking' : 'bongging';
-    tutorial.enterScreen(screen);
-    router.push(action.href);
+    go(action.href);
   };
 
   const pressCompass = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (tourStep) {
-      if (tourStep === 'compass') {
-        tutorial.goTo('bongging');
-      }
+    if (compassTour) {
+      // 평소와 같이 가치 실천 팝업을 연 뒤, 봉그깅 안내로 넘어간다
+      onPracticeRequest?.();
+      tutorial.goTo('bongging');
+      return;
+    }
+    if (tourBusy) {
       return;
     }
     if (onPracticeRequest) {
@@ -199,27 +173,18 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
     play(next);
   };
 
-  const target =
-    tourStep !== null
-      ? activityTarget(
-          TOUR_STEPS[tourStep].action === null ? 'compass' : ACTIONS[TOUR_STEPS[tourStep].action].label,
-          scale,
-          insets.bottom,
-        )
-      : null;
+  const target = compassTour ? activityTarget('compass', scale, insets.bottom) : null;
 
   return (
     <>
-      {tourStep !== null && target ? (
+      {compassTour && target ? (
         <>
           {/* 구멍 밖 터치를 막는다. 토글(zIndex 40) 아래, 헤더(20) 위 */}
           <View onStartShouldSetResponder={() => true} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 38 }} />
           <TutorialOverlay
-            step={tutorial.scope === 'full' ? TOUR_STEPS[tourStep].number : 1}
-            total={tutorial.scope === 'full' ? undefined : 1}
-            title={TOUR_STEPS[tourStep].title}
-            body={TOUR_STEPS[tourStep].body}
-            hint={TOUR_STEPS[tourStep].hint}
+            step={COMPASS_TOUR.number}
+            title={COMPASS_TOUR.title}
+            body={COMPASS_TOUR.body}
             hole={(box) => ({
               centerX: box.width - target.fromRight,
               centerY: box.height - target.fromBottom,
@@ -232,7 +197,7 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
           />
         </>
       ) : null}
-      {open && !tour ? (
+      {open && !tourBusy ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="활동 닫기"
@@ -264,8 +229,8 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
             fromX={scale(FAB_CENTER - centerX)}
             fromY={scale(FAB_CENTER - centerY)}
             progress={progresses[index]}
-            interactive={tourStep ? TOUR_STEPS[tourStep].action === index : open}
-            onPress={() => pressAction(action, index)}
+            interactive={!tourBusy && open}
+            onPress={() => pressAction(action)}
           />
         );
       })}
@@ -275,7 +240,7 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
           label={open ? '활동 닫기' : '활동 열기'}
           source={fabOpen}
           size={scale(FAB_SIZE)}
-          disabled={tourStep !== null && tourStep !== 'compass'}
+          disabled={tourBusy && !compassTour}
           onPress={pressCompass}
         />
       </Animated.View>

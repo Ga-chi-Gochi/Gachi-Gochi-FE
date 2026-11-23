@@ -48,15 +48,27 @@ export default function WelcomeScreen() {
             gap: scale(14),
             paddingHorizontal: scale(24),
           }}>
+          {/* 로고는 자체 외곽선이 있고, 부제만 글자 바깥을 얇게 감싼다 */}
           <Image
             source={uiHud.logo}
             style={{ width: scale(168), height: scale(56), ...pixelImageStyle }}
             contentFit="contain"
             accessibilityLabel="가치고치"
           />
-          <GalmuriText size={9} color={gachiUi.inkSoft} center>
-            제주를 돌보면 섬도 고치도 자라요
-          </GalmuriText>
+          <View
+            style={{
+              alignSelf: 'center',
+              paddingHorizontal: scale(8),
+              paddingVertical: scale(4),
+              backgroundColor: 'rgba(237,224,198,0.96)',
+              borderWidth: scale(gachiUi.border),
+              borderColor: gachiUi.ink,
+              borderRadius: scale(6),
+            }}>
+            <GalmuriText size={9} color={gachiUi.ink} center>
+              제주를 돌보면 섬도 고치도 자라요
+            </GalmuriText>
+          </View>
           <View style={{ height: scale(6) }} />
           <AssetImageButton
             source={uiButtons.greenLogin}

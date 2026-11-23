@@ -1,9 +1,9 @@
 import { type ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { pixel } from '@/constants/pixel-theme';
+import { gachiUi } from '@/constants/gachi-ui';
 
-const DIM = pixel.dim;
+const DIM = gachiUi.dim;
 const STRIP = 3;
 
 export type CircleHole = { centerX: number; centerY: number; radius: number };

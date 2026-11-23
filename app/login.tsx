@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
 import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiTextField } from '@/components/gachi-ui/gachi-text-field';
 import { AUTH_ENABLED } from '@/constants/auth';
 import { gachiUi } from '@/constants/gachi-ui';
 import { ISLAND_HOME } from '@/constants/routes';
@@ -52,8 +53,13 @@ export default function LoginScreen() {
         </View>
 
         <View style={{ alignSelf: 'stretch', gap: scale(12) }}>
-          <Field placeholder="이메일을 작성하세요" editable={AUTH_ENABLED} keyboardType="email-address" autoCapitalize="none" />
-          <Field placeholder="비밀번호를 입력하세요" editable={AUTH_ENABLED} secureTextEntry />
+          <GachiTextField
+            placeholder="이메일을 작성하세요"
+            editable={AUTH_ENABLED}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <GachiTextField placeholder="비밀번호를 입력하세요" editable={AUTH_ENABLED} secureTextEntry />
         </View>
 
         <Pressable
@@ -92,44 +98,5 @@ export default function LoginScreen() {
         </View>
       </ScrollView>
     </View>
-  );
-}
-
-function Field({
-  placeholder,
-  editable,
-  secureTextEntry,
-  keyboardType,
-  autoCapitalize,
-}: {
-  placeholder: string;
-  editable: boolean;
-  secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'email-address';
-  autoCapitalize?: 'none' | 'sentences';
-}) {
-  const { scale } = useResponsive();
-  return (
-    <TextInput
-      accessibilityLabel={placeholder}
-      placeholder={placeholder}
-      placeholderTextColor={gachiUi.inkSoft}
-      editable={editable}
-      secureTextEntry={secureTextEntry}
-      keyboardType={keyboardType}
-      autoCapitalize={autoCapitalize}
-      style={{
-        alignSelf: 'stretch',
-        minHeight: scale(48),
-        backgroundColor: gachiUi.white,
-        borderWidth: scale(gachiUi.border),
-        borderColor: gachiUi.ink,
-        borderRadius: scale(8),
-        paddingHorizontal: scale(14),
-        color: gachiUi.ink,
-        fontFamily: 'Galmuri9',
-        fontSize: scale(10),
-      }}
-    />
   );
 }

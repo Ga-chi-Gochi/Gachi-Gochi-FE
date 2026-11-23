@@ -17,6 +17,8 @@ export const gachiUi = {
   tabOff: '#8B6E4E',
   border: 2,
   shadow: 3,
+  /** 온보딩·가이드 어둡힘 (ink 72%) */
+  dim: 'rgba(61,46,34,0.72)',
 } as const;
 
 export const galmuri = {

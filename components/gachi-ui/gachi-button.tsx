@@ -67,14 +67,31 @@ export function GachiButton({
       onPress={onPress}
       style={style}>
       {({ pressed }) => {
-        const sunk = pressed || disabled;
+        // 비활성은 회색만 바꾸고, 그림자는 유지한다. (초록으로 바뀔 때 밑에 줄이 생기던 원인)
+        // 눌렀을 때만 그림자를 숨기고 면을 아래로 내린다.
+        const sunk = pressed && !disabled;
         return (
           <View
             style={{
               minWidth,
-              height: height + (sunk ? 0 : shadow),
+              height: height + shadow,
               justifyContent: 'flex-start',
             }}>
+            {sunk ? null : (
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: shadow,
+                  minWidth,
+                  height,
+                  borderRadius: radius,
+                  backgroundColor: drop,
+                }}
+              />
+            )}
             <View
               style={{
                 marginTop: sunk ? shadow : 0,
@@ -92,21 +109,6 @@ export function GachiButton({
                 {label}
               </GalmuriText>
             </View>
-            {sunk ? null : (
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: shadow,
-                  borderBottomLeftRadius: radius,
-                  borderBottomRightRadius: radius,
-                  backgroundColor: drop,
-                }}
-              />
-            )}
           </View>
         );
       }}

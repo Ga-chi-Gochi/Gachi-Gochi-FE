@@ -17,7 +17,7 @@ import {
 
 /**
  * 온보딩이 끝난 직후의 튜토리얼 단계.
- * 나침반 → 봉그깅(화면 안내) → 걷기(화면 안내) → 알 부화 선물 → 마무리(귤코인 보상)
+ * 나침반 → 가치 실천 팝업(봉그깅) → 봉그깅 화면 안내 → 팝업(걷기) → 걷기 화면 안내 → 알 부화 선물 → 마무리(귤코인 보상)
  * '-screen' 은 카메라·걷기 화면 안에서 안내를 보는 동안이다.
  */
 export type TutorialStep = 'compass' | 'bongging' | 'bongging-screen' | 'walking' | 'walking-screen' | 'gift' | 'finish';

@@ -62,12 +62,22 @@ type IslandGameProps = {
   /** preview: 웰컴용. 파도만 보이고 탭·핀치·화산 입력은 막는다 */
   mode?: 'play' | 'preview';
   petOpen: boolean;
+  /** 온보딩 스토리: 알 주변에 픽셀 느낌표 강조 */
+  noticeEgg?: boolean;
   onTapCreature: () => void;
   onCamera: (camera: IslandCameraState) => void;
   onAsh: (ash: IslandAsh) => void;
 };
 
-export function IslandGame({ look, mode = 'play', petOpen, onTapCreature, onCamera, onAsh }: IslandGameProps) {
+export function IslandGame({
+  look,
+  mode = 'play',
+  petOpen,
+  noticeEgg = false,
+  onTapCreature,
+  onCamera,
+  onAsh,
+}: IslandGameProps) {
   const play = usePlayState();
   const { token, phase, calm, openFog, finish } = useVolcanoEruption();
   const { factor } = useResponsive();
@@ -121,6 +131,9 @@ export function IslandGame({ look, mode = 'play', petOpen, onTapCreature, onCame
         petOpen: preview ? false : petOpen,
         // preview 는 게임 쪽 locked 로 핀치·탭을 막고, RN 은 pointerEvents none 으로 한 번 더 막는다
         locked: preview || Boolean(play.zoneUnlockReveal || play.pendingPlaceItemId),
+        // 웰컴(preview)에서는 알을 숨긴다
+        hideCreature: preview,
+        noticeEgg: !preview && noticeEgg,
         explore:
           !preview && play.exploreForestUnlocked && play.isExploring
             ? { level: exploreGochiLevel(play.exploringGochiId) }
@@ -130,6 +143,7 @@ export function IslandGame({ look, mode = 'play', petOpen, onTapCreature, onCame
     [
       factor,
       look,
+      noticeEgg,
       petOpen,
       placed,
       play.exploreForestUnlocked,

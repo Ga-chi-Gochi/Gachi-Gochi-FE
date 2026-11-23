@@ -1,8 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Image, type ImageSource } from 'expo-image';
-import { router, type Href } from 'expo-router';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, TextInput, View, type ViewStyle } from 'react-native';
+import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -16,15 +15,15 @@ import {
 } from '@/components/guide/guide-controls';
 import { GuidePager } from '@/components/guide/guide-pager';
 import { GuideSpotlight } from '@/components/guide/guide-spotlight';
-import { PixelButton, PixelChip, PixelText } from '@/components/pixel/pixel-ui';
-import { usePlayState } from '@/components/play-state';
-import { pixel } from '@/constants/pixel-theme';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiButton } from '@/components/gachi-ui/gachi-button';
+import { GachiTextField } from '@/components/gachi-ui/gachi-text-field';
+import { gachiUi } from '@/constants/gachi-ui';
 import { useReduceMotion } from '@/hooks/use-reduce-motion';
 import { useResponsive } from '@/hooks/use-responsive';
 import { markOnboardingSeen, saveCreatureName } from '@/lib/onboarding-state';
 
 const EGG = require('@/assets/pixel/gyulsae-egg.png');
-const JUVENILE = require('@/assets/pixel/gyulsae-juvenile.png');
 const WALK = require('@/assets/pixel/icon-walk.png') as ImageSource;
 const BONGGING = require('@/assets/pixel/icon-bongging.png') as ImageSource;
 const LOCAL_SHOP = require('@/assets/pixel/icon-local-shop.png') as ImageSource;
@@ -33,10 +32,11 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 const NAME_CHIPS = ['귤돌이', '하르방', '봉봉이'] as const;
 const RANDOM_NAMES = ['귤돌이', '하르방', '봉봉이', '새콤이', '감귤이', '돌하르'];
 const TAP_GOAL = 3;
-const PAGE_COUNT = 4;
+/** 알 이야기·두드리기 → 이름 → 키우기 안내. 저장/가입은 앞단 인증과 겹쳐서 두지 않는다 */
+const PAGE_COUNT = 3;
 const LAST_PAGE = PAGE_COUNT - 1;
 /** 장마다 위쪽 글자 색. 어둡힘이 깔리는 장(성장)만 밝은 글자 */
-const TONES: GuideTone[] = ['dark', 'dark', 'light', 'dark'];
+const TONES: GuideTone[] = ['dark', 'dark', 'light'];
 
 /** 섬 그림의 중심 높이(화면 높이 대비). 섬은 가로 가운데, 이 높이쯤에 놓인다 */
 const ISLAND_CENTER_Y = 0.48;
@@ -44,19 +44,9 @@ const ISLAND_CENTER_Y = 0.48;
 type OnboardingFlowProps = {
   initialName?: string;
   onDone: (name: string | null) => void;
+  /** 첫 장 스토리(말풍선)일 때 섬 알 강조 이펙트를 켠다 */
+  onEggNotice?: (active: boolean) => void;
 };
-
-function hasBatchim(name: string) {
-  const code = name.charCodeAt(name.length - 1);
-  if (Number.isNaN(code) || code < 0xac00 || code > 0xd7a3) {
-    return false;
-  }
-  return (code - 0xac00) % 28 !== 0;
-}
-
-function withParticle(name: string, batchim: string, plain: string) {
-  return `${name}${hasBatchim(name) ? batchim : plain}`;
-}
 
 /** 장이 열릴 때 캐릭터가 톡 튀어나온다. 성장 연출(growth-reveal)과 같은 팝 */
 function usePop(active: boolean, reduceMotion: boolean) {
@@ -150,22 +140,27 @@ function Enter({
   );
 }
 
-export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps) {
+export function OnboardingFlow({ initialName = '', onDone, onEggNotice }: OnboardingFlowProps) {
   const { width, height, scale } = useResponsive();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
-  const { growthStage, water } = usePlayState();
   const [index, setIndex] = useState(0);
   const [taps, setTaps] = useState(0);
   const [name, setName] = useState(initialName);
   const [tilt, setTilt] = useState(0);
+  /** 첫 장: 말풍선 스토리 → 알 두드리기 */
+  const [eggPhase, setEggPhase] = useState<'story' | 'poke'>('story');
   const finishing = useRef(false);
+  // 포커싱(어둡힘) 없이 섬을 그대로 보여 주므로 스토리도 어두운 글자
+  const headerTone: GuideTone = TONES[index] ?? 'dark';
+  const noticingEgg = index === 0 && eggPhase === 'story';
 
-  const creature = name.trim() || '귤새';
-  const topic = withParticle(creature, '은', '는');
-  const objectParticle = withParticle(creature, '을', '를');
+  useEffect(() => {
+    onEggNotice?.(noticingEgg);
+    return () => onEggNotice?.(false);
+  }, [noticingEgg, onEggNotice]);
 
-  const finish = (nextName: string | null, href?: Href) => {
+  const finish = (nextName: string | null) => {
     if (finishing.current) {
       return;
     }
@@ -177,21 +172,24 @@ export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps
       }
       await markOnboardingSeen();
       onDone(trimmed || null);
-      if (href) {
-        router.push(href);
-      }
     })();
   };
 
   const pokeEgg = () => {
-    setTaps((current) => Math.min(TAP_GOAL, current + 1));
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (reduceMotion) {
-      return;
+    if (!reduceMotion) {
+      setTilt(8);
+      setTimeout(() => setTilt(-8), 70);
+      setTimeout(() => setTilt(0), 150);
     }
-    setTilt(8);
-    setTimeout(() => setTilt(-8), 70);
-    setTimeout(() => setTilt(0), 150);
+    setTaps((current) => {
+      const next = Math.min(TAP_GOAL, current + 1);
+      // 3번 채우면 바로 이름 짓기 장으로 넘어간다
+      if (next >= TAP_GOAL && current < TAP_GOAL) {
+        setTimeout(() => setIndex(1), reduceMotion ? 0 : 220);
+      }
+      return next;
+    });
   };
 
   const goName = () => {
@@ -227,7 +225,17 @@ export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps
         </DimLayer>
       ) : null}
       <GuidePager index={index} width={width} height={height} onIndexChange={setIndex}>
-        <EggStep active={index === 0} taps={taps} contentTop={contentTop} padBottom={padBottom} tilt={tilt} onPoke={pokeEgg} onNext={goName} />
+        <EggStep
+          active={index === 0}
+          phase={eggPhase}
+          taps={taps}
+          contentTop={contentTop}
+          padBottom={padBottom}
+          tilt={tilt}
+          onPoke={pokeEgg}
+          onStoryNext={() => setEggPhase('poke')}
+          onNext={goName}
+        />
         <NameStep
           active={index === 1}
           name={name}
@@ -243,27 +251,17 @@ export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps
           }}
         />
         <GrowStep
-          active={index === 2}
-          contentTop={contentTop}
-          padBottom={padBottom}
-          title={`${topic} 이렇게 자라요`}
-          rows={[
-            { icon: WALK, title: '걸으면 물방울' },
-            { icon: BONGGING, title: '봉그깅하면 산소방울' },
-            { icon: LOCAL_SHOP, title: '상점에서 귤코인' },
-          ]}
-          onNext={() => setIndex(LAST_PAGE)}
-        />
-        <SaveStep
           active={index === LAST_PAGE}
-          title={`${objectParticle} 저장할까요?`}
-          level={growthStage.level}
-          water={water}
           contentTop={contentTop}
           padBottom={padBottom}
-          onKakao={() => finish(name)}
-          onApple={() => finish(name)}
-          onEmail={() => finish(name, '/signup' as Href)}
+          title="이 알은 이렇게 키워요"
+          body="가치를 실천하며 돌보면, 알에서 깨어나 쑥쑥 자라요."
+          rows={[
+            { icon: WALK, title: '걸으면 물방울을 모아요' },
+            { icon: BONGGING, title: '봉그깅하면 산소방울을 모아요' },
+            { icon: LOCAL_SHOP, title: '상점에서 귤코인으로 돌봐요' },
+          ]}
+          onNext={() => finish(name)}
         />
       </GuidePager>
       {/* 섬 위 장에서는 뒤의 HUD 가 비쳐 글자가 겹치므로 띠를 한 겹 더 깐다 */}
@@ -277,14 +275,14 @@ export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps
           paddingTop: padTop,
           paddingBottom: scale(4),
         }}>
-        <DimLayer on={TONES[index] === 'light'}>
-          <View style={{ flex: 1, backgroundColor: pixel.dim }} />
+        <DimLayer on={headerTone === 'light'}>
+          <View style={{ flex: 1, backgroundColor: gachiUi.dim }} />
         </DimLayer>
         <GuideHeader
           index={index}
           total={PAGE_COUNT}
-          tone={TONES[index] ?? 'dark'}
-          closeLabel={index === LAST_PAGE ? '나중에' : '건너뛰기'}
+          tone={headerTone}
+          closeLabel="건너뛰기"
           onClose={() => finish(index === 0 ? null : name)}
         />
       </View>
@@ -294,19 +292,23 @@ export function OnboardingFlow({ initialName = '', onDone }: OnboardingFlowProps
 
 function EggStep({
   active,
+  phase,
   taps,
   contentTop,
   padBottom,
   tilt,
   onPoke,
+  onStoryNext,
   onNext,
 }: {
   active: boolean;
+  phase: 'story' | 'poke';
   taps: number;
   contentTop: number;
   padBottom: number;
   tilt: number;
   onPoke: () => void;
+  onStoryNext: () => void;
   onNext: () => void;
 }) {
   const { width, height, scale } = useResponsive();
@@ -317,7 +319,7 @@ function EggStep({
   const eggWidth = stage * 0.5;
 
   useEffect(() => {
-    if (!active || reduceMotion) {
+    if (!active || phase !== 'poke' || reduceMotion) {
       bob.setValue(0);
       return;
     }
@@ -329,20 +331,50 @@ function EggStep({
     );
     loop.start();
     return () => loop.stop();
-  }, [active, reduceMotion, bob]);
+  }, [active, phase, reduceMotion, bob]);
+
+  // 섬·파도 위에 말풍선으로 도착 이야기를 전한다 (알 이동 연출 대신)
+  if (phase === 'story') {
+    return (
+      <View style={{ flex: 1 }}>
+        <GuideFrame
+          style={{
+            flex: 1,
+            paddingTop: contentTop + scale(8),
+            paddingBottom: padBottom,
+            paddingHorizontal: scale(28),
+            justifyContent: 'space-between',
+          }}>
+          <Enter active={active} distance={18}>
+            <GuideSpeech>
+              <GalmuriText size={11} bold center>
+                제주 바다에서 알이 왔어요.
+              </GalmuriText>
+              <GalmuriText size={9} color={gachiUi.inkSoft} center>
+                파도에 떠밀려 이 섬에 도착한 신비한 알이에요.
+              </GalmuriText>
+            </GuideSpeech>
+          </Enter>
+          <Enter active={active} delay={160} distance={14} style={{ alignSelf: 'center' }}>
+            <GachiButton label="알 만나기" width="wide" onPress={onStoryNext} />
+          </Enter>
+        </GuideFrame>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
       <GuideBackdrop />
       <GuideFrame style={{ flex: 1, paddingTop: contentTop, paddingBottom: padBottom, paddingHorizontal: scale(24) }}>
-        <PixelText size={24} center>
-          {'제주 바다에서\n알이 왔어요'}
-        </PixelText>
+        <GalmuriText size={14} bold center>
+          {'알에게\n인사해 볼까요'}
+        </GalmuriText>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: scale(20) }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="알 두드리기"
-            accessibilityHint={`${TAP_GOAL}번 두드리면 알이 깨어나요`}
+            accessibilityLabel="알에게 인사하기"
+            accessibilityHint={`${TAP_GOAL}번 톡톡 두드리면 다음으로 넘어가요`}
             accessibilityValue={{ text: `${Math.min(taps, TAP_GOAL)}/${TAP_GOAL}` }}
             onPress={onPoke}>
             <GuideStage size={stage}>
@@ -351,11 +383,15 @@ function EggStep({
               </Animated.View>
             </GuideStage>
           </Pressable>
-          <PixelText size={15} center>
-            {ready ? `이제 알이 깨어날 것 같아요! (${TAP_GOAL}/${TAP_GOAL})` : `알을 ${TAP_GOAL}번 두드려 보세요 (${taps}/${TAP_GOAL})`}
-          </PixelText>
+          <GalmuriText size={9} color={gachiUi.inkSoft} center>
+            {ready
+              ? `알이 반가운가 봐요! (${TAP_GOAL}/${TAP_GOAL})`
+              : `알을 ${TAP_GOAL}번 톡톡 두드려 보세요 (${taps}/${TAP_GOAL})`}
+          </GalmuriText>
         </View>
-        <PixelButton large label={ready ? '알 깨우기' : '톡톡 두드리기'} onPress={onNext} />
+        <View style={{ alignItems: 'center' }}>
+          <GachiButton label="톡톡 인사하기" width="wide" onPress={onNext} />
+        </View>
       </GuideFrame>
     </View>
   );
@@ -381,43 +417,29 @@ function NameStep({
   const { width, height, scale } = useResponsive();
   const reduceMotion = useReduceMotion();
   const pop = usePop(active, reduceMotion);
-  const [focused, setFocused] = useState(false);
   const empty = !name.trim();
   const stage = Math.round(Math.min(width * 0.5, height * 0.22, scale(220)));
-  const spriteWidth = stage * 0.7;
+  const eggWidth = stage * 0.55;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <GuideBackdrop />
       <GuideFrame style={{ flex: 1, paddingTop: contentTop, paddingBottom: padBottom, paddingHorizontal: scale(24) }}>
-        <PixelText size={24} center>
-          귤새가 태어났어요!
-        </PixelText>
+        <GalmuriText size={14} bold center>
+          {'이 알의 이름을\n지어 주세요'}
+        </GalmuriText>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: scale(20) }}>
           <GuideStage size={stage}>
             <Animated.View style={{ transform: [{ scale: pop }] }}>
-              <Image source={JUVENILE} contentFit="contain" style={{ width: spriteWidth, height: spriteWidth * (150 / 168), ...pixelImageStyle }} />
+              <Image source={EGG} contentFit="contain" style={{ width: eggWidth, height: eggWidth * 1.25, ...pixelImageStyle }} />
             </Animated.View>
           </GuideStage>
           <View style={{ alignSelf: 'stretch', gap: scale(12) }}>
-            <TextInput
-              accessibilityLabel="귤새 이름"
+            <GachiTextField
+              accessibilityLabel="알 이름"
               value={name}
               onChangeText={onChangeName}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
               placeholder="이름을 지어주세요"
-              placeholderTextColor={pixel.muted}
-              style={{
-                minHeight: scale(52),
-                backgroundColor: pixel.white,
-                borderWidth: scale(pixel.border),
-                borderColor: focused ? pixel.tangerine : pixel.ink,
-                paddingHorizontal: scale(12),
-                color: pixel.ink,
-                fontSize: scale(16),
-                fontWeight: '800',
-              }}
             />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: scale(8) }}>
               {NAME_CHIPS.map((chip) => (
@@ -426,13 +448,15 @@ function NameStep({
               <GuideChip label="랜덤" selected={false} onPress={onRandom} />
             </View>
             {empty ? (
-              <PixelText size={13} weight="500" center>
+              <GalmuriText size={9} color={gachiUi.inkSoft} center>
                 이름을 정하면 다음으로 갈 수 있어요
-              </PixelText>
+              </GalmuriText>
             ) : null}
           </View>
         </View>
-        <PixelButton large label="이 이름으로 할게요" disabled={empty} onPress={onNext} />
+        <View style={{ alignItems: 'center' }}>
+          <GachiButton label="이 이름으로 할게요" width="wide" disabled={empty} onPress={onNext} />
+        </View>
       </GuideFrame>
     </KeyboardAvoidingView>
   );
@@ -443,6 +467,7 @@ function GrowStep({
   contentTop,
   padBottom,
   title,
+  body,
   rows,
   onNext,
 }: {
@@ -450,6 +475,7 @@ function GrowStep({
   contentTop: number;
   padBottom: number;
   title: string;
+  body: string;
   rows: { icon: ImageSource; title: string }[];
   onNext: () => void;
 }) {
@@ -466,16 +492,19 @@ function GrowStep({
         }}>
         <Enter active={active} distance={18}>
           <GuideSpeech compact>
-            <PixelText size={18} center>
+            <GalmuriText size={11} bold center>
               {title}
-            </PixelText>
+            </GalmuriText>
+            <GalmuriText size={9} color={gachiUi.inkSoft} center>
+              {body}
+            </GalmuriText>
             <View style={{ gap: scale(8) }}>
               {rows.map((row, order) => (
                 <Enter key={row.title} active={active} delay={140 + order * 70} distance={10}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(12) }}>
                     <Image source={row.icon} contentFit="contain" style={{ width: scale(36), height: scale(36), ...pixelImageStyle }} />
                     <View style={{ flex: 1 }}>
-                      <PixelText size={15}>{row.title}</PixelText>
+                      <GalmuriText size={9}>{row.title}</GalmuriText>
                     </View>
                   </View>
                 </Enter>
@@ -483,60 +512,9 @@ function GrowStep({
             </View>
           </GuideSpeech>
         </Enter>
-        <Enter active={active} delay={140 + rows.length * 70} distance={14} style={{ alignSelf: 'center', minWidth: scale(200) }}>
-          <PixelButton large label="다음" onPress={onNext} />
+        <Enter active={active} delay={140 + rows.length * 70} distance={14} style={{ alignSelf: 'center' }}>
+          <GachiButton label="시작하기" width="wide" onPress={onNext} />
         </Enter>
-      </GuideFrame>
-    </View>
-  );
-}
-
-function SaveStep({
-  active,
-  title,
-  level,
-  water,
-  contentTop,
-  padBottom,
-  onKakao,
-  onApple,
-  onEmail,
-}: {
-  active: boolean;
-  title: string;
-  level: number;
-  water: number;
-  contentTop: number;
-  padBottom: number;
-  onKakao: () => void;
-  onApple: () => void;
-  onEmail: () => void;
-}) {
-  const { width, height, scale } = useResponsive();
-  const reduceMotion = useReduceMotion();
-  const pop = usePop(active, reduceMotion);
-  const stage = Math.round(Math.min(width * 0.5, height * 0.24, scale(210)));
-  const spriteWidth = stage * 0.7;
-  return (
-    <View style={{ flex: 1 }}>
-      <GuideBackdrop />
-      <GuideFrame style={{ flex: 1, paddingTop: contentTop, paddingBottom: padBottom, paddingHorizontal: scale(24) }}>
-        <PixelText size={22} center>
-          {title}
-        </PixelText>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: scale(16) }}>
-          <GuideStage size={stage}>
-            <Animated.View style={{ transform: [{ scale: pop }] }}>
-              <Image source={JUVENILE} contentFit="contain" style={{ width: spriteWidth, height: spriteWidth * (150 / 168), ...pixelImageStyle }} />
-            </Animated.View>
-          </GuideStage>
-          <PixelChip label={`Lv.${level} · 물방울 ${water}`} />
-        </View>
-        <View style={{ gap: scale(10) }}>
-          <PixelButton large label="카카오로 3초 만에 시작" onPress={onKakao} />
-          <PixelButton large tone="ghost" label="Apple로 계속하기" onPress={onApple} />
-          <PixelButton large tone="ghost" label="이메일로 가입" onPress={onEmail} />
-        </View>
       </GuideFrame>
     </View>
   );

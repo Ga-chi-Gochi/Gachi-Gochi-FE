@@ -42,7 +42,14 @@ export default function IslandHomeScreen() {
     claimExploreEgg,
     acknowledgeExploreEggReveal,
   } = usePlayState();
-  const { start: startTutorial, startHelp, step: tutorialStep } = useTutorial();
+  const {
+    start: startTutorial,
+    startHelp,
+    step: tutorialStep,
+    scope: tutorialScope,
+    enterScreen,
+    skip: skipTutorial,
+  } = useTutorial();
   const [claiming, setClaiming] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
@@ -57,6 +64,38 @@ export default function IslandHomeScreen() {
   const [guideReplay, setGuideReplay] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [practiceOpen, setPracticeOpen] = useState(false);
+  const [eggNotice, setEggNotice] = useState(false);
+
+  // 봉그깅·걷기 튜토리얼은 FAB 펼침 대신 가치 실천 팝업으로 이어진다
+  const practiceTourOpen = tutorialStep === 'bongging' || tutorialStep === 'walking';
+
+  const skipPracticeTour = () => {
+    setPracticeOpen(false);
+    skipTutorial();
+  };
+
+  const practiceTour =
+    tutorialStep === 'bongging'
+      ? {
+          kind: 'plogging' as const,
+          step: tutorialScope === 'full' ? 2 : 1,
+          total: tutorialScope === 'full' ? undefined : 1,
+          title: '봉그깅부터 볼게요',
+          body: '쓰레기를 주워 인증하면 경험치를 얻어요',
+          hint: '봉그깅을 눌러 보세요',
+          onSkip: skipPracticeTour,
+        }
+      : tutorialStep === 'walking'
+        ? {
+            kind: 'walk' as const,
+            step: tutorialScope === 'full' ? 3 : 1,
+            total: tutorialScope === 'full' ? undefined : 1,
+            title: '이번엔 걷기예요',
+            body: '걸은 만큼 귤과 경험치를 받아요',
+            hint: '걷기를 눌러 보세요',
+            onSkip: skipPracticeTour,
+          }
+        : null;
 
   useEffect(() => {
     let alive = true;
@@ -106,14 +145,25 @@ export default function IslandHomeScreen() {
       <IslandGame
         look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1}
         petOpen={petOpen}
+        noticeEgg={eggNotice}
         onTapCreature={openPet}
         onCamera={setCamera}
         onAsh={setAsh}
       />
-      <IslandPlayOverlay camera={camera} ash={ash} petOpen={petOpen} onClosePet={() => setPetOpen(false)} />
+      {/* 온보딩 중에는 HUD를 숨겨 성장 안내 때 섬만 보이게 한다 */}
+      {showGuide ? null : (
+        <IslandPlayOverlay camera={camera} ash={ash} petOpen={petOpen} onClosePet={() => setPetOpen(false)} />
+      )}
       <View
-        pointerEvents="box-none"
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 1 - ash.top }}>
+        pointerEvents={showGuide ? 'none' : 'box-none'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          opacity: showGuide ? 0 : 1 - ash.top,
+        }}>
         <ResourceHeader
           soundOn={soundOn}
           onToggleSound={() => setSoundOn((current) => !current)}
@@ -160,10 +210,19 @@ export default function IslandHomeScreen() {
         <IslandSideButtons ashBottom={ash.bottom} />
         <HomeActivityToggle tourEnabled={!showGuide} onPracticeRequest={() => setPracticeOpen(true)} />
         <ValuePracticePopup
-          open={practiceOpen}
-          onClose={() => setPracticeOpen(false)}
+          open={practiceOpen || practiceTourOpen}
+          tour={practiceTour}
+          onClose={() => {
+            if (practiceTour) {
+              return;
+            }
+            setPracticeOpen(false);
+          }}
           onStart={(kind) => {
             setPracticeOpen(false);
+            if (practiceTourOpen) {
+              enterScreen(kind === 'walk' ? 'walking' : 'bongging');
+            }
             router.push((kind === 'walk' ? '/walking' : '/camera') as Href);
           }}
         />
@@ -236,6 +295,7 @@ export default function IslandHomeScreen() {
       {showGuide ? (
         <OnboardingFlow
           initialName={creatureName}
+          onEggNotice={setEggNotice}
           onDone={(name) => {
             if (name) {
               setNickname(name);
@@ -244,6 +304,7 @@ export default function IslandHomeScreen() {
             const replay = guideReplay;
             setShowGuide(false);
             setGuideReplay(false);
+            setEggNotice(false);
             // 처음 온보딩이면 강제 튜토리얼, 메뉴에서 다시 본 뒤에는 다시 보기로 이어진다
             startTutorial({ replay });
           }}

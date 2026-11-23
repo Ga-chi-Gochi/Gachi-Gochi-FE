@@ -4,11 +4,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
+import { type SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
 import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
@@ -21,6 +22,8 @@ import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/li
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
+type ViewNode = ComponentRef<typeof View>;
+
 export default function CameraScreen() {
   const { scale, height } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -31,6 +34,8 @@ export default function CameraScreen() {
   const guided = tutorial.step === 'bongging-screen';
   const [leavingTutorial, setLeavingTutorial] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const closeRef = useRef<ViewNode>(null);
+  const [closeHole, setCloseHole] = useState<SpotlightHole | null>(null);
   const holdCamera = guided || leavingTutorial;
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
@@ -70,6 +75,46 @@ export default function CameraScreen() {
   useFocusEffect(
     useCallback(() => () => leaveScreen('bongging'), [leaveScreen]),
   );
+
+  /** 닫기 버튼을 실제로 재서, 어림잡은 좌표가 아니라 버튼 정중앙에 구멍을 맞춘다 */
+  const measureClose = useCallback(() => {
+    const node = closeRef.current;
+    if (!node) {
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) {
+        setCloseHole(null);
+        return;
+      }
+      const pad = scale(12);
+      const radius = Math.max(width, height) / 2 + pad;
+      const next: SpotlightHole = {
+        centerX: x + width / 2,
+        centerY: y + height / 2,
+        radius,
+      };
+      setCloseHole((current) =>
+        current &&
+        'centerX' in current &&
+        current.centerX === next.centerX &&
+        current.centerY === next.centerY &&
+        current.radius === next.radius
+          ? current
+          : next,
+      );
+    });
+  }, [scale]);
+
+  useEffect(() => {
+    if (!guided) {
+      return;
+    }
+    const id = requestAnimationFrame(measureClose);
+    return () => cancelAnimationFrame(id);
+  }, [guided, measureClose, insets.top, insets.left]);
+
+  const focusHole = guided ? closeHole : null;
 
   async function allowCamera() {
     if (permission && !permission.canAskAgain) {
@@ -199,7 +244,11 @@ export default function CameraScreen() {
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <View style={{ marginTop: scale(8), minHeight: scale(46), justifyContent: 'center' }}>
-          <View style={{ position: 'absolute', left: Math.max(insets.left, scale(12)), top: '50%', marginTop: -scale(16) }}>
+          <View
+            ref={closeRef}
+            collapsable={false}
+            onLayout={guided ? measureClose : undefined}
+            style={{ position: 'absolute', left: Math.max(insets.left, scale(12)), top: '50%', marginTop: -scale(16) }}>
             <AssetImageButton source={uiCamera.close} label="닫기" width={32} height={32} onPress={() => router.back()} />
           </View>
           {guided ? null : (
@@ -296,12 +345,9 @@ export default function CameraScreen() {
           title="봉그깅은 이렇게 해요"
           body="쓰레기를 사진으로 찍어 인증하면 경험치를 얻어요. 경험치가 쌓이면 고치가 자라요."
           hint="왼쪽 위 ✕ 버튼을 눌러 돌아가요"
-          hole={() => ({
-            centerX: Math.max(insets.left, scale(16)) + scale(21),
-            centerY: insets.top + scale(8) + scale(23),
-            radius: scale(21) + scale(8),
-          })}
+          hole={focusHole ? () => focusHole : undefined}
           placement="below"
+          align="start"
           onSkip={() => {
             setLeavingTutorial(true);
             tutorial.skip();

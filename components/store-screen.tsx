@@ -90,7 +90,12 @@ export function StoreScreen() {
       <StoreHeader />
 
       <View style={{ paddingHorizontal: scale(16), gap: scale(10) }}>
-        <StorePreview tab={previewTab} modeActive={mode.active} onToggleMode={mode.toggle} />
+        <StorePreview
+          tab={previewTab}
+          modeActive={mode.active}
+          onToggleMode={mode.toggle}
+          selectedItemId={selected?.kind === 'item' && selected.tab === 'island' ? selected.id : null}
+        />
 
         <View style={{ flexDirection: 'row', gap: scale(6) }}>
           {STORE_TABS.map((item) => {

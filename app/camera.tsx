@@ -275,7 +275,13 @@ export default function CameraScreen() {
             collapsable={false}
             onLayout={guided ? measureClose : undefined}
             style={{ position: 'absolute', left: Math.max(insets.left, sidePad), top: '50%', marginTop: -scale(18) }}>
-            <AssetImageButton source={uiCamera.close} label="닫기" width={36} height={40} onPress={() => router.back()} />
+            <AssetImageButton
+              source={uiCamera.close}
+              label="닫기"
+              width={36}
+              height={40}
+              onPress={() => router.replace('/(tabs)')}
+            />
           </View>
           <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
             <Image source={uiCamera.tagPickup} style={{ width: scale(132), height: scale(24), ...pixelImageStyle }} contentFit="contain" />

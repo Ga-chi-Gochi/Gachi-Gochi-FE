@@ -151,8 +151,8 @@ export function IslandGame({
         petOpen: preview ? false : petOpen,
         // preview 는 게임 쪽 locked 로 핀치·탭을 막고, RN 은 pointerEvents none 으로 한 번 더 막는다
         locked: preview || Boolean(play.zoneUnlockReveal || play.pendingPlaceItemId),
-        // 웰컴(preview)에서는 알을 숨긴다
-        hideCreature: preview,
+        // 웰컴(preview)·모험 중에는 섬 고치를 숨긴다 (끝나면 다시 표시)
+        hideCreature: preview || play.isExploring,
         noticeEgg: !preview && noticeEgg,
         explore:
           !preview && play.exploreForestUnlocked && play.isExploring

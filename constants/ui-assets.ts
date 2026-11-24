@@ -19,6 +19,7 @@ export const uiButtons = {
   greenAllow: require('@/assets/ui/buttons/btn-green-allow.png'),
   greenStart: require('@/assets/ui/buttons/btn-green-start.png'),
   greenWideStart: require('@/assets/ui/buttons/btn-green-wide-start.png'),
+  greenAdventure: require('@/assets/ui/buttons/btn-green-adventure.png'),
   greenNext: require('@/assets/ui/buttons/btn-green-next.png'),
   greenVerify: require('@/assets/ui/buttons/btn-green-verify.png'),
   beigeSignup: require('@/assets/ui/buttons/btn-beige-signup.png'),
@@ -99,6 +100,12 @@ export const uiCharacter = {
   egg: require('@/assets/ui/character/gyulsae-egg.png'),
   young: require('@/assets/ui/character/gyulsae-young.png'),
   adult: require('@/assets/ui/character/gyulsae-adult.png'),
+} as const;
+
+export const uiExplore = {
+  oreum: require('@/assets/ui/explore/deco-small-oreum.png'),
+  camellia: require('@/assets/ui/explore/deco-camellia-tree.png'),
+  orchard: require('@/assets/ui/explore/deco-tangerine-blossom-tree.png'),
 } as const;
 
 export type UiIconButtonKind = keyof typeof uiButtons;

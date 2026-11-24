@@ -382,7 +382,7 @@ export function IslandMap({
                 })
               : null}
 
-            {!showFocusUI && !placing && !expanding ? (
+            {!showFocusUI && !placing && !expanding && !isExploring ? (
               <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} onPress={focusOn} />
             ) : null}
           </Reanimated.View>

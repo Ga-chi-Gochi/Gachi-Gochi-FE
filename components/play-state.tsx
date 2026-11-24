@@ -159,7 +159,7 @@ type PlayState = {
   exploreEggReveal: ExploreEggReveal | null;
   canStartExplore: boolean;
   exploreRemainLabel: string;
-  startExplore: (input: { gochiId: string }) => Promise<boolean>;
+  startExplore: (input: { gochiId: string; durationMs?: number }) => Promise<boolean>;
   claimExploreEgg: () => Promise<boolean>;
   acknowledgeExploreEggReveal: () => void;
   markGochiEggDetailSeen: (eggId: string) => Promise<void>;
@@ -630,16 +630,20 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     unlockedRef.current = ['core'];
   }, []);
 
-  const startExplore = useCallback(async (input: { gochiId: string }) => {
+  const startExplore = useCallback(async (input: { gochiId: string; durationMs?: number }) => {
     if (!unlockedRef.current.includes(EXPLORE_FOREST_ZONE)) {
       return false;
     }
+    const durationMs =
+      typeof input.durationMs === 'number' && input.durationMs > 0
+        ? input.durationMs
+        : EXPLORE_DURATION_MS;
     // 서버 주소가 없으면 local — 실패해도 로컬 파견은 진행
     await dispatchExploreTrip({
       gochiId: input.gochiId,
-      durationMs: EXPLORE_DURATION_MS,
+      durationMs,
     });
-    const next = await startExploreTrip(input);
+    const next = await startExploreTrip({ gochiId: input.gochiId, durationMs });
     if (!next) {
       return false;
     }

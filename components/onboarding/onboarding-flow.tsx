@@ -147,7 +147,8 @@ export function OnboardingFlow({ initialName = '', onDone, onEggNotice }: Onboar
   const [index, setIndex] = useState(0);
   const [taps, setTaps] = useState(0);
   const [name, setName] = useState(initialName);
-  const [tilt, setTilt] = useState(0);
+  /** 네이티브 드라이버용 흔들림. state rotate 문자열은 모바일에서 bob과 같이 쓰면 무시된다 */
+  const [eggShake] = useState(() => new Animated.Value(0));
   /** 첫 장: 말풍선 스토리 → 알 두드리기 */
   const [eggPhase, setEggPhase] = useState<'story' | 'poke'>('story');
   const finishing = useRef(false);
@@ -178,9 +179,13 @@ export function OnboardingFlow({ initialName = '', onDone, onEggNotice }: Onboar
   const pokeEgg = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!reduceMotion) {
-      setTilt(8);
-      setTimeout(() => setTilt(-8), 70);
-      setTimeout(() => setTilt(0), 150);
+      eggShake.stopAnimation();
+      eggShake.setValue(0);
+      Animated.sequence([
+        Animated.timing(eggShake, { toValue: 1, duration: 70, useNativeDriver: true }),
+        Animated.timing(eggShake, { toValue: -1, duration: 80, useNativeDriver: true }),
+        Animated.timing(eggShake, { toValue: 0, duration: 90, useNativeDriver: true }),
+      ]).start();
     }
     setTaps((current) => {
       const next = Math.min(TAP_GOAL, current + 1);
@@ -231,7 +236,7 @@ export function OnboardingFlow({ initialName = '', onDone, onEggNotice }: Onboar
           taps={taps}
           contentTop={contentTop}
           padBottom={padBottom}
-          tilt={tilt}
+          shake={eggShake}
           onPoke={pokeEgg}
           onStoryNext={() => setEggPhase('poke')}
           onNext={goName}
@@ -296,7 +301,7 @@ function EggStep({
   taps,
   contentTop,
   padBottom,
-  tilt,
+  shake,
   onPoke,
   onStoryNext,
   onNext,
@@ -306,7 +311,7 @@ function EggStep({
   taps: number;
   contentTop: number;
   padBottom: number;
-  tilt: number;
+  shake: Animated.Value;
   onPoke: () => void;
   onStoryNext: () => void;
   onNext: () => void;
@@ -317,6 +322,7 @@ function EggStep({
   const ready = taps >= TAP_GOAL;
   const stage = Math.round(Math.min(width * 0.56, height * 0.3, scale(260)));
   const eggWidth = stage * 0.5;
+  const rotate = shake.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-10deg', '0deg', '10deg'] });
 
   useEffect(() => {
     if (!active || phase !== 'poke' || reduceMotion) {
@@ -378,7 +384,7 @@ function EggStep({
             accessibilityValue={{ text: `${Math.min(taps, TAP_GOAL)}/${TAP_GOAL}` }}
             onPress={onPoke}>
             <GuideStage size={stage}>
-              <Animated.View style={{ transform: [{ translateY: bob }, { rotate: `${tilt}deg` }] }}>
+              <Animated.View style={{ transform: [{ translateY: bob }, { rotate }] }}>
                 <Image source={EGG} contentFit="contain" style={{ width: eggWidth, height: eggWidth * 1.25, ...pixelImageStyle }} />
               </Animated.View>
             </GuideStage>

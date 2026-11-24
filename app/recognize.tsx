@@ -2,11 +2,13 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
 import { usePlayState } from '@/components/play-state';
+import { gachiUi, galmuri } from '@/constants/gachi-ui';
 import { uiBongging, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
@@ -15,6 +17,9 @@ import { recognitionErrorMessage, recognizeTrash } from '@/lib/bongging-recognit
 import { localFailureVerification, toBonggingVerification, type BonggingVerification } from '@/lib/bongging-reward';
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
+
+/** 와프 확인중 화면 배경 */
+const CREAM_BG = gachiUi.cream;
 
 type Recognition = { verification: BonggingVerification } | { error: unknown };
 type Phase = 'boot' | 'limit' | 'analysis' | 'found' | 'reward' | 'failure';
@@ -68,6 +73,11 @@ export default function RecognizeScreen() {
 
   const retryCapture = useCallback(() => {
     cancelBonggingCertification();
+    // replace('/camera') 하면 카메라가 스택에 쌓여 닫기 때 카메라가 반복된다
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     router.replace('/camera');
   }, [cancelBonggingCertification]);
 
@@ -108,7 +118,6 @@ export default function RecognizeScreen() {
       await markBonggingCertified();
       finishBonggingCertification({ xp: next.xp, growthStacks: next.growthStacks });
       setVerification(next);
-      // 옵션 B: 제미나이가 쓰레기를 찾은 뒤에만 초록 코너
       setPhase('found');
     } catch {
       setAnalysisError('인증 정보를 만들지 못했어요. 다시 시도해 주세요.');
@@ -145,41 +154,48 @@ export default function RecognizeScreen() {
 
   const popupWidth = Math.min(width - scale(40), scale(300));
   const showFoundFrame = phase === 'found' || phase === 'reward';
-  const dimmed = phase === 'reward' || phase === 'failure' || phase === 'limit';
+  /** 와프: 확인중·실패·한도는 크림 배경 */
+  const creamPhase = phase === 'analysis' || phase === 'failure' || phase === 'limit' || phase === 'boot';
+  const statusStyle = creamPhase ? 'dark' : 'light';
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#1A171F' }}>
-      <StatusBar style="light" />
-      {photo ? (
+    <View style={{ flex: 1, backgroundColor: creamPhase ? CREAM_BG : '#1A171F' }}>
+      <StatusBar style={statusStyle} />
+
+      {!creamPhase && photo ? (
         <Image source={photo} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} contentFit="cover" />
       ) : null}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          backgroundColor: dimmed ? 'rgba(26,23,31,0.62)' : 'rgba(26,23,31,0.28)',
-        }}
-      />
+      {!creamPhase ? (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            backgroundColor: phase === 'reward' ? 'rgba(26,23,31,0.55)' : 'rgba(26,23,31,0.28)',
+          }}
+        />
+      ) : null}
 
       <View style={{ flex: 1, paddingTop: insets.top + scale(8), paddingBottom: Math.max(insets.bottom, scale(12)) }}>
-        <View style={{ paddingHorizontal: scale(16), flexDirection: 'row', alignItems: 'center' }}>
-          <AssetImageButton source={uiBongging.close} label="닫기" width={32} height={32} onPress={cancelAnalysis} />
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Image source={uiBongging.tag} style={{ width: scale(88), height: scale(28), ...pixelImageStyle }} contentFit="contain" />
+        {phase === 'analysis' ? null : (
+          <View style={{ paddingHorizontal: scale(16), flexDirection: 'row', alignItems: 'center' }}>
+            <AssetImageButton
+              source={uiBongging.close}
+              label="닫기"
+              width={36}
+              height={40}
+              onPress={phase === 'limit' ? goHome : cancelAnalysis}
+            />
+            <View style={{ flex: 1 }} />
+            <View style={{ width: scale(36) }} />
           </View>
-          <View style={{ width: scale(32) }} />
-        </View>
+        )}
 
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: scale(20) }}>
           {phase === 'analysis' ? (
-            <Image
-              source={uiBongging.loading}
-              style={{ width: scale(180), height: scale(138), ...pixelImageStyle }}
-              contentFit="contain"
-            />
+            <AnalysisLoading onCancel={cancelAnalysis} />
           ) : null}
 
           {showFoundFrame ? (
@@ -199,12 +215,19 @@ export default function RecognizeScreen() {
             </View>
           ) : null}
 
-          {phase === 'failure' && photo && !analysisError ? (
-            <View style={{ width: scale(220), height: scale(220), marginBottom: scale(12), alignItems: 'center', justifyContent: 'center' }}>
-              <Image source={photo} style={{ width: scale(180), height: scale(180), borderRadius: scale(6) }} contentFit="cover" />
+          {phase === 'failure' && photo ? (
+            <View
+              style={{
+                width: scale(240),
+                height: scale(240),
+                marginBottom: scale(16),
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Image source={photo} style={{ width: scale(196), height: scale(196), borderRadius: scale(4) }} contentFit="cover" />
               <Image
                 source={uiBongging.photoFrame}
-                style={{ position: 'absolute', width: scale(220), height: scale(220), ...pixelImageStyle }}
+                style={{ position: 'absolute', width: scale(240), height: scale(240), ...pixelImageStyle }}
                 contentFit="contain"
               />
             </View>
@@ -227,7 +250,7 @@ export default function RecognizeScreen() {
               source={uiBongging.popupFail}
               width={popupWidth * 0.92}
               aspect={0.78}
-              centerLabel={analysisError ? '다시 찍기' : '다시 찍기'}
+              centerLabel="다시 찍기"
               onCenter={retryCapture}
               accessibilityHint={analysisError ?? verification?.message ?? localFailureVerification.message}
             />
@@ -244,6 +267,119 @@ export default function RecognizeScreen() {
           ) : null}
         </View>
       </View>
+    </View>
+  );
+}
+
+/** 와프 p-16: 크림 배경 + 귤새 로딩 + 초록 점 루프 */
+function AnalysisLoading({ onCancel }: { onCancel: () => void }) {
+  const { scale, width } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const artWidth = Math.min(scale(220), width - scale(48));
+  const artHeight = artWidth * (184 / 240);
+  // 에셋의 흰 글씨·고정 점은 크림에서 안 보이므로 캐릭터만 남긴다
+  const clipHeight = artHeight * 0.58;
+
+  return (
+    <View style={{ flex: 1, width: '100%', alignItems: 'center' }}>
+      <View style={{ position: 'absolute', top: 0, left: scale(16) }}>
+        <AssetImageButton source={uiBongging.close} label="닫기" width={36} height={40} onPress={onCancel} />
+      </View>
+
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: scale(12) }}>
+        <View style={{ width: artWidth, height: clipHeight, overflow: 'hidden', alignItems: 'center' }}>
+          <Image
+            source={uiBongging.loading}
+            style={{ width: artWidth, height: artHeight, ...pixelImageStyle }}
+            contentFit="contain"
+          />
+        </View>
+        <OutlinedPixelText>확인하는 중이우다...</OutlinedPixelText>
+        <LoadingDots />
+      </View>
+
+      <GalmuriText size={9} color={gachiUi.inkSoft} center style={{ marginBottom: Math.max(insets.bottom, scale(20)) }}>
+        보통 5초 안에 끝나요
+      </GalmuriText>
+    </View>
+  );
+}
+
+/** 에셋 로딩 문구처럼 밝은 글자 + 검정 테두리 */
+function OutlinedPixelText({ children }: { children: string }) {
+  const { scale } = useResponsive();
+  const fontSize = scale(14);
+  const stroke = 1;
+  const offsets = [
+    [0, -1],
+    [-1, 0],
+    [1, 0],
+    [0, 1],
+  ] as const;
+
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {offsets.map(([x, y]) => (
+        <Text
+          key={`${x},${y}`}
+          style={{
+            position: 'absolute',
+            left: x * stroke,
+            top: y * stroke,
+            color: gachiUi.ink,
+            fontSize,
+            fontFamily: galmuri.size14,
+            textAlign: 'center',
+            includeFontPadding: false,
+          }}>
+          {children}
+        </Text>
+      ))}
+      <Text
+        style={{
+          color: gachiUi.white,
+          fontSize,
+          fontFamily: galmuri.size14,
+          textAlign: 'center',
+          includeFontPadding: false,
+        }}>
+        {children}
+      </Text>
+    </View>
+  );
+}
+
+/** 왼쪽→오른쪽 초록 점이 순회하는 진행 표시 */
+function LoadingDots() {
+  const { scale } = useResponsive();
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActive((current) => (current + 1) % 3);
+    }, 320);
+    return () => clearInterval(timer);
+  }, []);
+
+  const size = scale(10);
+  const gap = scale(8);
+
+  return (
+    <View
+      accessibilityLabel="확인 진행 중"
+      style={{ flexDirection: 'row', alignItems: 'center', gap }}>
+      {[0, 1, 2].map((index) => (
+        <View
+          key={index}
+          style={{
+            width: size,
+            height: size,
+            backgroundColor: index === active ? gachiUi.green : gachiUi.beigeDeep,
+            borderWidth: scale(1.5),
+            borderColor: gachiUi.ink,
+          }}
+        />
+      ))}
     </View>
   );
 }
@@ -276,9 +412,7 @@ function BakedPopup({
   const hitHeight = height * 0.22;
 
   return (
-    <View
-      accessibilityHint={accessibilityHint}
-      style={{ width, height, ...pixelImageStyle }}>
+    <View accessibilityHint={accessibilityHint} style={{ width, height, ...pixelImageStyle }}>
       <Image source={source} style={{ width, height, ...pixelImageStyle }} contentFit="contain" />
       {onLeft && onRight ? (
         <View
@@ -291,18 +425,8 @@ function BakedPopup({
             flexDirection: 'row',
             gap: width * 0.04,
           }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={leftLabel}
-            onPress={onLeft}
-            style={{ flex: 1 }}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={rightLabel}
-            onPress={onRight}
-            style={{ flex: 1 }}
-          />
+          <Pressable accessibilityRole="button" accessibilityLabel={leftLabel} onPress={onLeft} style={{ flex: 1 }} />
+          <Pressable accessibilityRole="button" accessibilityLabel={rightLabel} onPress={onRight} style={{ flex: 1 }} />
         </View>
       ) : null}
       {onCenter ? (

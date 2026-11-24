@@ -198,7 +198,7 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
           })
         : null}
 
-      {!placing && !petOpen && walkPoints.length > 0 ? (
+      {!placing && !petOpen && !isExploring && walkPoints.length > 0 ? (
         <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} walkGrid={walkGrid} onPress={onPet} />
       ) : null}
 

@@ -24,21 +24,12 @@ import {
 } from './gas';
 import {
   CELL,
-  DEEP_SHEET,
   GRASS_CENTER_COLOR,
-  ISLAND_SHAPE,
-  SEA_ANIMATED,
   SEA_PLAIN_COLOR,
   SEA_PLAIN_SPAN,
   SHORE_TUCK,
   SOFT_SHORE_SHEET,
-  RAMP_COLORS,
-  RAMP_PX,
-  RAMP_SHEETS,
-  RAMP_SPARKLE_COLOR,
   REVEAL_MS,
-  SHORE_SHEET,
-  SLICE_PX,
   CRATER_MID,
   CRATER_PIXELS,
   CRATER_SPANS,
@@ -47,25 +38,14 @@ import {
   VOLCANO_ROWS,
   blockZoneFrame,
   buildBlockIsland,
-  buildIslandCells,
   craterCloudPoint,
   islandCenterCol,
-  landShape,
-  revealDelay,
-  shoreHeight,
-  splitReveal,
   magmaColor,
   spills,
   surgeFill,
   volcanoOrigin,
   type BlockIsland,
   type BlockTile,
-  type IslandCell,
-  type RampBlock,
-  type Reveal,
-  type RevealOrigin,
-  type ShoreSlice,
-  type SurfaceGrain,
 } from './shape';
 import {
   MAX_TICK_MS,
@@ -77,11 +57,10 @@ import {
   type Engine,
   type Planner,
 } from './creature';
-import { MOTION_RULES, MOTION_SEQ, type MotionSheet } from './motion';
-import { SPARKLE_ON_FRAMES, SeaClock, waveLag } from './seaClock';
+import { MOTION_RULES, MOTION_SEQ } from './motion';
+import { SeaClock, waveLag } from './seaClock';
 import { keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
 
-import grassLawnUrl from '../assets/grass-lawn.png';
 import sandFillUrl from '../assets/sand-fill.png';
 import eggUrl from '../assets/gyulsae-egg.png';
 import youngUrl from '../assets/gyulsae-young.png';
@@ -91,10 +70,6 @@ const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: tr
   string,
   string
 >;
-
-/** 깊은 바다 그림판 한 장의 세로 줄 수와 가로 최대 칸 수 (64칸 = 2048px, 모바일 GPU 텍스처 한도 안) */
-const SEA_BAND_ROWS = 8;
-const SEA_CHUNK_COLS = 64;
 
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
@@ -139,7 +114,6 @@ const DEFAULT_STATE: GameState = {
   petOpen: false,
   locked: false,
   explore: null,
-  look: 1,
 };
 
 function creatureKey(level: number) {
@@ -177,20 +151,10 @@ export class IslandScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Container;
 
   private sea!: Phaser.GameObjects.Container;
-  /**
-   * 깊은 바다 그림판. 칸마다 시간차가 다른 프레임을 가로로 그리고, 같은 줄을 SEA_BAND_ROWS 번 세로로 복사한다.
-   * 가로는 최대 SEA_CHUNK_COLS 칸씩 나눈다 (GPU 텍스처 크기 한도). 그림판을 쓰는 Image 들을 세로로 쌓아 깐다.
-   */
-  private seaChunks: { tex: Phaser.Textures.CanvasTexture; col0: number; cols: number }[] = [];
-  private seaCol0 = 0;
   private seaClock = new SeaClock();
   private centerCol = 0;
   private water!: Phaser.GameObjects.Container;
   private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
-  private shoreStrips: { img: Phaser.GameObjects.Image; lag: number }[] = [];
-  private sparkles: { x: number; y: number; lag: number }[] = [];
-  private sparkleGfx!: Phaser.GameObjects.Graphics;
-  private waterSeq = 0;
   private quake!: Phaser.GameObjects.Container;
   private rising!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
@@ -274,7 +238,6 @@ export class IslandScene extends Phaser.Scene {
       if (name === 'sea-shore-soft') this.load.spritesheet(`tile-${name}`, url, { frameWidth: 32, frameHeight: 32 });
       else this.load.image(`tile-${name}`, url);
     }
-    this.load.image('grass-lawn', grassLawnUrl);
     this.load.image('sand-fill', sandFillUrl);
     this.load.image('gyulsae-egg', eggUrl);
     this.load.image('gyulsae-young', youngUrl);
@@ -309,12 +272,11 @@ export class IslandScene extends Phaser.Scene {
     this.quake = this.add.container(0, 0);
     // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
     this.water = this.add.container(0, 0);
-    this.sparkleGfx = this.add.graphics();
     this.rising = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
     this.volcano = this.add.container(0, 0);
     this.lava = this.add.graphics();
-    this.quake.add([this.water, this.sparkleGfx, this.rising, this.terrain, this.volcano, this.lava]);
+    this.quake.add([this.water, this.rising, this.terrain, this.volcano, this.lava]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
@@ -331,7 +293,7 @@ export class IslandScene extends Phaser.Scene {
 
     // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
     const main = this.cameras.main;
-    main.setBackgroundColor(SEA_ANIMATED ? '#1C8481' : SEA_PLAIN_COLOR);
+    main.setBackgroundColor(SEA_PLAIN_COLOR);
     this.worldCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.fixedCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     main.ignore([this.world, this.overlay]);
@@ -363,65 +325,14 @@ export class IslandScene extends Phaser.Scene {
     const x1 = Math.ceil((2.2 * this.W) / CELL) * CELL;
     const y1 = Math.ceil((2.2 * this.H) / CELL) * CELL;
     this.centerCol = islandCenterCol(this.W, this.H);
-    this.seaCol0 = x0 / CELL;
-    const old = this.seaChunks.map((c) => c.tex.key);
     this.sea.removeAll(true);
-    this.seaChunks = [];
-    if (!SEA_ANIMATED) {
-      const px0 = Math.floor(x0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
-      const py0 = Math.floor(y0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
-      this.sea.add(this.add.tileSprite(px0, py0, x1 - px0, y1 - py0, 'tile-sea-plain-2x2').setOrigin(0));
-      for (const key of old) this.textures.remove(key);
-      return;
-    }
-    const totalCols = (x1 - x0) / CELL;
-    const bandH = SEA_BAND_ROWS * CELL;
-    for (let c = 0; c < totalCols; c += SEA_CHUNK_COLS) {
-      const cols = Math.min(SEA_CHUNK_COLS, totalCols - c);
-      const tex = this.textures.createCanvas(`sea-${(this.waterSeq += 1)}`, cols * CELL, bandH);
-      if (!tex) continue;
-      this.seaChunks.push({ tex, col0: this.seaCol0 + c, cols });
-      for (let y = y0; y < y1; y += bandH) {
-        this.sea.add(this.add.image(x0 + c * CELL, y, tex.key).setOrigin(0));
-      }
-    }
-    this.paintSea();
-    for (const key of old) this.textures.remove(key);
+    const px0 = Math.floor(x0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
+    const py0 = Math.floor(y0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
+    this.sea.add(this.add.tileSprite(px0, py0, x1 - px0, y1 - py0, 'tile-sea-plain-2x2').setOrigin(0));
   }
 
-  /** 바다 시계가 넘어갈 때마다 깊은 바다를 다시 그린다 (칸마다 시간차). 첫 줄을 그리고 아래로 복사한다 */
-  private paintSea() {
-    const sheet = DEEP_SHEET as MotionSheet;
-    const src = this.textures.get(sheet.body as unknown as string).getSourceImage() as CanvasImageSource;
-    for (const chunk of this.seaChunks) {
-      const ctx = chunk.tex.getContext();
-      ctx.imageSmoothingEnabled = false;
-      for (let i = 0; i < chunk.cols; i += 1) {
-        const f = this.seaClock.shown(waveLag(chunk.col0 + i, this.centerCol));
-        ctx.drawImage(src, (f % sheet.cols) * CELL, Math.floor(f / sheet.cols) * CELL, CELL, CELL, i * CELL, 0, CELL, CELL);
-      }
-      for (let r = 1; r < SEA_BAND_ROWS; r += 1) {
-        ctx.drawImage(chunk.tex.getSourceImage() as CanvasImageSource, 0, 0, chunk.cols * CELL, CELL, 0, r * CELL, chunk.cols * CELL, CELL);
-      }
-      chunk.tex.refresh();
-    }
-  }
-
-  /** 얕은 물 블록·해안 띠의 시트 프레임과 반짝이를 지금 바다 시계에 맞춘다 */
   private stepWater() {
     for (const b of this.rampBlocks) b.img.setFrame(this.seaClock.shown(b.lag));
-    for (const s of this.shoreStrips) {
-      const crop = s.img.getData('crop') as [number, number, number, number];
-      s.img.setFrame(this.seaClock.shown(s.lag));
-      s.img.setCrop(crop[0], crop[1], crop[2], crop[3]);
-    }
-    const g = this.sparkleGfx;
-    g.clear();
-    if (this.sparkles.length === 0) return;
-    g.fillStyle(hex(RAMP_SPARKLE_COLOR), 1);
-    for (const sp of this.sparkles) {
-      if (this.seaClock.shown(sp.lag) < SPARKLE_ON_FRAMES) g.fillRect(sp.x, sp.y, RAMP_PX, RAMP_PX);
-    }
   }
 
   // ------------------------------------------------------------------ 텍스처
@@ -487,8 +398,7 @@ export class IslandScene extends Phaser.Scene {
     send({ type: 'camera', zoom: this.shownZoom(), x: this.cam.x, y: this.cam.y, w: this.W, h: this.H, zones: this.blockZoneBoxes() });
   }
 
-  private blockZoneBoxes(): ZoneBoxes | undefined {
-    if (ISLAND_SHAPE !== 'blocks') return undefined;
+  private blockZoneBoxes(): ZoneBoxes {
     const boxes: ZoneBoxes = {};
     for (const zone of ISLAND_ZONES) {
       const frame = blockZoneFrame(zone.id, this.W, this.H);
@@ -635,7 +545,7 @@ export class IslandScene extends Phaser.Scene {
 
   private applyState(next: GameState, force = false) {
     this.state = next;
-    const tKey = JSON.stringify([this.W, this.H, next.zones, next.growing, next.look]);
+    const tKey = JSON.stringify([this.W, this.H, next.zones, next.growing]);
     if (force || tKey !== this.terrainKey) {
       this.terrainKey = tKey;
       this.buildTerrain();
@@ -653,69 +563,7 @@ export class IslandScene extends Phaser.Scene {
   private buildTerrain() {
     const { W, H } = this;
     const s = this.state;
-    if (ISLAND_SHAPE === 'blocks') {
-      this.buildBlocks(buildBlockIsland(W, H, s.zones, s.growing));
-      this.placeVolcano();
-      return;
-    }
-    const island = buildIslandCells(W, H, s.zones, s.growing, s.look);
-    const { cells, grains } = island;
-
-    // 고정된 타일 칸 + 점들을 캔버스 한 장에 미리 그린다. (RN은 이것들이 전부 View 였다)
-    const tiles = cells.filter((c) => c.riseDelay == null && !(c.kind === 'sand' || c.fine));
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const g of grains) {
-      x0 = Math.min(x0, g.x);
-      y0 = Math.min(y0, g.y);
-      x1 = Math.max(x1, g.x + g.size);
-      y1 = Math.max(y1, g.y + (g.height ?? g.size));
-    }
-    for (const c of tiles) {
-      x0 = Math.min(x0, c.x * CELL);
-      y0 = Math.min(y0, c.y * CELL);
-      x1 = Math.max(x1, (c.x + 1) * CELL + TILE_BLEED);
-      y1 = Math.max(y1, (c.y + 1) * CELL + TILE_BLEED);
-    }
-
-    const oldKey = this.terrain.texture.key;
-    if (Number.isFinite(x0)) {
-      x0 = Math.floor(x0);
-      y0 = Math.floor(y0);
-      const w = Math.max(1, Math.ceil(x1) - x0);
-      const h = Math.max(1, Math.ceil(y1) - y0);
-      const key = `terrain-${(this.terrainSeq += 1)}`;
-      const tex = this.textures.createCanvas(key, w, h);
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        for (const c of tiles) {
-          const img = this.textures.get(c.kind === 'sand' ? 'sand-fill' : 'grass-lawn').getSourceImage() as CanvasImageSource;
-          ctx.drawImage(img, c.x * CELL - x0, c.y * CELL - y0, CELL + TILE_BLEED, CELL + TILE_BLEED);
-        }
-        for (const g of grains) {
-          ctx.fillStyle = g.color;
-          ctx.fillRect(g.x - x0, g.y - y0, g.size, g.height ?? g.size);
-        }
-        tex.refresh();
-        this.terrain.setTexture(key).setPosition(x0, y0).setVisible(true);
-      }
-    } else {
-      this.terrain.setVisible(false);
-    }
-    if (oldKey.startsWith('terrain-')) this.textures.remove(oldKey);
-
-    // 솟아오르는 칸 (RisingCell): 0.45배·투명 → 1배, 380ms, 가운데서 먼 칸일수록 늦게
-    this.tweens.killTweensOf(this.rising.list);
-    this.rising.removeAll(true);
-    for (const c of cells) {
-      if (c.riseDelay == null) continue;
-      this.rising.add(this.risingCell(c));
-    }
-
-    this.buildWater(island);
+    this.buildBlocks(buildBlockIsland(W, H, s.zones, s.growing));
     this.placeVolcano();
   }
 
@@ -785,8 +633,6 @@ export class IslandScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.water.list);
     this.water.removeAll(true);
     this.rampBlocks = [];
-    this.shoreStrips = [];
-    this.sparkles = [];
     const shoreKey = SOFT_SHORE_SHEET.body as unknown as string;
     for (const cell of island.shore) {
       const lag = waveLag(cell.x, this.centerCol);
@@ -814,169 +660,6 @@ export class IslandScene extends Phaser.Scene {
       ease: 'Cubic.Out',
     });
     return box;
-  }
-
-  /**
-   * 얕은 물과 남쪽 해안 (beach-home 의 ShallowRampLayer · ShoreSlices, 'ramp' 방식).
-   * - 블록: 32칸마다 얕은 물 시트 t1~t3 중 하나를 칸 시간차에 맞춰 재생
-   * - 점: 단계 사이 디더링(고정) → 한 장으로 미리 그림
-   * - 해안 띠: 파도 시트를 8px 세로 띠로 잘라 섬 곡선을 따라 붙임
-   * - 섬이 솟는 중(before 있음)에는 사라지는 것·새로 생기는 것을 가운데서 먼 순서로 380ms 동안 흐리게/진하게
-   */
-  private buildWater(island: ReturnType<typeof buildIslandCells>) {
-    this.tweens.killTweensOf(this.water.list);
-    this.water.removeAll(true);
-    this.rampBlocks = [];
-    this.shoreStrips = [];
-    this.sparkles = [];
-    const ramp = island.ramp;
-    const slices = island.slices;
-    if (!ramp && !slices) {
-      this.stepWater();
-      return;
-    }
-    const shape = landShape(this.W, this.H);
-    const origin: RevealOrigin = { cx: shape.cx, cy: shape.cy };
-    const before = island.before;
-
-    const blockImg = (block: RampBlock) => {
-      const sheet = RAMP_SHEETS[block.stage] as MotionSheet;
-      const lag = waveLag(Math.floor(block.x / CELL), this.centerCol);
-      const img = this.add
-        .image(block.x, block.y, sheet.body as unknown as string, this.seaClock.shown(lag))
-        .setOrigin(0)
-        .setDisplaySize(block.size, block.size);
-      this.rampBlocks.push({ img, lag });
-      return img;
-    };
-    const sliceImgs = (slice: ShoreSlice) => {
-      const col = Math.floor(slice.x / CELL);
-      const lag = waveLag(col, this.centerCol);
-      const height = shoreHeight(slice);
-      const cropX = slice.x - col * CELL;
-      const img = this.add
-        .image(col * CELL, slice.top, SHORE_SHEET.body as unknown as string, this.seaClock.shown(lag))
-        .setOrigin(0)
-        .setData('crop', [cropX, 0, SLICE_PX, height]);
-      img.setCrop(cropX, 0, SLICE_PX, height);
-      this.shoreStrips.push({ img, lag });
-      const parts: Phaser.GameObjects.GameObject[] = [img];
-      if (slice.opacity < 1) {
-        // 띠가 짧아지는 곳은 아래 두 줄을 얕은 물 색 점으로 섞는다 (ShoreSliceStrip melt)
-        const melt = this.add.graphics();
-        melt.fillStyle(hex(RAMP_COLORS[0]), 1);
-        for (const y of [height - RAMP_PX * 2, height - RAMP_PX]) {
-          for (let i = 0; i < SLICE_PX / RAMP_PX; i += 1) {
-            if ((i + (slice.x + y) / RAMP_PX) % 2 === 0) melt.fillRect(slice.x + i * RAMP_PX, slice.top + y, RAMP_PX, RAMP_PX);
-          }
-        }
-        parts.push(melt);
-      }
-      return parts;
-    };
-    const dotsImage = (dots: SurfaceGrain[]) => {
-      let x0 = Infinity;
-      let y0 = Infinity;
-      let x1 = -Infinity;
-      let y1 = -Infinity;
-      for (const d of dots) {
-        x0 = Math.min(x0, d.x);
-        y0 = Math.min(y0, d.y);
-        x1 = Math.max(x1, d.x + d.size);
-        y1 = Math.max(y1, d.y + (d.height ?? d.size));
-      }
-      x0 = Math.floor(x0);
-      y0 = Math.floor(y0);
-      const key = `ramp-dots-${(this.waterSeq += 1)}`;
-      const tex = this.textures.createCanvas(key, Math.max(1, Math.ceil(x1) - x0), Math.max(1, Math.ceil(y1) - y0));
-      if (!tex) return dotsGfx(dots);
-      const ctx = tex.getContext();
-      for (const d of dots) {
-        ctx.fillStyle = d.color;
-        ctx.fillRect(d.x - x0, d.y - y0, d.size, d.height ?? d.size);
-      }
-      tex.refresh();
-      const img = this.add.image(x0, y0, key).setOrigin(0);
-      img.once('destroy', () => this.textures.remove(key));
-      return img;
-    };
-    const dotsGfx = (dots: SurfaceGrain[]) => {
-      const g = this.add.graphics();
-      for (const d of dots) {
-        g.fillStyle(hex(d.color), 1);
-        g.fillRect(d.x, d.y, d.size, d.height ?? d.size);
-      }
-      return g;
-    };
-    /** stay 는 그대로, gone 은 흐려지며 사라지고, fresh 는 진해지며 나타난다 (RevealGroup) */
-    const place = <T,>(
-      reveal: Reveal<T>,
-      make: (items: T[]) => Phaser.GameObjects.GameObject[],
-      makeStay: (items: T[]) => Phaser.GameObjects.GameObject[] = make,
-    ) => {
-      this.water.add(makeStay(reveal.stay));
-      for (const [list, appear] of [
-        [reveal.gone, false],
-        [reveal.fresh, true],
-      ] as const) {
-        for (const [delay, items] of list) {
-          const objs = make(items) as unknown as (Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Alpha)[];
-          for (const o of objs) o.setAlpha(appear ? 0 : 1);
-          this.water.add(objs);
-          this.tweens.add({ targets: objs, alpha: appear ? 1 : 0, duration: REVEAL_MS, delay, ease: 'Cubic.Out' });
-        }
-      }
-    };
-
-    if (ramp) {
-      const blocks = splitReveal(
-        ramp.blocks,
-        before?.ramp?.blocks,
-        (b) => `${b.key}:${b.stage}:${b.size}`,
-        (b) => revealDelay(b.x + b.size / 2, b.y + b.size / 2, origin),
-      );
-      place(blocks, (items) => items.map(blockImg));
-      const dots = splitReveal(
-        ramp.dots,
-        before?.ramp?.dots,
-        (d) => `${d.key}:${d.color}:${d.size}`,
-        (d) => revealDelay(d.x + d.size / 2, d.y, origin),
-      );
-      place(
-        dots,
-        (items) => (items.length ? [dotsGfx(items)] : []),
-        (items) => (items.length ? [dotsImage(items)] : []),
-      );
-      // 반짝이는 섬이 솟는 동안에는 쉰다
-      if (!before) this.sparkles = ramp.sparkles.map((sp) => ({ x: sp.x, y: sp.y, lag: ((sp.lag % 32) + 32) % 32 }));
-    }
-    if (slices) {
-      const reveal = splitReveal(
-        slices,
-        before?.slices,
-        (sl) => `${sl.x}:${sl.top}:${sl.opacity}`,
-        (sl) => revealDelay(sl.x + SLICE_PX / 2, sl.top, origin),
-      );
-      place(reveal, (items) => items.flatMap(sliceImgs));
-    }
-    this.stepWater();
-  }
-
-  private risingCell(cell: IslandCell) {
-    const img = this.add
-      .image(cell.x * CELL + CELL / 2, cell.y * CELL + CELL / 2, cell.kind === 'sand' ? 'sand-fill' : 'grass-lawn')
-      .setDisplaySize(CELL, CELL);
-    const base = img.scaleX;
-    img.setScale(base * 0.45).setAlpha(0);
-    this.tweens.add({
-      targets: img,
-      scale: base,
-      alpha: 1,
-      duration: 380,
-      delay: cell.riseDelay ?? 0,
-      ease: 'Cubic.Out',
-    });
-    return img;
   }
 
   // ------------------------------------------------------------------ 분화: 흔들림·용암·화산재
@@ -1403,7 +1086,6 @@ export class IslandScene extends Phaser.Scene {
     this.updateGas(now);
     this.drawCreature(delta);
     if (this.seaClock.tick(delta)) {
-      this.paintSea();
       this.stepWater();
     }
     this.drawExplore(now);

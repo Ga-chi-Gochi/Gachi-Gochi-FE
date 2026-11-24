@@ -2,7 +2,6 @@ import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { VISIBLE_ISLAND_LOOKS, type IslandLook } from '@/components/island/beach-home';
 import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
 import { IslandPlayOverlay } from '@/components/island/island-play-overlay';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
@@ -37,7 +36,6 @@ export default function IslandHomeScreen() {
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
-  const [islandVersion, setIslandVersion] = useState<IslandLook>(1);
   const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
   const openPet = () => {
@@ -52,7 +50,6 @@ export default function IslandHomeScreen() {
     <View style={{ flex: 1 }}>
       {/* 섬 그림은 게임(웹뷰)이 그린다. 확대·이동·귤새 탭도 게임이 받는다. */}
       <IslandGame
-        look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1}
         petOpen={petOpen}
         onTapCreature={openPet}
         onCamera={setCamera}
@@ -69,8 +66,6 @@ export default function IslandHomeScreen() {
           onSettings={() => setSheet({ title: '설정', body: '준비 중' })}
           onShop={() => router.push('/(tabs)/shop' as Href)}
           onCodex={() => router.push('/collection' as Href)}
-          islandVersion={islandVersion}
-          onPickIslandVersion={setIslandVersion}
         />
 
         {hasExploreReward && !exploreEggReveal ? (

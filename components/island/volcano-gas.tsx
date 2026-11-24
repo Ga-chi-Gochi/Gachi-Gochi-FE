@@ -1,8 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, useWindowDimensions, View } from 'react-native';
 
-import { craterCloudPoint } from '@/components/island/beach-home';
-import { useIslandCameraSnapshot } from '@/components/island/island-camera';
+import { craterCloudPoint, useIslandCameraSnapshot } from '@/components/island/volcano-anchor';
 import { LAVA_BOIL_MS, LAVA_FILL_MS, useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { usePlayState } from '@/components/play-state';
 

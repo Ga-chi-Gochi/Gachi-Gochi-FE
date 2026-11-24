@@ -20,7 +20,6 @@ export type GameState = {
   /** 확대·이동을 막는다 (배치 중, 구역 열리는 중) */
   locked: boolean;
   explore: { level: number } | null;
-  look: 1 | 2 | 3;
 };
 
 export type ZoneBox = { left: number; top: number; width: number; height: number };

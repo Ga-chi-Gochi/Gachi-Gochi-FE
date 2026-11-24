@@ -3,8 +3,6 @@ type ImageSource = string;
 
 export type MotionSeqId =
   | 'sea-shore'
-  | 'sea-shallow'
-  | 'sea-deep'
   | 'egg-still'
   | 'egg-hop'
   | 'juvenile-idle'
@@ -63,30 +61,6 @@ export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
       cols: 8,
       rows: 4,
       body: 'sea-shore',
-    },
-  },
-  'sea-shallow': {
-    frameMs: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110],
-    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 32,
-      cols: 8,
-      rows: 4,
-      body: 'sea-shallow',
-    },
-  },
-  'sea-deep': {
-    frameMs: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110],
-    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 32,
-      cols: 8,
-      rows: 4,
-      body: 'sea-deep',
     },
   },
   'egg-still': {
@@ -329,10 +303,3 @@ export const MOTION_RULES = {
   box: '귤새는 size x size 상자 가운데가 (x, y). 아래쪽(y+size/2)이 큰 순서로 위에 그림',
   stages: MOTION_STAGES,
 };
-
-export const SEA_TINT_SHEETS = {
-  deep: { frameCount: 32, cols: 8, rows: 4, body: 'sea-deep-b-soft' },
-  t1: { frameCount: 32, cols: 8, rows: 4, body: 'sea-t1-b-soft' },
-  t2: { frameCount: 32, cols: 8, rows: 4, body: 'sea-t2-b-soft' },
-  t3: { frameCount: 32, cols: 8, rows: 4, body: 'sea-t3-b-soft' },
-} satisfies Record<string, MotionSheet>;

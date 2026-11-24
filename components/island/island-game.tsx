@@ -67,14 +67,13 @@ type GameMessage =
   | { type: 'fps'; frames: number; dur: number; maxGap: number; long: number };
 
 type IslandGameProps = {
-  look: 1 | 2 | 3;
   petOpen: boolean;
   onTapCreature: () => void;
   onCamera: (camera: IslandCameraState) => void;
   onAsh: (ash: IslandAsh) => void;
 };
 
-export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: IslandGameProps) {
+export function IslandGame({ petOpen, onTapCreature, onCamera, onAsh }: IslandGameProps) {
   const play = usePlayState();
   const { token, phase, calm, openFog, finish } = useVolcanoEruption();
   const { factor } = useResponsive();
@@ -128,11 +127,9 @@ export function IslandGame({ look, petOpen, onTapCreature, onCamera, onAsh }: Is
         locked: Boolean(play.zoneUnlockReveal || play.pendingPlaceItemId),
         explore:
           play.exploreForestUnlocked && play.isExploring ? { level: exploreGochiLevel(play.exploringGochiId) } : null,
-        look,
       }),
     [
       factor,
-      look,
       petOpen,
       placed,
       play.exploreForestUnlocked,

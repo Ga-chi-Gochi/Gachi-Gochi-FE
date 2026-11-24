@@ -78,6 +78,8 @@ const stageUrls: Record<IslandStageId, string> = { 1: stage1Url, 2: stage2Url, 3
 
 const animUrls = import.meta.glob('../assets/anims/*/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
+const shopUrls = import.meta.glob('../assets/shop/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+
 // ------------------------------------------------------------------ 카메라 (island-camera.tsx)
 const MIN_ZOOM = 0.62;
 const MAX_ZOOM = 2.8;
@@ -230,6 +232,10 @@ export class IslandScene extends Phaser.Scene {
     for (const [path, url] of Object.entries(volcanoUrls)) {
       const m = /volcano-cell-(\d)-(\d)\.png$/.exec(path);
       if (m) this.load.image(`volcano-${m[1]}-${m[2]}`, url);
+    }
+    for (const [path, url] of Object.entries(shopUrls)) {
+      const m = /shop\/([\w-]+)\.png$/.exec(path);
+      if (m) this.load.image(`shop-${m[1]}`, url);
     }
   }
 
@@ -788,6 +794,10 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private dotSprite(id: string, size: number) {
+    if (this.textures.exists(`shop-${id}`)) {
+      const img = this.add.image(0, 0, `shop-${id}`).setOrigin(0).setDisplaySize(size, size);
+      return { img, w: size, h: size };
+    }
     const rows = PATTERNS[id as keyof typeof PATTERNS];
     if (!rows) return null;
     const cols = rows[0]?.length || 8;

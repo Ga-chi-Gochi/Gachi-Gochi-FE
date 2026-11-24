@@ -4,22 +4,27 @@ import { PixelRatio, Platform, Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
-import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { StoreModeToggle } from '@/components/store-mode-toggle';
+import { ShopItemSprite } from '@/components/store-product-image';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_STAGE_ART, toIslandStage, type IslandStageId } from '@/constants/island-stages';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { CHARACTER_WEAR, wearStageForLevel, type GyulsaeWearStage } from '@/constants/shop-art';
 import type { StorePreviewTab } from '@/constants/store-items';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
-const GYULSAE_ART_PIXELS = 32;
-const GYULSAE_CONTENT_SHIFT = 0.14;
+const GYULSAE_ART_PIXELS = 64;
+const GYULSAE_ART: Record<GyulsaeWearStage, { source: number; shift: number }> = {
+  egg: { source: require('@/assets/pixel/gyulsae-egg.png'), shift: 0.13 },
+  young: { source: require('@/assets/pixel/gyulsae-juvenile.png'), shift: 0.14 },
+  adult: { source: require('@/assets/pixel/gyulsae-adult.png'), shift: 0 },
+};
 const CELL = 32;
 const SEA_BLOCK_CELLS = 8;
 const SEA_COLOR = '#32b5b3';
@@ -84,8 +89,21 @@ function getCrispSize(target: number) {
   return (multiple * GYULSAE_ART_PIXELS) / ratio;
 }
 
-function StoreCharacterView({ size, bottomInset }: { size: number; bottomInset: number }) {
+function StoreCharacterView({
+  size,
+  bottomInset,
+  selectedItemId,
+}: {
+  size: number;
+  bottomInset: number;
+  selectedItemId: string | null;
+}) {
+  const { growthStage } = usePlayState();
   const crispSize = getCrispSize(size);
+  const stage = wearStageForLevel(growthStage.level);
+  const body = GYULSAE_ART[stage];
+  const wear = selectedItemId ? CHARACTER_WEAR[selectedItemId]?.[stage] : undefined;
+  const layer = { position: 'absolute', width: crispSize, height: crispSize, ...crispStyle } as const;
   return (
     <View
       style={{
@@ -94,15 +112,15 @@ function StoreCharacterView({ size, bottomInset }: { size: number; bottomInset: 
         justifyContent: 'center',
         paddingBottom: bottomInset,
       }}>
-      <Image
-        source={require('@/assets/pixel/gyulsae-juvenile.png')}
+      <View
         style={{
           width: crispSize,
           height: crispSize,
-          transform: [{ translateY: -crispSize * GYULSAE_CONTENT_SHIFT }],
-        }}
-        contentFit="fill"
-      />
+          transform: [{ translateY: -crispSize * body.shift }],
+        }}>
+        <Image source={body.source} style={layer} contentFit="fill" />
+        {wear ? <Image source={wear} style={layer} contentFit="fill" /> : null}
+      </View>
     </View>
   );
 }
@@ -259,7 +277,7 @@ function StoreIslandView({
                     gap: DECOR_GAP * u,
                   }}>
                   {sprites.map((sprite, i) => (
-                    <PixelSprite key={`${sprite}-${i}`} id={sprite} size={DECOR_SIZE * u} />
+                    <ShopItemSprite key={`${sprite}-${i}`} id={sprite} size={DECOR_SIZE * u} />
                   ))}
                 </View>
               );
@@ -331,7 +349,7 @@ export function StorePreview({
       {tab === 'island' ? (
         <StoreIslandView width={previewWidth} height={previewHeight} selectedItemId={selectedItemId} />
       ) : (
-        <StoreCharacterView size={scale(200)} bottomInset={scale(34)} />
+        <StoreCharacterView size={scale(200)} bottomInset={scale(34)} selectedItemId={selectedItemId} />
       )}
 
       <View

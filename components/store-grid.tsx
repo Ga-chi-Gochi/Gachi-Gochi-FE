@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { PixelText } from '@/components/pixel/pixel-ui';
-import { StoreProductImage } from '@/components/store-product-image';
+import { StorePriceTag, StoreProductImage } from '@/components/store-product-image';
 import { pixel } from '@/constants/pixel-theme';
 import type { StoreProduct } from '@/constants/store-items';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -65,9 +65,16 @@ export function StoreGrid({
               backgroundColor: selected ? '#FFE2C7' : pixel.white,
             }}>
             <StoreProductImage product={product} size={imageSize} />
-            <PixelText size={12} color={has ? pixel.muted : pixel.ink} center>
-              {has ? '보유 중' : product.priceLabel}
+            <PixelText size={12} center>
+              {product.name}
             </PixelText>
+            {has ? (
+              <PixelText size={11} color={pixel.muted} center>
+                보유 중
+              </PixelText>
+            ) : (
+              <StorePriceTag product={product} size={11} />
+            )}
           </Pressable>
         );
       })}

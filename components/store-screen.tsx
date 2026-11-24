@@ -94,7 +94,7 @@ export function StoreScreen() {
           tab={previewTab}
           modeActive={mode.active}
           onToggleMode={mode.toggle}
-          selectedItemId={selected?.kind === 'item' && selected.tab === 'island' ? selected.id : null}
+          selectedItemId={selected?.kind === 'item' ? selected.id : null}
         />
 
         <View style={{ flexDirection: 'row', gap: scale(6) }}>

@@ -487,7 +487,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       await applyXpGain(GROW_XP);
       return true;
     } finally {
-      // 연출이 시작됐으면 growthReveal/islandExpandBusy 가 계속 잠근다
+      // 성장/확장 연출이 걸렸으면 그쪽 락이 이어 받고, 아니면 연타 락만 푼다
       growInFlightRef.current = false;
       setGrowInFlight(false);
     }
@@ -537,8 +537,9 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     if (pendingExpandZoneRef.current === next.id) {
       pendingExpandZoneRef.current = null;
     }
-    islandExpandBusyRef.current = false;
-    setIslandExpandBusy(false);
+    // busy 는 화산 연출 done(releaseIslandExpandAttempt) 때까지 유지한다.
+    // 예전에 reveal 시점에 풀면, 배포 빌드에서 ash.block 오버레이보다 먼저
+    // 키우기가 다시 열려 연타로 XP·확장이 중복된다.
     setUnlockedZones(nextIds);
     void updateIslandState((record) => ({
       ...record,

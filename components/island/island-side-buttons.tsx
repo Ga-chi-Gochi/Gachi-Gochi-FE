@@ -40,9 +40,11 @@ async function confirmReset(resetLocalData: () => Promise<void>) {
 export function IslandSideButtons({ ashBottom = 0 }: IslandSideButtonsProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { growCreature, resetLocalData, homeExpandSignal, releaseIslandExpandAttempt, growLocked } = usePlayState();
-  const { erupt } = useVolcanoEruption();
+  const { growCreature, resetLocalData, homeExpandSignal, growLocked } = usePlayState();
+  const { erupt, phase } = useVolcanoEruption();
   const lastExpandSignal = useRef(homeExpandSignal);
+  // play-state busy + 화산 phase. 배포에서 ash 메시지보다 버튼이 먼저 살아나는 걸 막는다
+  const locked = growLocked || phase !== 'idle';
 
   // XP 임계 → 예전「섬 넓히기」와 동일하게 erupt 만 호출 (해금은 게임 reveal)
   useEffect(() => {
@@ -53,14 +55,13 @@ export function IslandSideButtons({ ashBottom = 0 }: IslandSideButtonsProps) {
     if (homeExpandSignal <= 0) {
       return;
     }
-    if (!erupt()) {
-      releaseIslandExpandAttempt();
-    }
-  }, [erupt, homeExpandSignal, releaseIslandExpandAttempt]);
+    // 이미 분화 중이면 false. busy 는 done 까지 유지해야 해서 여기서 풀지 않는다
+    erupt();
+  }, [erupt, homeExpandSignal]);
 
   return (
     <View
-      pointerEvents="box-none"
+      pointerEvents={locked ? 'none' : 'box-none'}
       style={{
         position: 'absolute',
         left: scale(12),
@@ -70,8 +71,8 @@ export function IslandSideButtons({ ashBottom = 0 }: IslandSideButtonsProps) {
         zIndex: 45,
         opacity: 1 - ashBottom,
       }}>
-      <PixelButton label="로컬 데이터 초기화" tone="ghost" onPress={() => void confirmReset(resetLocalData)} />
-      <PixelButton label="키우기" tone="green" disabled={growLocked} onPress={() => void growCreature()} />
+      <PixelButton label="로컬 데이터 초기화" tone="ghost" disabled={locked} onPress={() => void confirmReset(resetLocalData)} />
+      <PixelButton label="키우기" tone="green" disabled={locked} onPress={() => void growCreature()} />
     </View>
   );
 }

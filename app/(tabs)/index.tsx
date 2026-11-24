@@ -325,7 +325,10 @@ export default function IslandHomeScreen() {
       ) : null}
       {ash.block ? (
         // 화산재가 화면을 덮는 동안은 버튼도 못 누르게 막는다 (예전 VolcanoGas 가 맨 위에서 터치를 받던 것과 같다)
-        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80 }} />
+        <View
+          pointerEvents="auto"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80, backgroundColor: 'transparent' }}
+        />
       ) : null}
     </View>
     </VolcanoEruptionProvider>

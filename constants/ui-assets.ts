@@ -78,6 +78,14 @@ export const uiBongging = {
   bubbleConfirm: require('@/assets/ui/bongging/bong-bubble-confirm.png'),
   tag: require('@/assets/ui/bongging/bong-tag.png'),
   loading: require('@/assets/ui/bongging/bong-loading.png'),
+  location: require('@/assets/ui/bongging/bong-location.png'),
+  limitBadge: require('@/assets/ui/bongging/bong-limit.png'),
+  photoFrame: require('@/assets/ui/bongging/bong-photo-frame.png'),
+  photoFrameSmall: require('@/assets/ui/bongging/bong-photo-frame-small.png'),
+  popupFail: require('@/assets/ui/bongging/bong-popup-fail.png'),
+  popupLimit: require('@/assets/ui/bongging/bong-popup-limit.png'),
+  popupReward: require('@/assets/ui/bongging/bong-popup-reward.png'),
+  toastClean: require('@/assets/ui/bongging/bong-toast-clean.png'),
 } as const;
 
 export const uiActions = {

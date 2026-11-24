@@ -1,27 +1,24 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnalysisSkeleton } from '@/components/analysis-skeleton';
-import { FigButton } from '@/components/fig-button';
+import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
 import { usePlayState } from '@/components/play-state';
-import { RewardFanfare } from '@/components/reward-fanfare';
-import { art } from '@/constants/art';
-import { palette } from '@/constants/palette';
+import { uiBongging, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
+import { isBonggingDailyLimitReached, markBonggingCertified } from '@/lib/bongging-daily';
 import { recognitionErrorMessage, recognizeTrash } from '@/lib/bongging-recognition';
-import { countTrash, localFailureVerification, toBonggingVerification, type BonggingVerification } from '@/lib/bongging-reward';
+import { localFailureVerification, toBonggingVerification, type BonggingVerification } from '@/lib/bongging-reward';
+
+const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
 type Recognition = { verification: BonggingVerification } | { error: unknown };
+type Phase = 'boot' | 'limit' | 'analysis' | 'found' | 'reward' | 'failure';
 
-// 실패도 값으로 돌려준다. 분석 화면 애니메이션이 끝날 때까지 기다렸다 꺼내 쓰기 때문이다.
 function startRecognition(imageUri: string): Promise<Recognition> {
   return recognizeTrash(imageUri).then(
     (items) => ({ verification: toBonggingVerification(items) }),
@@ -29,56 +26,73 @@ function startRecognition(imageUri: string): Promise<Recognition> {
   );
 }
 
+function toImageUri(uri: string) {
+  if (
+    uri.startsWith('file:') ||
+    uri.startsWith('content:') ||
+    uri.startsWith('ph:') ||
+    uri.startsWith('assets-library:') ||
+    uri.startsWith('blob:') ||
+    uri.startsWith('data:') ||
+    uri.startsWith('http')
+  ) {
+    return uri;
+  }
+  return `data:image/jpeg;base64,${uri}`;
+}
+
+/**
+ * 촬영 후 한 흐름: 한도 → 분석 로딩 → (제미나이 성공 시 초록 found) → 보상/실패 팝업
+ */
 export default function RecognizeScreen() {
-  const { scale, height } = useResponsive();
+  const { scale, width } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { certificationPhotoUri, xp, growthStacks, pendingCertification, finishBonggingCertification, cancelBonggingCertification } = usePlayState();
+  const { pendingCertification, finishBonggingCertification, cancelBonggingCertification } = usePlayState();
   const pendingImageUri = pendingCertification?.imageUri ?? null;
-  // 분석 중인 사진을 기억해 둔다. 인증에 실패해도, 닫으면서 대기 사진이 지워져도 방금 찍은 사진이 보인다.
-  const [photoUri, setPhotoUri] = useState(pendingImageUri ?? certificationPhotoUri);
+  const [photoUri, setPhotoUri] = useState(pendingImageUri);
   if (pendingImageUri && pendingImageUri !== photoUri) {
     setPhotoUri(pendingImageUri);
   }
-  const photo = photoUri ? { uri: toImageUri(photoUri) } : art.trash;
-  const [phase, setPhase] = useState<'analysis' | 'fanfare' | 'result' | 'failure'>('analysis');
+  const photo = photoUri ? { uri: toImageUri(photoUri) } : null;
+
+  const [phase, setPhase] = useState<Phase>('boot');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [verification, setVerification] = useState<BonggingVerification | null>(null);
   const recognition = useRef<Promise<Recognition> | null>(null);
-  const result = verification ?? localFailureVerification;
+  const ranRef = useRef(false);
 
-  // 화면에 들어오자마자 분석을 시작해서, 애니메이션이 도는 동안 판별 응답을 기다린다.
-  useEffect(() => {
-    if (pendingImageUri && !recognition.current) {
-      recognition.current = startRecognition(pendingImageUri);
-    }
-  }, [pendingImageUri]);
-
-  const [photoHeight, setPhotoHeight] = useState(0);
-  const finishFanfare = useCallback(() => setPhase('result'), []);
   const cancelAnalysis = useCallback(() => {
     cancelBonggingCertification();
     router.back();
   }, [cancelBonggingCertification]);
+
   const retryCapture = useCallback(() => {
     cancelBonggingCertification();
     router.replace('/camera');
   }, [cancelBonggingCertification]);
-  const completeAnalysis = useCallback(async () => {
+
+  const goHome = useCallback(() => {
+    router.replace('/(tabs)');
+  }, []);
+
+  const runAnalysis = useCallback(async () => {
     if (!pendingCertification) {
       setPhase('failure');
       return;
     }
+    setPhase('analysis');
     setAnalysisError(null);
     recognition.current ??= startRecognition(pendingCertification.imageUri);
     const outcome = await recognition.current;
     if ('error' in outcome) {
-      // 다시 시도하면 새로 분석하도록 비운다.
       recognition.current = null;
       setAnalysisError(recognitionErrorMessage(outcome.error));
+      setPhase('failure');
       return;
     }
-    const verification = outcome.verification;
-    if (verification.status === 'failure') {
+    const next = outcome.verification;
+    if (next.status === 'failure') {
+      setVerification(next);
       setPhase('failure');
       return;
     }
@@ -91,162 +105,220 @@ export default function RecognizeScreen() {
         locationSource: pendingCertification.locationSource,
       });
       await submitBonggingCertification(submission);
-      finishBonggingCertification({ xp: verification.xp, growthStacks: verification.growthStacks });
-      setVerification(verification);
-      setAnalysisError(null);
-      setPhase('fanfare');
+      await markBonggingCertified();
+      finishBonggingCertification({ xp: next.xp, growthStacks: next.growthStacks });
+      setVerification(next);
+      // 옵션 B: 제미나이가 쓰레기를 찾은 뒤에만 초록 코너
+      setPhase('found');
     } catch {
       setAnalysisError('인증 정보를 만들지 못했어요. 다시 시도해 주세요.');
+      setPhase('failure');
     }
   }, [finishBonggingCertification, pendingCertification]);
-  const toXp = Math.max(xp, result.xp);
-  const toGrowth = Math.max(growthStacks, result.growthStacks);
-  const photoBudget = photoHeight || Math.max(0, height - insets.top - insets.bottom - scale(320));
-  const frameHeight = Math.min(scale(210), Math.max(scale(96), photoBudget - scale(96)));
+
+  useEffect(() => {
+    if (ranRef.current) {
+      return;
+    }
+    ranRef.current = true;
+    void (async () => {
+      if (!pendingImageUri) {
+        setPhase('failure');
+        return;
+      }
+      if (await isBonggingDailyLimitReached()) {
+        setPhase('limit');
+        return;
+      }
+      recognition.current = startRecognition(pendingImageUri);
+      await runAnalysis();
+    })();
+  }, [pendingImageUri, runAnalysis]);
+
+  useEffect(() => {
+    if (phase !== 'found') {
+      return;
+    }
+    const timer = setTimeout(() => setPhase('reward'), 850);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  const popupWidth = Math.min(width - scale(40), scale(300));
+  const showFoundFrame = phase === 'found' || phase === 'reward';
+  const dimmed = phase === 'reward' || phase === 'failure' || phase === 'limit';
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.ink }}>
-      <StatusBar style={phase === 'analysis' ? 'dark' : 'light'} />
-      <Image source={photo} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} contentFit="cover" />
-      <LinearGradient
-        colors={['rgba(26,23,31,0.55)', 'rgba(26,23,31,0.05)', 'rgba(26,23,31,0)']}
-        locations={[0, 0.42, 1]}
-        style={{ position: 'absolute', top: 0, right: 0, left: 0, height: insets.top + scale(168), pointerEvents: 'none' }}
-      />
-      {phase === 'analysis' ? (
-        <AnalysisSkeleton error={analysisError} onCancel={cancelAnalysis} onDone={() => void completeAnalysis()} onRetry={() => void completeAnalysis()} />
-      ) : phase === 'failure' ? (
-        <AnalysisFailure message={localFailureVerification.message} onClose={cancelAnalysis} onRetry={retryCapture} />
-      ) : phase === 'fanfare' ? (
-        <RewardFanfare fromXp={toXp - result.xp} toXp={toXp} fromGrowth={toGrowth - result.growthStacks} toGrowth={toGrowth} onDone={finishFanfare} />
-      ) : (
-      <Animated.View entering={FadeIn.duration(280)} style={{ flex: 1, paddingTop: insets.top }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: scale(16), marginTop: scale(8) }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="닫기"
-            onPress={() => router.back()}
-            style={{ width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
-          </Pressable>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(12), paddingVertical: scale(8) }}>
-              <MaterialIcons name="delete-outline" size={scale(16)} color={palette.ink} />
-              <Text style={{ color: palette.ink, fontWeight: '800' }}>인증 결과</Text>
-            </View>
-          </View>
-          <View style={{ width: scale(42) }} />
-        </View>
-        <View
-          onLayout={(event) => setPhotoHeight(event.nativeEvent.layout.height)}
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: scale(24), gap: scale(10), overflow: 'hidden' }}>
-          {result.items.map((item, index) => (
-            <View key={item.name} style={{ backgroundColor: index === 0 ? palette.canola : palette.white, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(6), flexDirection: 'row', gap: scale(4), alignItems: 'center' }}>
-              <MaterialIcons name="check" size={scale(16)} color={palette.ink} />
-              <Text style={{ fontWeight: '800', color: palette.ink, fontSize: scale(12) }}>
-                {item.name}
-                {item.count > 1 ? ` ${item.count}개` : ''} · {item.confidence}%
-              </Text>
-            </View>
-          ))}
-          <View style={{ width: frameHeight * 0.9, height: frameHeight, borderWidth: 2, borderColor: palette.canola, borderRadius: scale(16) }} />
-        </View>
-        <Animated.View
-          entering={FadeInDown.duration(420)}
-          style={{
-            backgroundColor: palette.white,
-            borderTopLeftRadius: scale(28),
-            borderTopRightRadius: scale(28),
-            paddingTop: scale(18),
-            paddingHorizontal: scale(20),
-            paddingBottom: Math.max(insets.bottom, scale(12)) + scale(8),
-            gap: scale(12),
-          }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(8) }}>
-            <Text style={{ flex: 1, fontSize: scale(22), fontWeight: '800', color: palette.ink, lineHeight: scale(28) }}>쓰레기 {countTrash(result.items)}개를 인증했어요</Text>
-            <View style={{ backgroundColor: palette.leafSoft, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4), marginTop: scale(2) }}>
-              <Text style={{ color: palette.leafDeep, fontWeight: '800', fontSize: scale(12) }}>성공</Text>
-            </View>
-          </View>
-          <Text style={{ color: palette.muted, fontSize: scale(14), lineHeight: scale(20) }}>{result.message}</Text>
-          <View style={{ flexDirection: 'row', gap: scale(8) }}>
-            <RewardPill label="경험치" value={result.xp} backgroundColor={palette.canolaSoft} />
-            <RewardPill label="섬 성장" value={result.growthStacks} backgroundColor={palette.leafSoft} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: scale(10) }}>
-            <FigButton label="하나 더 줍기" tone="white" onPress={() => router.replace('/camera')} />
-            <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
-          </View>
-        </Animated.View>
-      </Animated.View>
-      )}
-    </View>
-  );
-}
-
-function AnalysisFailure({ message, onClose, onRetry }: { message: string; onClose: () => void; onRetry: () => void }) {
-  const { scale } = useResponsive();
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={{ flex: 1, paddingTop: insets.top }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: scale(16), marginTop: scale(8) }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="닫기"
-          onPress={onClose}
-          style={{ width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
-          <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
-        </Pressable>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(6), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(12), paddingVertical: scale(8) }}>
-            <MaterialIcons name="delete-outline" size={scale(16)} color={palette.ink} />
-            <Text style={{ color: palette.ink, fontWeight: '800' }}>인증 결과</Text>
-          </View>
-        </View>
-        <View style={{ width: scale(42) }} />
-      </View>
-      <View style={{ flex: 1 }} />
+    <View style={{ flex: 1, backgroundColor: '#1A171F' }}>
+      <StatusBar style="light" />
+      {photo ? (
+        <Image source={photo} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} contentFit="cover" />
+      ) : null}
       <View
         style={{
-          backgroundColor: palette.white,
-          borderTopLeftRadius: scale(28),
-          borderTopRightRadius: scale(28),
-          paddingTop: scale(18),
-          paddingHorizontal: scale(20),
-          paddingBottom: Math.max(insets.bottom, scale(12)) + scale(8),
-          gap: scale(12),
-        }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: scale(8) }}>
-          <Text style={{ flex: 1, fontSize: scale(22), fontWeight: '800', color: palette.ink, lineHeight: scale(28) }}>쓰레기를 확인하지 못했어요</Text>
-          <View style={{ backgroundColor: palette.blush, borderRadius: scale(999), paddingHorizontal: scale(10), paddingVertical: scale(4), marginTop: scale(2) }}>
-            <Text style={{ color: palette.tangerineDeep, fontWeight: '800', fontSize: scale(12) }}>실패</Text>
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: dimmed ? 'rgba(26,23,31,0.62)' : 'rgba(26,23,31,0.28)',
+        }}
+      />
+
+      <View style={{ flex: 1, paddingTop: insets.top + scale(8), paddingBottom: Math.max(insets.bottom, scale(12)) }}>
+        <View style={{ paddingHorizontal: scale(16), flexDirection: 'row', alignItems: 'center' }}>
+          <AssetImageButton source={uiBongging.close} label="닫기" width={32} height={32} onPress={cancelAnalysis} />
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Image source={uiBongging.tag} style={{ width: scale(88), height: scale(28), ...pixelImageStyle }} contentFit="contain" />
           </View>
+          <View style={{ width: scale(32) }} />
         </View>
-        <Text style={{ color: palette.muted, fontSize: scale(14), lineHeight: scale(20) }}>{message}</Text>
-        <View style={{ flexDirection: 'row', gap: scale(10) }}>
-          <FigButton label="닫기" tone="white" onPress={onClose} />
-          <FigButton label="다시 찍기" onPress={onRetry} />
+
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: scale(20) }}>
+          {phase === 'analysis' ? (
+            <Image
+              source={uiBongging.loading}
+              style={{ width: scale(180), height: scale(138), ...pixelImageStyle }}
+              contentFit="contain"
+            />
+          ) : null}
+
+          {showFoundFrame ? (
+            <View style={{ width: scale(260), height: scale(260), alignItems: 'center', justifyContent: 'center' }}>
+              {photo ? (
+                <Image
+                  source={photo}
+                  style={{ width: scale(220), height: scale(220), borderRadius: scale(6) }}
+                  contentFit="cover"
+                />
+              ) : null}
+              <Image
+                source={uiCamera.cornersFound}
+                style={{ position: 'absolute', width: scale(260), height: scale(260), ...pixelImageStyle }}
+                contentFit="contain"
+              />
+            </View>
+          ) : null}
+
+          {phase === 'failure' && photo && !analysisError ? (
+            <View style={{ width: scale(220), height: scale(220), marginBottom: scale(12), alignItems: 'center', justifyContent: 'center' }}>
+              <Image source={photo} style={{ width: scale(180), height: scale(180), borderRadius: scale(6) }} contentFit="cover" />
+              <Image
+                source={uiBongging.photoFrame}
+                style={{ position: 'absolute', width: scale(220), height: scale(220), ...pixelImageStyle }}
+                contentFit="contain"
+              />
+            </View>
+          ) : null}
+
+          {phase === 'reward' ? (
+            <BakedPopup
+              source={uiBongging.popupReward}
+              width={popupWidth}
+              aspect={316 / 352}
+              leftLabel="한 번 더"
+              rightLabel="섬 보러 가기"
+              onLeft={retryCapture}
+              onRight={goHome}
+            />
+          ) : null}
+
+          {phase === 'failure' ? (
+            <BakedPopup
+              source={uiBongging.popupFail}
+              width={popupWidth * 0.92}
+              aspect={0.78}
+              centerLabel={analysisError ? '다시 찍기' : '다시 찍기'}
+              onCenter={retryCapture}
+              accessibilityHint={analysisError ?? verification?.message ?? localFailureVerification.message}
+            />
+          ) : null}
+
+          {phase === 'limit' ? (
+            <BakedPopup
+              source={uiBongging.popupLimit}
+              width={popupWidth * 0.92}
+              aspect={0.72}
+              centerLabel="알았수다"
+              onCenter={goHome}
+            />
+          ) : null}
         </View>
       </View>
     </View>
   );
 }
 
-function RewardPill({ label, value, backgroundColor }: { label: string; value: number; backgroundColor: string }) {
-  const { scale } = useResponsive();
+function BakedPopup({
+  source,
+  width,
+  aspect,
+  leftLabel,
+  rightLabel,
+  centerLabel,
+  onLeft,
+  onRight,
+  onCenter,
+  accessibilityHint,
+}: {
+  source: number;
+  width: number;
+  aspect: number;
+  leftLabel?: string;
+  rightLabel?: string;
+  centerLabel?: string;
+  onLeft?: () => void;
+  onRight?: () => void;
+  onCenter?: () => void;
+  accessibilityHint?: string;
+}) {
+  const height = width * aspect;
+  const hitTop = height * 0.72;
+  const hitHeight = height * 0.22;
 
   return (
-    <View style={{ flex: 1, backgroundColor, borderRadius: scale(16), padding: scale(12) }}>
-      <Text style={{ color: palette.muted, fontSize: scale(12), fontWeight: '700' }}>{label}</Text>
-      <Text style={{ color: palette.ink, fontSize: scale(22), fontWeight: '800' }}>+{value}</Text>
+    <View
+      accessibilityHint={accessibilityHint}
+      style={{ width, height, ...pixelImageStyle }}>
+      <Image source={source} style={{ width, height, ...pixelImageStyle }} contentFit="contain" />
+      {onLeft && onRight ? (
+        <View
+          style={{
+            position: 'absolute',
+            left: width * 0.08,
+            right: width * 0.08,
+            top: hitTop,
+            height: hitHeight,
+            flexDirection: 'row',
+            gap: width * 0.04,
+          }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={leftLabel}
+            onPress={onLeft}
+            style={{ flex: 1 }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={rightLabel}
+            onPress={onRight}
+            style={{ flex: 1 }}
+          />
+        </View>
+      ) : null}
+      {onCenter ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={centerLabel}
+          onPress={onCenter}
+          style={{
+            position: 'absolute',
+            left: width * 0.18,
+            right: width * 0.18,
+            top: hitTop,
+            height: hitHeight,
+          }}
+        />
+      ) : null}
     </View>
   );
-}
-
-function toImageUri(uri: string) {
-  if (uri.startsWith('file:') || uri.startsWith('content:') || uri.startsWith('ph:') || uri.startsWith('assets-library:') || uri.startsWith('blob:') || uri.startsWith('data:') || uri.startsWith('http')) {
-    return uri;
-  }
-  return `data:image/jpeg;base64,${uri}`;
 }

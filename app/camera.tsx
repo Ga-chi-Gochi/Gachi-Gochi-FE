@@ -9,14 +9,17 @@ import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
 import { type SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
-import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
+import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
+import { gachiUi } from '@/constants/gachi-ui';
 import { palette } from '@/constants/palette';
 import { uiButtons, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
+import { BONGGING_DAILY_LIMIT, isBonggingDailyLimitReached, readBonggingDailyCount } from '@/lib/bongging-daily';
 import { confirmOfflineCertification } from '@/lib/confirm-offline-certification';
 import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
 
@@ -25,7 +28,7 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 type ViewNode = ComponentRef<typeof View>;
 
 export default function CameraScreen() {
-  const { scale, height } = useResponsive();
+  const { scale, width, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { stageBonggingCertification } = usePlayState();
   const tutorial = useTutorial();
@@ -47,6 +50,8 @@ export default function CameraScreen() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [stageHeight, setStageHeight] = useState(0);
+  const [dailyCount, setDailyCount] = useState(0);
+  const [limitReached, setLimitReached] = useState(false);
 
   const granted = permission?.granted === true;
   const previewFacing = isFocused && granted && !holdCamera ? facing : null;
@@ -73,7 +78,14 @@ export default function CameraScreen() {
 
   // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
   useFocusEffect(
-    useCallback(() => () => leaveScreen('bongging'), [leaveScreen]),
+    useCallback(() => {
+      void (async () => {
+        const count = await readBonggingDailyCount();
+        setDailyCount(count);
+        setLimitReached(count >= BONGGING_DAILY_LIMIT);
+      })();
+      return () => leaveScreen('bongging');
+    }, [leaveScreen]),
   );
 
   /** 닫기 버튼을 실제로 재서, 어림잡은 좌표가 아니라 버튼 정중앙에 구멍을 맞춘다 */
@@ -179,6 +191,19 @@ export default function CameraScreen() {
   }
 
   async function certifyPhoto(photo: { uri: string; exif?: unknown; fileName?: string | null }) {
+    if (await isBonggingDailyLimitReached()) {
+      setLimitReached(true);
+      stageBonggingCertification({
+        imageUri: photo.uri,
+        fileName: photo.fileName,
+        latitude: null,
+        longitude: null,
+        locationSource: 'none',
+      });
+      router.push('/recognize');
+      return;
+    }
+
     setNotice('위치를 확인하고 있어요');
     try {
       const location = await resolveBonggingLocation(photo.exif);
@@ -214,11 +239,15 @@ export default function CameraScreen() {
   }
 
   const shutterDisabled = granted && (!ready || busy);
-  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(280));
-  const finder = Math.min(scale(250), Math.max(scale(120), stageBudget - scale(16)));
+  // 와프(393×852) 기준: 뷰파인더 ≈ 280, 버블 ≈ 340, 하단 바 ≈ 112 + safe
+  const sidePad = scale(16);
+  const bubbleWidth = Math.min(scale(340), width - sidePad * 2);
+  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(320));
+  const finder = Math.min(scale(280), Math.max(scale(200), Math.min(width - sidePad * 2, stageBudget - scale(8))));
+  const bottomBarPad = Math.max(insets.bottom, scale(10));
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.ink }}>
+    <View style={{ flex: 1, backgroundColor: '#2C2926' }}>
       {isFocused ? <StatusBar style="light" /> : null}
       {isFocused && granted && !holdCamera ? (
         <CameraView
@@ -233,39 +262,51 @@ export default function CameraScreen() {
           }}
         />
       ) : null}
+      {/* 상단만 살짝 어둡게 — 하단은 크림 컨트롤 바가 받친다 */}
       <LinearGradient
-        colors={['rgba(26,23,31,0.62)', 'rgba(26,23,31,0)']}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + scale(148), pointerEvents: 'none' }}
-      />
-      <LinearGradient
-        colors={['rgba(26,23,31,0)', 'rgba(26,23,31,0.28)', 'rgba(26,23,31,0.82)']}
-        locations={[0, 0.35, 1]}
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: scale(210) + insets.bottom, pointerEvents: 'none' }}
+        colors={['rgba(44,41,38,0.72)', 'rgba(44,41,38,0)']}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + scale(120), pointerEvents: 'none' }}
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        <View style={{ marginTop: scale(8), minHeight: scale(46), justifyContent: 'center' }}>
+        {/* 헤더: ✕ | 봉그깅 태그 | 설정 */}
+        <View style={{ marginTop: scale(6), height: scale(40), justifyContent: 'center' }}>
           <View
             ref={closeRef}
             collapsable={false}
             onLayout={guided ? measureClose : undefined}
-            style={{ position: 'absolute', left: Math.max(insets.left, scale(12)), top: '50%', marginTop: -scale(16) }}>
-            <AssetImageButton source={uiCamera.close} label="닫기" width={32} height={32} onPress={() => router.back()} />
+            style={{ position: 'absolute', left: Math.max(insets.left, sidePad), top: '50%', marginTop: -scale(18) }}>
+            <AssetImageButton source={uiCamera.close} label="닫기" width={36} height={40} onPress={() => router.back()} />
+          </View>
+          <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+            <Image source={uiCamera.tagPickup} style={{ width: scale(132), height: scale(24), ...pixelImageStyle }} contentFit="contain" />
           </View>
           {guided ? null : (
-            <View style={{ position: 'absolute', right: Math.max(insets.right, scale(12)), top: '50%', marginTop: -scale(21) }}>
-              <FeatureHelpButton onPress={() => setHelpOpen(true)} />
+            <View style={{ position: 'absolute', right: Math.max(insets.right, sidePad), top: '50%', marginTop: -scale(18) }}>
+              <AssetImageButton source={uiCamera.settings} label="도움말" width={36} height={40} onPress={() => setHelpOpen(true)} />
             </View>
           )}
-          <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <Image source={uiCamera.tagPickup} style={{ width: scale(100), height: scale(28), ...pixelImageStyle }} contentFit="contain" />
-          </View>
         </View>
-        <View style={{ marginTop: scale(12), alignItems: 'center' }}>
-          <Image source={uiCamera.bubbleGuide} style={{ width: scale(220), height: scale(36), ...pixelImageStyle }} contentFit="contain" />
+
+        {/* 가이드 말풍선 */}
+        <View style={{ marginTop: scale(10), alignItems: 'center', paddingHorizontal: sidePad }}>
+          <Image
+            source={uiCamera.bubbleGuide}
+            style={{ width: bubbleWidth, height: bubbleWidth * (52 / 380), ...pixelImageStyle }}
+            contentFit="contain"
+          />
         </View>
+
+        {/* 뷰파인더 */}
         <View
           onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}
-          style={{ flex: 1, alignItems: 'center', justifyContent: granted || guided ? 'center' : 'flex-start', paddingTop: granted || guided ? 0 : scale(16), paddingHorizontal: scale(24), overflow: 'hidden' }}>
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: granted || guided ? 'center' : 'flex-start',
+            paddingTop: granted || guided ? 0 : scale(16),
+            paddingHorizontal: sidePad,
+            overflow: 'hidden',
+          }}>
           {granted || guided ? (
             <View style={{ width: finder, height: finder, alignItems: 'center', justifyContent: 'center' }}>
               <Image
@@ -296,22 +337,56 @@ export default function CameraScreen() {
             </View>
           )}
         </View>
-        <View style={{ alignItems: 'center', marginBottom: scale(8) }}>
+
+        {/* 위치 → 오늘 한도 (와프: 파인더 아래) */}
+        <View style={{ alignItems: 'center', gap: scale(8), paddingVertical: scale(10) }}>
           <Image
             source={notice ? uiCamera.locationWait : uiCamera.location}
-            style={{ width: scale(180), height: scale(24), ...pixelImageStyle }}
+            style={{
+              width: notice ? scale(198) : scale(170),
+              height: scale(32),
+              ...pixelImageStyle,
+            }}
             contentFit="contain"
           />
           {notice ? (
-            <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(12), marginTop: scale(4) }}>{notice}</Text>
+            <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(12) }}>{notice}</Text>
+          ) : null}
+          {!guided ? (
+            <View
+              style={{
+                paddingHorizontal: scale(14),
+                paddingVertical: scale(5),
+                borderRadius: scale(10),
+                backgroundColor: gachiUi.cream,
+                borderWidth: scale(2),
+                borderColor: gachiUi.ink,
+              }}>
+              <GalmuriText size={8} bold color={limitReached ? gachiUi.greenDeep : gachiUi.ink} center>
+                {`오늘 봉그깅 ${Math.min(dailyCount, BONGGING_DAILY_LIMIT)}/${BONGGING_DAILY_LIMIT}`}
+              </GalmuriText>
+            </View>
           ) : null}
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: Math.max(insets.bottom, scale(12)) }}>
+
+        {/* 하단 크림 컨트롤 바: 갤러리 | 셔터 | 전환 */}
+        <View
+          style={{
+            backgroundColor: gachiUi.cream,
+            borderTopWidth: scale(3),
+            borderTopColor: gachiUi.ink,
+            paddingTop: scale(14),
+            paddingBottom: bottomBarPad,
+            paddingHorizontal: scale(28),
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
           <AssetImageButton
             source={uiCamera.gallery}
             label="갤러리에서 선택"
-            width={40}
-            height={40}
+            width={44}
+            height={48}
             disabled={busy}
             onPress={() => {
               void pickFromGallery();
@@ -325,14 +400,18 @@ export default function CameraScreen() {
             onPress={() => {
               void shoot();
             }}
-            style={{ opacity: shutterDisabled ? 0.5 : 1 }}>
-            <Image source={uiCamera.shutter} style={{ width: scale(72), height: scale(72), ...pixelImageStyle }} contentFit="contain" />
+            style={{ opacity: shutterDisabled ? 0.5 : 1, marginTop: scale(-6) }}>
+            <Image
+              source={uiCamera.shutter}
+              style={{ width: scale(72), height: scale(78), ...pixelImageStyle }}
+              contentFit="contain"
+            />
           </Pressable>
           <AssetImageButton
             source={uiCamera.flip}
             label="카메라 전환"
-            width={40}
-            height={40}
+            width={44}
+            height={48}
             disabled={!granted || busy}
             onPress={flipCamera}
           />

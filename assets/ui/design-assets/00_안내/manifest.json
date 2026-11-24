@@ -1,0 +1,3781 @@
+{
+ "version": 1,
+ "generated": "2026-11-15",
+ "scale": "@2x = 1칸 2px (앱 기본). 원본 @8x는 99_원본",
+ "fileNamesUnique": true,
+ "assets": [
+  {
+   "id": "action-plogging-off",
+   "name": "봉그깅",
+   "category": "08_가치인증",
+   "file": "action-plogging-off@2x.png",
+   "size": [
+    58,
+    58
+   ],
+   "sizePt": [
+    116,
+    116
+   ]
+  },
+  {
+   "id": "action-plogging-on",
+   "name": "봉그깅 (선택)",
+   "category": "08_가치인증",
+   "file": "action-plogging-on@2x.png",
+   "size": [
+    58,
+    58
+   ],
+   "sizePt": [
+    116,
+    116
+   ]
+  },
+  {
+   "id": "action-walk-off",
+   "name": "걷기",
+   "category": "08_가치인증",
+   "file": "action-walk-off@2x.png",
+   "size": [
+    58,
+    58
+   ],
+   "sizePt": [
+    116,
+    116
+   ]
+  },
+  {
+   "id": "action-walk-on",
+   "name": "걷기 (선택)",
+   "category": "08_가치인증",
+   "file": "action-walk-on@2x.png",
+   "size": [
+    58,
+    58
+   ],
+   "sizePt": [
+    116,
+    116
+   ]
+  },
+  {
+   "id": "bong-btn-close",
+   "name": "닫기 버튼",
+   "category": "06_봉그깅",
+   "file": "bong-btn-close@2x.png",
+   "size": [
+    20,
+    22
+   ],
+   "sizePt": [
+    40,
+    44
+   ]
+  },
+  {
+   "id": "bong-btn-retake",
+   "name": "다시 찍으게 버튼",
+   "category": "06_봉그깅",
+   "file": "bong-btn-retake@2x.png",
+   "size": [
+    85,
+    24
+   ],
+   "sizePt": [
+    170,
+    48
+   ]
+  },
+  {
+   "id": "bong-btn-verify",
+   "name": "인증허게 버튼",
+   "category": "06_봉그깅",
+   "file": "bong-btn-verify@2x.png",
+   "size": [
+    100,
+    24
+   ],
+   "sizePt": [
+    200,
+    48
+   ]
+  },
+  {
+   "id": "bong-bubble-camera",
+   "name": "말풍선 · 카메라 켜그네 쓰레기 봉가줍서",
+   "category": "06_봉그깅",
+   "file": "bong-bubble-camera@2x.png",
+   "size": [
+    162,
+    22
+   ],
+   "sizePt": [
+    324,
+    44
+   ]
+  },
+  {
+   "id": "bong-bubble-confirm",
+   "name": "말풍선 · 이걸로 인증할까마씸?",
+   "category": "06_봉그깅",
+   "file": "bong-bubble-confirm@2x.png",
+   "size": [
+    119,
+    22
+   ],
+   "sizePt": [
+    238,
+    44
+   ]
+  },
+  {
+   "id": "bong-limit",
+   "name": "남은 횟수 칩",
+   "category": "06_봉그깅",
+   "file": "bong-limit@2x.png",
+   "size": [
+    76,
+    16
+   ],
+   "sizePt": [
+    152,
+    32
+   ]
+  },
+  {
+   "id": "bong-loading",
+   "name": "확인 중 (귤새 + 봉투)",
+   "category": "06_봉그깅",
+   "file": "bong-loading@2x.png",
+   "size": [
+    120,
+    92
+   ],
+   "sizePt": [
+    240,
+    184
+   ]
+  },
+  {
+   "id": "bong-location",
+   "name": "위치 칩",
+   "category": "06_봉그깅",
+   "file": "bong-location@2x.png",
+   "size": [
+    176,
+    16
+   ],
+   "sizePt": [
+    352,
+    32
+   ]
+  },
+  {
+   "id": "bong-photo-frame",
+   "name": "사진 틀 + 찰칵 도장",
+   "category": "06_봉그깅",
+   "file": "bong-photo-frame@2x.png",
+   "size": [
+    120,
+    120
+   ],
+   "sizePt": [
+    240,
+    240
+   ]
+  },
+  {
+   "id": "bong-photo-frame-small",
+   "name": "작은 사진 틀",
+   "category": "06_봉그깅",
+   "file": "bong-photo-frame-small@2x.png",
+   "size": [
+    64,
+    64
+   ],
+   "sizePt": [
+    128,
+    128
+   ]
+  },
+  {
+   "id": "bong-popup-fail",
+   "name": "실패 팝업",
+   "category": "06_봉그깅",
+   "file": "bong-popup-fail@2x.png",
+   "size": [
+    176,
+    116
+   ],
+   "sizePt": [
+    352,
+    232
+   ]
+  },
+  {
+   "id": "bong-popup-limit",
+   "name": "하루 한도 팝업",
+   "category": "06_봉그깅",
+   "file": "bong-popup-limit@2x.png",
+   "size": [
+    176,
+    100
+   ],
+   "sizePt": [
+    352,
+    200
+   ]
+  },
+  {
+   "id": "bong-popup-reward",
+   "name": "보상 팝업 (잘 봉갔수다!)",
+   "category": "06_봉그깅",
+   "file": "bong-popup-reward@2x.png",
+   "size": [
+    176,
+    158
+   ],
+   "sizePt": [
+    352,
+    316
+   ]
+  },
+  {
+   "id": "bong-tag",
+   "name": "봉그깅 태그",
+   "category": "06_봉그깅",
+   "file": "bong-tag@2x.png",
+   "size": [
+    54,
+    16
+   ],
+   "sizePt": [
+    108,
+    32
+   ]
+  },
+  {
+   "id": "bong-toast-clean",
+   "name": "토스트 · 섬 바당이 깨끗해졌수다!",
+   "category": "06_봉그깅",
+   "file": "bong-toast-clean@2x.png",
+   "size": [
+    164,
+    20
+   ],
+   "sizePt": [
+    328,
+    40
+   ]
+  },
+  {
+   "id": "btn-beige-cancel",
+   "name": "버튼 · 말쿠다 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-cancel@2x.png",
+   "size": [
+    60,
+    20
+   ],
+   "sizePt": [
+    120,
+    40
+   ],
+   "label": "말쿠다"
+  },
+  {
+   "id": "btn-beige-cancel-pressed",
+   "name": "버튼 · 말쿠다 (눌림) · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-cancel-pressed@2x.png",
+   "size": [
+    60,
+    20
+   ],
+   "sizePt": [
+    120,
+    40
+   ],
+   "label": "말쿠다"
+  },
+  {
+   "id": "btn-beige-change",
+   "name": "버튼 · 캐릭터 바꾸게 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-change@2x.png",
+   "size": [
+    97,
+    20
+   ],
+   "sizePt": [
+    194,
+    40
+   ],
+   "label": "캐릭터 바꾸게"
+  },
+  {
+   "id": "btn-beige-close",
+   "name": "버튼 · 닫으게 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-close@2x.png",
+   "size": [
+    60,
+    20
+   ],
+   "sizePt": [
+    120,
+    40
+   ],
+   "label": "닫으게"
+  },
+  {
+   "id": "btn-beige-deny",
+   "name": "버튼 · 안 허쿠다 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-deny@2x.png",
+   "size": [
+    73,
+    20
+   ],
+   "sizePt": [
+    146,
+    40
+   ],
+   "label": "안 허쿠다"
+  },
+  {
+   "id": "btn-beige-later",
+   "name": "버튼 · 나중에 허쿠다 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-later@2x.png",
+   "size": [
+    97,
+    20
+   ],
+   "sizePt": [
+    194,
+    40
+   ],
+   "label": "나중에 허쿠다"
+  },
+  {
+   "id": "btn-beige-signup",
+   "name": "버튼 · 회원가입허게 · 베이지",
+   "category": "01_버튼",
+   "file": "btn-beige-signup@2x.png",
+   "size": [
+    92,
+    20
+   ],
+   "sizePt": [
+    184,
+    40
+   ],
+   "label": "회원가입허게"
+  },
+  {
+   "id": "btn-gray-soldout",
+   "name": "버튼 · 준비햄수다 · 회색",
+   "category": "01_버튼",
+   "file": "btn-gray-soldout@2x.png",
+   "size": [
+    80,
+    20
+   ],
+   "sizePt": [
+    160,
+    40
+   ],
+   "label": "준비햄수다"
+  },
+  {
+   "id": "btn-green-adventure",
+   "name": "버튼 · 모험 보내게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-adventure@2x.png",
+   "size": [
+    85,
+    20
+   ],
+   "sizePt": [
+    170,
+    40
+   ],
+   "label": "모험 보내게"
+  },
+  {
+   "id": "btn-green-allow",
+   "name": "버튼 · 허락허쿠다 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-allow@2x.png",
+   "size": [
+    80,
+    20
+   ],
+   "sizePt": [
+    160,
+    40
+   ],
+   "label": "허락허쿠다"
+  },
+  {
+   "id": "btn-green-buy",
+   "name": "버튼 · 사쿠다 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-buy@2x.png",
+   "size": [
+    60,
+    20
+   ],
+   "sizePt": [
+    120,
+    40
+   ],
+   "label": "사쿠다"
+  },
+  {
+   "id": "btn-green-confirm",
+   "name": "버튼 · 알았수다 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-confirm@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "알았수다"
+  },
+  {
+   "id": "btn-green-confirm-pressed",
+   "name": "버튼 · 알았수다 (눌림) · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-confirm-pressed@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "알았수다"
+  },
+  {
+   "id": "btn-green-login",
+   "name": "버튼 · 들어가게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-login@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "들어가게"
+  },
+  {
+   "id": "btn-green-next",
+   "name": "버튼 · 넘어가게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-next@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "넘어가게"
+  },
+  {
+   "id": "btn-green-place",
+   "name": "버튼 · 설치허게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-place@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "설치허게"
+  },
+  {
+   "id": "btn-green-reward",
+   "name": "버튼 · 보상 받게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-reward@2x.png",
+   "size": [
+    73,
+    20
+   ],
+   "sizePt": [
+    146,
+    40
+   ],
+   "label": "보상 받게"
+  },
+  {
+   "id": "btn-green-start",
+   "name": "버튼 · 시작허게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-start@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "시작허게"
+  },
+  {
+   "id": "btn-green-verify",
+   "name": "버튼 · 인증허게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-verify@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "인증허게"
+  },
+  {
+   "id": "btn-green-wear",
+   "name": "버튼 · 착용허게 · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-wear@2x.png",
+   "size": [
+    68,
+    20
+   ],
+   "sizePt": [
+    136,
+    40
+   ],
+   "label": "착용허게"
+  },
+  {
+   "id": "btn-green-wide-reward",
+   "name": "버튼 · 보상 받게 (넓은) · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-wide-reward@2x.png",
+   "size": [
+    180,
+    24
+   ],
+   "sizePt": [
+    360,
+    48
+   ],
+   "label": "보상 받게"
+  },
+  {
+   "id": "btn-green-wide-start",
+   "name": "버튼 · 시작허게 (넓은) · 초록",
+   "category": "01_버튼",
+   "file": "btn-green-wide-start@2x.png",
+   "size": [
+    180,
+    24
+   ],
+   "sizePt": [
+    360,
+    48
+   ],
+   "label": "시작허게"
+  },
+  {
+   "id": "cam-btn-close",
+   "name": "닫기 버튼",
+   "category": "05_카메라",
+   "file": "cam-btn-close@2x.png",
+   "size": [
+    18,
+    20
+   ],
+   "sizePt": [
+    36,
+    40
+   ]
+  },
+  {
+   "id": "cam-btn-flip",
+   "name": "카메라 전환 버튼",
+   "category": "05_카메라",
+   "file": "cam-btn-flip@2x.png",
+   "size": [
+    22,
+    24
+   ],
+   "sizePt": [
+    44,
+    48
+   ]
+  },
+  {
+   "id": "cam-btn-gallery",
+   "name": "앨범 버튼",
+   "category": "05_카메라",
+   "file": "cam-btn-gallery@2x.png",
+   "size": [
+    22,
+    24
+   ],
+   "sizePt": [
+    44,
+    48
+   ]
+  },
+  {
+   "id": "cam-btn-settings",
+   "name": "설정 버튼",
+   "category": "05_카메라",
+   "file": "cam-btn-settings@2x.png",
+   "size": [
+    18,
+    20
+   ],
+   "sizePt": [
+    36,
+    40
+   ]
+  },
+  {
+   "id": "cam-bubble-found",
+   "name": "말풍선 · 쓰레기 촞았수다! 셔터 눌러줍서",
+   "category": "05_카메라",
+   "file": "cam-bubble-found@2x.png",
+   "size": [
+    190,
+    26
+   ],
+   "sizePt": [
+    380,
+    52
+   ]
+  },
+  {
+   "id": "cam-bubble-guide",
+   "name": "말풍선 · 카메라 켜그네 쓰레기 봉가줍서!",
+   "category": "05_카메라",
+   "file": "cam-bubble-guide@2x.png",
+   "size": [
+    190,
+    26
+   ],
+   "sizePt": [
+    380,
+    52
+   ]
+  },
+  {
+   "id": "cam-corner-piece",
+   "name": "모서리 한 조각",
+   "category": "05_카메라",
+   "file": "cam-corner-piece@2x.png",
+   "size": [
+    27,
+    26
+   ],
+   "sizePt": [
+    54,
+    52
+   ]
+  },
+  {
+   "id": "cam-corners",
+   "name": "촬영 모서리 틀",
+   "category": "05_카메라",
+   "file": "cam-corners@2x.png",
+   "size": [
+    151,
+    150
+   ],
+   "sizePt": [
+    302,
+    300
+   ]
+  },
+  {
+   "id": "cam-corners-found",
+   "name": "촬영 모서리 틀 (쓰레기 인식)",
+   "category": "05_카메라",
+   "file": "cam-corners-found@2x.png",
+   "size": [
+    151,
+    150
+   ],
+   "sizePt": [
+    302,
+    300
+   ]
+  },
+  {
+   "id": "cam-location",
+   "name": "위치 확인했수다",
+   "category": "05_카메라",
+   "file": "cam-location@2x.png",
+   "size": [
+    85,
+    16
+   ],
+   "sizePt": [
+    170,
+    32
+   ]
+  },
+  {
+   "id": "cam-location-wait",
+   "name": "위치 확인 햄수다…",
+   "category": "05_카메라",
+   "file": "cam-location-wait@2x.png",
+   "size": [
+    99,
+    16
+   ],
+   "sizePt": [
+    198,
+    32
+   ]
+  },
+  {
+   "id": "cam-shutter",
+   "name": "셔터",
+   "category": "05_카메라",
+   "file": "cam-shutter@2x.png",
+   "size": [
+    36,
+    39
+   ],
+   "sizePt": [
+    72,
+    78
+   ]
+  },
+  {
+   "id": "cam-tag-pickup",
+   "name": "태그 · 쓰레기 봉그기",
+   "category": "05_카메라",
+   "file": "cam-tag-pickup@2x.png",
+   "size": [
+    88,
+    16
+   ],
+   "sizePt": [
+    176,
+    32
+   ]
+  },
+  {
+   "id": "card-camellia",
+   "name": "상품 카드 · 동백꽃 (선택)",
+   "category": "09_상점",
+   "file": "card-camellia@2x.png",
+   "size": [
+    58,
+    76
+   ],
+   "sizePt": [
+    116,
+    152
+   ]
+  },
+  {
+   "id": "card-sunglasses",
+   "name": "상품 카드 · 선글라스",
+   "category": "09_상점",
+   "file": "card-sunglasses@2x.png",
+   "size": [
+    58,
+    76
+   ],
+   "sizePt": [
+    116,
+    152
+   ]
+  },
+  {
+   "id": "card-tangerine",
+   "name": "상품 카드 · 귤꽃",
+   "category": "09_상점",
+   "file": "card-tangerine@2x.png",
+   "size": [
+    58,
+    76
+   ],
+   "sizePt": [
+    116,
+    152
+   ]
+  },
+  {
+   "id": "hud-coin",
+   "name": "귤코인 HUD",
+   "category": "04_HUD",
+   "file": "hud-coin@2x.png",
+   "size": [
+    50,
+    17
+   ],
+   "sizePt": [
+    100,
+    34
+   ]
+  },
+  {
+   "id": "hud-xp-label",
+   "name": "XP 글자",
+   "category": "04_HUD",
+   "file": "hud-xp-label@2x.png",
+   "size": [
+    16,
+    12
+   ],
+   "sizePt": [
+    32,
+    24
+   ]
+  },
+  {
+   "id": "logo-gachigochi",
+   "name": "가치고치 로고 글자",
+   "category": "04_HUD",
+   "file": "logo-gachigochi@2x.png",
+   "size": [
+    66,
+    22
+   ],
+   "sizePt": [
+    132,
+    44
+   ]
+  },
+  {
+   "id": "menu-panel",
+   "name": "메뉴 펼침",
+   "category": "02_팝업",
+   "file": "menu-panel@2x.png",
+   "size": [
+    100,
+    82
+   ],
+   "sizePt": [
+    200,
+    164
+   ]
+  },
+  {
+   "id": "popup-buy",
+   "name": "구매 팝업 (향긋한 귤꽃)",
+   "category": "02_팝업",
+   "file": "popup-buy@2x.png",
+   "size": [
+    168,
+    120
+   ],
+   "sizePt": [
+    336,
+    240
+   ]
+  },
+  {
+   "id": "popup-permission",
+   "name": "권한 요청 팝업 (걸음 수 봐도 되쿠과?)",
+   "category": "02_팝업",
+   "file": "popup-permission@2x.png",
+   "size": [
+    168,
+    94
+   ],
+   "sizePt": [
+    336,
+    188
+   ]
+  },
+  {
+   "id": "popup-walk-value",
+   "name": "오늘의 걷기 가치 팝업",
+   "category": "02_팝업",
+   "file": "popup-walk-value@2x.png",
+   "size": [
+    168,
+    94
+   ],
+   "sizePt": [
+    336,
+    188
+   ]
+  },
+  {
+   "id": "tab-char-off",
+   "name": "탭 · 캐릭터 꾸미기",
+   "category": "03_탭",
+   "file": "tab-char-off@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tab-char-on",
+   "name": "탭 · 캐릭터 꾸미기 (선택)",
+   "category": "03_탭",
+   "file": "tab-char-on@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tab-coin-off",
+   "name": "탭 · 귤코인 사기",
+   "category": "03_탭",
+   "file": "tab-coin-off@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tab-coin-on",
+   "name": "탭 · 귤코인 사기 (선택)",
+   "category": "03_탭",
+   "file": "tab-coin-on@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tab-island-off",
+   "name": "탭 · 섬 꾸미기",
+   "category": "03_탭",
+   "file": "tab-island-off@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tab-island-on",
+   "name": "탭 · 섬 꾸미기 (선택)",
+   "category": "03_탭",
+   "file": "tab-island-on@2x.png",
+   "size": [
+    64,
+    18
+   ],
+   "sizePt": [
+    128,
+    36
+   ]
+  },
+  {
+   "id": "tangerine-15",
+   "name": "귤 (15칸)",
+   "category": "12_귤",
+   "file": "tangerine-15@2x.png",
+   "size": [
+    15,
+    15
+   ],
+   "sizePt": [
+    30,
+    30
+   ]
+  },
+  {
+   "id": "tangerine-30",
+   "name": "귤 (30칸)",
+   "category": "12_귤",
+   "file": "tangerine-30@2x.png",
+   "size": [
+    30,
+    30
+   ],
+   "sizePt": [
+    60,
+    60
+   ]
+  },
+  {
+   "id": "toast-reward",
+   "name": "보상 토스트 (귤 10개 받았수다!)",
+   "category": "02_팝업",
+   "file": "toast-reward@2x.png",
+   "size": [
+    140,
+    20
+   ],
+   "sizePt": [
+    280,
+    40
+   ]
+  },
+  {
+   "id": "walk-coin-total",
+   "name": "내 귤코인 합계",
+   "category": "07_걷기",
+   "file": "walk-coin-total@2x.png",
+   "size": [
+    180,
+    22
+   ],
+   "sizePt": [
+    360,
+    44
+   ]
+  },
+  {
+   "id": "walk-reward-claimed",
+   "name": "보상 카드 (받음)",
+   "category": "07_걷기",
+   "file": "walk-reward-claimed@2x.png",
+   "size": [
+    56,
+    72
+   ],
+   "sizePt": [
+    112,
+    144
+   ]
+  },
+  {
+   "id": "walk-reward-locked",
+   "name": "보상 카드 (잠김)",
+   "category": "07_걷기",
+   "file": "walk-reward-locked@2x.png",
+   "size": [
+    56,
+    72
+   ],
+   "sizePt": [
+    112,
+    144
+   ]
+  },
+  {
+   "id": "walk-reward-ready",
+   "name": "보상 카드 (받기 가능)",
+   "category": "07_걷기",
+   "file": "walk-reward-ready@2x.png",
+   "size": [
+    56,
+    72
+   ],
+   "sizePt": [
+    112,
+    144
+   ]
+  },
+  {
+   "id": "walk-step-bar",
+   "name": "걸음 진행 바",
+   "category": "07_걷기",
+   "file": "walk-step-bar@2x.png",
+   "size": [
+    180,
+    26
+   ],
+   "sizePt": [
+    360,
+    52
+   ]
+  },
+  {
+   "id": "walk-step-board",
+   "name": "걸음 수 판",
+   "category": "07_걷기",
+   "file": "walk-step-board@2x.png",
+   "size": [
+    150,
+    44
+   ],
+   "sizePt": [
+    300,
+    88
+   ]
+  },
+  {
+   "id": "walk-title",
+   "name": "제목 · 이만큼 획득했수다!",
+   "category": "07_걷기",
+   "file": "walk-title@2x.png",
+   "size": [
+    134,
+    20
+   ],
+   "sizePt": [
+    268,
+    40
+   ]
+  },
+  {
+   "id": "gyulsae-adult",
+   "name": "귤새 성체",
+   "category": "10_캐릭터",
+   "file": "gyulsae-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "gyulsae-young",
+   "name": "귤새 어린 새",
+   "category": "10_캐릭터",
+   "file": "gyulsae-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "gyulsae-egg",
+   "name": "귤새 알",
+   "category": "10_캐릭터",
+   "file": "gyulsae-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "wear-flower-buckwheat-adult",
+   "name": "착용 · 하얀 메밀꽃 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-buckwheat-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-buckwheat",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-buckwheat-egg",
+   "name": "착용 · 하얀 메밀꽃 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-buckwheat-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-buckwheat",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-buckwheat-young",
+   "name": "착용 · 하얀 메밀꽃 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-buckwheat-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-buckwheat",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-camellia-adult",
+   "name": "착용 · 붉은 동백꽃 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-camellia-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-camellia",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-camellia-egg",
+   "name": "착용 · 붉은 동백꽃 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-camellia-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-camellia",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-camellia-young",
+   "name": "착용 · 붉은 동백꽃 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-camellia-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-camellia",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-canola-adult",
+   "name": "착용 · 노란 유채꽃 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-canola-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-canola",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-canola-egg",
+   "name": "착용 · 노란 유채꽃 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-canola-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-canola",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-canola-young",
+   "name": "착용 · 노란 유채꽃 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-canola-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-canola",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-cherry-adult",
+   "name": "착용 · 제주 왕벚꽃 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-cherry-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-cherry",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-cherry-egg",
+   "name": "착용 · 제주 왕벚꽃 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-cherry-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-cherry",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-cherry-young",
+   "name": "착용 · 제주 왕벚꽃 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-cherry-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-cherry",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-crinum-adult",
+   "name": "착용 · 토끼섬 문주란 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-crinum-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-crinum",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-crinum-egg",
+   "name": "착용 · 토끼섬 문주란 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-crinum-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-crinum",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-crinum-young",
+   "name": "착용 · 토끼섬 문주란 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-crinum-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-crinum",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-hydrangea-adult",
+   "name": "착용 · 도채비꽃 수국 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-hydrangea-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-hydrangea",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-hydrangea-egg",
+   "name": "착용 · 도채비꽃 수국 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-hydrangea-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-hydrangea",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-hydrangea-young",
+   "name": "착용 · 도채비꽃 수국 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-hydrangea-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-hydrangea",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-seaside-aster-adult",
+   "name": "착용 · 바닷가 해국 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-seaside-aster-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-seaside-aster",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-seaside-aster-egg",
+   "name": "착용 · 바닷가 해국 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-seaside-aster-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-seaside-aster",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-seaside-aster-young",
+   "name": "착용 · 바닷가 해국 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-seaside-aster-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-seaside-aster",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-flower-tangerine-adult",
+   "name": "착용 · 향긋한 귤꽃 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-tangerine-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-tangerine",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-flower-tangerine-egg",
+   "name": "착용 · 향긋한 귤꽃 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-tangerine-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-tangerine",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-flower-tangerine-young",
+   "name": "착용 · 향긋한 귤꽃 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-flower-tangerine-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-tangerine",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-nest-adult",
+   "name": "착용 · 둥지 기저귀 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-nest-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "nest",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-nest-egg",
+   "name": "착용 · 둥지 기저귀 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-nest-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "nest",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-nest-young",
+   "name": "착용 · 둥지 기저귀 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-nest-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "nest",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-net-adult",
+   "name": "착용 · 귤망 모자 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-net-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "net",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-net-egg",
+   "name": "착용 · 귤망 모자 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-net-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "net",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-net-young",
+   "name": "착용 · 귤망 모자 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-net-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "net",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-ribbon-adult",
+   "name": "착용 · 분홍 리본 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-ribbon-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "ribbon",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-ribbon-egg",
+   "name": "착용 · 분홍 리본 · 알",
+   "category": "10_캐릭터/착용",
+   "file": "wear-ribbon-egg@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "ribbon",
+   "character": "egg",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-egg"
+  },
+  {
+   "id": "wear-ribbon-young",
+   "name": "착용 · 분홍 리본 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-ribbon-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "ribbon",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "wear-sunglasses-adult",
+   "name": "착용 · 멋쟁이 선글라스 · 성체",
+   "category": "10_캐릭터/착용",
+   "file": "wear-sunglasses-adult@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "sunglasses",
+   "character": "adult",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-adult"
+  },
+  {
+   "id": "wear-sunglasses-young",
+   "name": "착용 · 멋쟁이 선글라스 · 어린 새",
+   "category": "10_캐릭터/착용",
+   "file": "wear-sunglasses-young@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "sunglasses",
+   "character": "young",
+   "pivot": [
+    16,
+    30
+   ],
+   "overlay": "gyulsae-young"
+  },
+  {
+   "id": "icon-flower-buckwheat",
+   "name": "아이콘 · 하얀 메밀꽃",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-buckwheat@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-buckwheat"
+  },
+  {
+   "id": "icon-flower-camellia",
+   "name": "아이콘 · 붉은 동백꽃",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-camellia@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-camellia"
+  },
+  {
+   "id": "icon-flower-canola",
+   "name": "아이콘 · 노란 유채꽃",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-canola@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-canola"
+  },
+  {
+   "id": "icon-flower-cherry",
+   "name": "아이콘 · 제주 왕벚꽃",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-cherry@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-cherry"
+  },
+  {
+   "id": "icon-flower-crinum",
+   "name": "아이콘 · 토끼섬 문주란",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-crinum@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-crinum"
+  },
+  {
+   "id": "icon-flower-hydrangea",
+   "name": "아이콘 · 도채비꽃 수국",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-hydrangea@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-hydrangea"
+  },
+  {
+   "id": "icon-flower-seaside-aster",
+   "name": "아이콘 · 바닷가 해국",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-seaside-aster@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-seaside-aster"
+  },
+  {
+   "id": "icon-flower-tangerine",
+   "name": "아이콘 · 향긋한 귤꽃",
+   "category": "11_아이템/아이콘",
+   "file": "icon-flower-tangerine@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "flower-tangerine"
+  },
+  {
+   "id": "icon-nest",
+   "name": "아이콘 · 둥지 기저귀",
+   "category": "11_아이템/아이콘",
+   "file": "icon-nest@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "nest"
+  },
+  {
+   "id": "icon-net",
+   "name": "아이콘 · 귤망 모자",
+   "category": "11_아이템/아이콘",
+   "file": "icon-net@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "net"
+  },
+  {
+   "id": "icon-ribbon",
+   "name": "아이콘 · 분홍 리본",
+   "category": "11_아이템/아이콘",
+   "file": "icon-ribbon@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "ribbon"
+  },
+  {
+   "id": "icon-sunglasses",
+   "name": "아이콘 · 멋쟁이 선글라스",
+   "category": "11_아이템/아이콘",
+   "file": "icon-sunglasses@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "item": "sunglasses"
+  },
+  {
+   "id": "deco-camellia-tree",
+   "name": "섬장식 · 동백꽃나무",
+   "category": "11_아이템/섬장식",
+   "file": "deco-camellia-tree@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-tangerine-blossom-tree",
+   "name": "섬장식 · 귤꽃나무",
+   "category": "11_아이템/섬장식",
+   "file": "deco-tangerine-blossom-tree@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-cherry-blossom-tree",
+   "name": "섬장식 · 벚꽃나무",
+   "category": "11_아이템/섬장식",
+   "file": "deco-cherry-blossom-tree@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-canola-flowers",
+   "name": "섬장식 · 유채꽃",
+   "category": "11_아이템/섬장식",
+   "file": "deco-canola-flowers@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-grass",
+   "name": "섬장식 · 풀",
+   "category": "11_아이템/섬장식",
+   "file": "deco-grass@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-small-oreum",
+   "name": "섬장식 · 작은 오름",
+   "category": "11_아이템/섬장식",
+   "file": "deco-small-oreum@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-jeongnang",
+   "name": "섬장식 · 정낭",
+   "category": "11_아이템/섬장식",
+   "file": "deco-jeongnang@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-stone-wall",
+   "name": "섬장식 · 돌담",
+   "category": "11_아이템/섬장식",
+   "file": "deco-stone-wall@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "deco-dol-hareubang",
+   "name": "섬장식 · 돌하르방",
+   "category": "11_아이템/섬장식",
+   "file": "deco-dol-hareubang@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "pivot": [
+    16,
+    30
+   ]
+  },
+  {
+   "id": "xp-bar-empty",
+   "name": "XP 바 (빈 칸)",
+   "category": "04_HUD",
+   "file": "xp-bar-empty@orig.png",
+   "sizePx": [
+    1024,
+    128
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "xp-bar-full",
+   "name": "XP 바 (가득)",
+   "category": "04_HUD",
+   "file": "xp-bar-full@2x.png",
+   "size": [
+    128,
+    16
+   ],
+   "sizePt": [
+    256,
+    32
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "cam-frame-beige",
+   "name": "사진 모서리 틀 (베이지)",
+   "category": "05_카메라",
+   "file": "cam-frame-beige@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-back",
+   "name": "네모 버튼 · 뒤로",
+   "category": "01_버튼",
+   "file": "btn-square-back@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-round-shop",
+   "name": "동그라미 버튼 · 상점",
+   "category": "01_버튼",
+   "file": "btn-round-shop@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-round-walk",
+   "name": "동그라미 버튼 · 걷기",
+   "category": "01_버튼",
+   "file": "btn-round-walk@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-round-bond",
+   "name": "동그라미 버튼 · 교감",
+   "category": "01_버튼",
+   "file": "btn-round-bond@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-round-adventure",
+   "name": "동그라미 버튼 · 모험 (큰)",
+   "category": "01_버튼",
+   "file": "btn-round-adventure@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-close",
+   "name": "네모 버튼 · 닫기",
+   "category": "01_버튼",
+   "file": "btn-square-close@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-sound",
+   "name": "네모 버튼 · 소리",
+   "category": "01_버튼",
+   "file": "btn-square-sound@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-menu",
+   "name": "네모 버튼 · 메뉴",
+   "category": "01_버튼",
+   "file": "btn-square-menu@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-profile",
+   "name": "네모 버튼 · 내 정보",
+   "category": "01_버튼",
+   "file": "btn-square-profile@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "btn-square-settings",
+   "name": "네모 버튼 · 설정",
+   "category": "01_버튼",
+   "file": "btn-square-settings@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "sea-01",
+   "name": "바다 타일 01 (기본바다 배경)",
+   "category": "14_타일/바다",
+   "file": "sea-01@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sea-02",
+   "name": "바다 타일 02 (기본바다 배경)",
+   "category": "14_타일/바다",
+   "file": "sea-02@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sea-03",
+   "name": "바다 타일 03 (기본바다 배경)",
+   "category": "14_타일/바다",
+   "file": "sea-03@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sea-04",
+   "name": "바다 타일 04 (기본바다 배경)",
+   "category": "14_타일/바다",
+   "file": "sea-04@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sea-05",
+   "name": "바다 타일 05 (기본바다 배경)",
+   "category": "14_타일/바다",
+   "file": "sea-05@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-0-1",
+   "name": "해안가 0-1",
+   "category": "14_타일/해안가",
+   "file": "coast-0-1@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-1-1",
+   "name": "해안가 1-1",
+   "category": "14_타일/해안가",
+   "file": "coast-1-1@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-2-1",
+   "name": "해안가 2-1",
+   "category": "14_타일/해안가",
+   "file": "coast-2-1@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-3-1",
+   "name": "해안가 3-1",
+   "category": "14_타일/해안가",
+   "file": "coast-3-1@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-4-1",
+   "name": "해안가 4-1",
+   "category": "14_타일/해안가",
+   "file": "coast-4-1@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-0-2",
+   "name": "해안가 0-2",
+   "category": "14_타일/해안가",
+   "file": "coast-0-2@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-1-2",
+   "name": "해안가 1-2",
+   "category": "14_타일/해안가",
+   "file": "coast-1-2@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-2-2",
+   "name": "해안가 2-2",
+   "category": "14_타일/해안가",
+   "file": "coast-2-2@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-3-2",
+   "name": "해안가 3-2",
+   "category": "14_타일/해안가",
+   "file": "coast-3-2@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-4-2",
+   "name": "해안가 4-2",
+   "category": "14_타일/해안가",
+   "file": "coast-4-2@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-0-3",
+   "name": "해안가 0-3",
+   "category": "14_타일/해안가",
+   "file": "coast-0-3@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-1-3",
+   "name": "해안가 1-3",
+   "category": "14_타일/해안가",
+   "file": "coast-1-3@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-2-3",
+   "name": "해안가 2-3",
+   "category": "14_타일/해안가",
+   "file": "coast-2-3@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-3-3",
+   "name": "해안가 3-3",
+   "category": "14_타일/해안가",
+   "file": "coast-3-3@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-4-3",
+   "name": "해안가 4-3",
+   "category": "14_타일/해안가",
+   "file": "coast-4-3@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-0-4",
+   "name": "해안가 0-4",
+   "category": "14_타일/해안가",
+   "file": "coast-0-4@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-1-4",
+   "name": "해안가 1-4",
+   "category": "14_타일/해안가",
+   "file": "coast-1-4@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-2-4",
+   "name": "해안가 2-4",
+   "category": "14_타일/해안가",
+   "file": "coast-2-4@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-3-4",
+   "name": "해안가 3-4",
+   "category": "14_타일/해안가",
+   "file": "coast-3-4@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-4-4",
+   "name": "해안가 4-4",
+   "category": "14_타일/해안가",
+   "file": "coast-4-4@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-0-5",
+   "name": "해안가 0-5",
+   "category": "14_타일/해안가",
+   "file": "coast-0-5@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-1-5",
+   "name": "해안가 1-5",
+   "category": "14_타일/해안가",
+   "file": "coast-1-5@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-2-5",
+   "name": "해안가 2-5",
+   "category": "14_타일/해안가",
+   "file": "coast-2-5@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-3-5",
+   "name": "해안가 3-5",
+   "category": "14_타일/해안가",
+   "file": "coast-3-5@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "coast-4-5",
+   "name": "해안가 4-5",
+   "category": "14_타일/해안가",
+   "file": "coast-4-5@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-corner-top-left",
+   "name": "모래사장 모퉁이 좌측 상",
+   "category": "14_타일/모래사장",
+   "file": "sand-corner-top-left@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-side-left",
+   "name": "모래사장 측면 좌",
+   "category": "14_타일/모래사장",
+   "file": "sand-side-left@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-corner-bottom-left",
+   "name": "모래사장 모퉁이 좌측 하",
+   "category": "14_타일/모래사장",
+   "file": "sand-corner-bottom-left@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-side-top",
+   "name": "모래사장 측면 상",
+   "category": "14_타일/모래사장",
+   "file": "sand-side-top@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-center",
+   "name": "모래사장 중앙 (마른 모래)",
+   "category": "14_타일/모래사장",
+   "file": "sand-center@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-side-bottom",
+   "name": "모래사장 측면 하",
+   "category": "14_타일/모래사장",
+   "file": "sand-side-bottom@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-corner-top-right",
+   "name": "모래사장 모퉁이 우측 상",
+   "category": "14_타일/모래사장",
+   "file": "sand-corner-top-right@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-side-right",
+   "name": "모래사장 측면 우",
+   "category": "14_타일/모래사장",
+   "file": "sand-side-right@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "sand-corner-bottom-right",
+   "name": "모래사장 모퉁이 우측 하",
+   "category": "14_타일/모래사장",
+   "file": "sand-corner-bottom-right@orig.png",
+   "sizePx": [
+    512,
+    512
+   ],
+   "source": "notion",
+   "note": "원본 해상도 그림(도트 칸 격자 아님). 앱에서는 64pt로 줄여 쓰거나, 도트 칸으로 다시 그려야 해요"
+  },
+  {
+   "id": "wet-sand-corner-top-left",
+   "name": "젖은 모래 모퉁이 좌측 상",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-corner-top-left@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-side-top",
+   "name": "젖은 모래 측면 상",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-side-top@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-corner-top-right",
+   "name": "젖은 모래 모퉁이 우측 상",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-corner-top-right@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-side-left",
+   "name": "젖은 모래 측면 좌",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-side-left@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-center",
+   "name": "젖은 모래 중앙",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-center@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-side-right",
+   "name": "젖은 모래 측면 우",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-side-right@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-corner-bottom-left",
+   "name": "젖은 모래 모퉁이 좌측 하",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-corner-bottom-left@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-side-bottom",
+   "name": "젖은 모래 측면 하",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-side-bottom@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "wet-sand-corner-bottom-right",
+   "name": "젖은 모래 모퉁이 우측 하",
+   "category": "14_타일/젖은모래",
+   "file": "wet-sand-corner-bottom-right@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-01",
+   "name": "잔디밭 타일 01",
+   "category": "14_타일/잔디밭",
+   "file": "grass-01@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-02",
+   "name": "잔디밭 타일 02",
+   "category": "14_타일/잔디밭",
+   "file": "grass-02@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-03",
+   "name": "잔디밭 타일 03",
+   "category": "14_타일/잔디밭",
+   "file": "grass-03@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-04",
+   "name": "잔디밭 타일 04",
+   "category": "14_타일/잔디밭",
+   "file": "grass-04@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-05",
+   "name": "잔디밭 타일 05",
+   "category": "14_타일/잔디밭",
+   "file": "grass-05@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-06",
+   "name": "잔디밭 타일 06",
+   "category": "14_타일/잔디밭",
+   "file": "grass-06@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-07",
+   "name": "잔디밭 타일 07",
+   "category": "14_타일/잔디밭",
+   "file": "grass-07@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-08",
+   "name": "잔디밭 타일 08",
+   "category": "14_타일/잔디밭",
+   "file": "grass-08@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-09",
+   "name": "잔디밭 타일 09",
+   "category": "14_타일/잔디밭",
+   "file": "grass-09@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-10",
+   "name": "잔디밭 타일 10",
+   "category": "14_타일/잔디밭",
+   "file": "grass-10@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-11",
+   "name": "잔디밭 타일 11",
+   "category": "14_타일/잔디밭",
+   "file": "grass-11@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-12",
+   "name": "잔디밭 타일 12",
+   "category": "14_타일/잔디밭",
+   "file": "grass-12@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-13",
+   "name": "잔디밭 타일 13",
+   "category": "14_타일/잔디밭",
+   "file": "grass-13@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-14",
+   "name": "잔디밭 타일 14",
+   "category": "14_타일/잔디밭",
+   "file": "grass-14@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-15",
+   "name": "잔디밭 타일 15",
+   "category": "14_타일/잔디밭",
+   "file": "grass-15@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-16",
+   "name": "잔디밭 타일 16",
+   "category": "14_타일/잔디밭",
+   "file": "grass-16@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-17",
+   "name": "잔디밭 타일 17",
+   "category": "14_타일/잔디밭",
+   "file": "grass-17@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-18",
+   "name": "잔디밭 타일 18",
+   "category": "14_타일/잔디밭",
+   "file": "grass-18@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-19",
+   "name": "잔디밭 타일 19",
+   "category": "14_타일/잔디밭",
+   "file": "grass-19@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-20",
+   "name": "잔디밭 타일 20",
+   "category": "14_타일/잔디밭",
+   "file": "grass-20@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-21",
+   "name": "잔디밭 타일 21",
+   "category": "14_타일/잔디밭",
+   "file": "grass-21@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-22",
+   "name": "잔디밭 타일 22",
+   "category": "14_타일/잔디밭",
+   "file": "grass-22@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-23",
+   "name": "잔디밭 타일 23",
+   "category": "14_타일/잔디밭",
+   "file": "grass-23@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-24",
+   "name": "잔디밭 타일 24",
+   "category": "14_타일/잔디밭",
+   "file": "grass-24@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-25",
+   "name": "잔디밭 타일 25",
+   "category": "14_타일/잔디밭",
+   "file": "grass-25@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-26",
+   "name": "잔디밭 타일 26",
+   "category": "14_타일/잔디밭",
+   "file": "grass-26@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-27",
+   "name": "잔디밭 타일 27",
+   "category": "14_타일/잔디밭",
+   "file": "grass-27@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-28",
+   "name": "잔디밭 타일 28",
+   "category": "14_타일/잔디밭",
+   "file": "grass-28@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-29",
+   "name": "잔디밭 타일 29",
+   "category": "14_타일/잔디밭",
+   "file": "grass-29@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-30",
+   "name": "잔디밭 타일 30",
+   "category": "14_타일/잔디밭",
+   "file": "grass-30@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-31",
+   "name": "잔디밭 타일 31",
+   "category": "14_타일/잔디밭",
+   "file": "grass-31@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-32",
+   "name": "잔디밭 타일 32",
+   "category": "14_타일/잔디밭",
+   "file": "grass-32@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-33",
+   "name": "잔디밭 타일 33",
+   "category": "14_타일/잔디밭",
+   "file": "grass-33@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-34",
+   "name": "잔디밭 타일 34",
+   "category": "14_타일/잔디밭",
+   "file": "grass-34@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-35",
+   "name": "잔디밭 타일 35",
+   "category": "14_타일/잔디밭",
+   "file": "grass-35@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-36",
+   "name": "잔디밭 타일 36",
+   "category": "14_타일/잔디밭",
+   "file": "grass-36@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-37",
+   "name": "잔디밭 타일 37",
+   "category": "14_타일/잔디밭",
+   "file": "grass-37@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-38",
+   "name": "잔디밭 타일 38",
+   "category": "14_타일/잔디밭",
+   "file": "grass-38@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-39",
+   "name": "잔디밭 타일 39",
+   "category": "14_타일/잔디밭",
+   "file": "grass-39@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-40",
+   "name": "잔디밭 타일 40",
+   "category": "14_타일/잔디밭",
+   "file": "grass-40@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "grass-41",
+   "name": "잔디밭 타일 41",
+   "category": "14_타일/잔디밭",
+   "file": "grass-41@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-01",
+   "name": "화산 타일 01",
+   "category": "14_타일/화산",
+   "file": "volcano-01@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-02",
+   "name": "화산 타일 02",
+   "category": "14_타일/화산",
+   "file": "volcano-02@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-03",
+   "name": "화산 타일 03",
+   "category": "14_타일/화산",
+   "file": "volcano-03@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-04",
+   "name": "화산 타일 04",
+   "category": "14_타일/화산",
+   "file": "volcano-04@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-05",
+   "name": "화산 타일 05",
+   "category": "14_타일/화산",
+   "file": "volcano-05@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  },
+  {
+   "id": "volcano-06",
+   "name": "화산 타일 06",
+   "category": "14_타일/화산",
+   "file": "volcano-06@2x.png",
+   "size": [
+    32,
+    32
+   ],
+   "sizePt": [
+    64,
+    64
+   ],
+   "source": "notion"
+  }
+ ]
+}

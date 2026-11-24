@@ -17,7 +17,7 @@ import {
 
 /**
  * 온보딩이 끝난 직후의 튜토리얼 단계.
- * 나침반 → 봉그깅(화면 안내) → 걷기(화면 안내) → 알 부화 선물 → 마무리(귤코인 보상)
+ * 나침반 → 가치 실천 팝업(봉그깅) → 봉그깅 화면 안내 → 팝업(걷기) → 걷기 화면 안내 → 알 부화 선물 → 마무리(귤코인 보상)
  * '-screen' 은 카메라·걷기 화면 안에서 안내를 보는 동안이다.
  */
 export type TutorialStep = 'compass' | 'bongging' | 'bongging-screen' | 'walking' | 'walking-screen' | 'gift' | 'finish';
@@ -62,7 +62,7 @@ function restStep(step: TutorialStep): TutorialRestStep {
 }
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
-  const { water, xp, addXp, addCoins } = usePlayState();
+  const { xp, addXp, addCoins } = usePlayState();
   const [step, setStep] = useState<TutorialStep | null>(null);
   const [replay, setReplay] = useState(false);
   const [scope, setScope] = useState<TutorialScope>('full');
@@ -175,12 +175,12 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   );
 
   const giftXp = useCallback(async () => {
-    const needed = xpToReachLevel(TUTORIAL_HATCH_LEVEL, water, xp);
+    const needed = xpToReachLevel(TUTORIAL_HATCH_LEVEL, xp);
     if (needed > 0) {
       await addXp(needed);
     }
     move('finish');
-  }, [addXp, move, water, xp]);
+  }, [addXp, move, xp]);
 
   // 끝냈거나 건너뛴 것을 기억해 두면 다음 실행부터 강제 튜토리얼이 자동으로 뜨지 않는다
   const close = useCallback(

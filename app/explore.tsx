@@ -1,23 +1,57 @@
+import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiButton, GachiIconButton } from '@/components/gachi-ui/gachi-button';
+import { GachiCoinBadge } from '@/components/gachi-ui/gachi-hud';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
-import { PixelButton, PixelChip, PixelPanel, PixelScreen, PixelText } from '@/components/pixel/pixel-ui';
-import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { usePlayState } from '@/components/play-state';
-import { EXPLORE_MOCK_GOCHIS, getExploreGochi } from '@/constants/explore';
-import { pixel } from '@/constants/pixel-theme';
+import {
+  canSendExploreCharacter,
+  EXPLORE_CHARACTERS,
+  EXPLORE_COURSES,
+  formatExploreReturnLabel,
+  getExploreCharacter,
+  getExploreCourse,
+  getExploreGochi,
+  type ExploreCharacterId,
+  type ExploreCourseId,
+} from '@/constants/explore';
+import { gachiUi } from '@/constants/gachi-ui';
+import { ISLAND_HOME } from '@/constants/routes';
+import { uiButtons } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
 
+function leaveExplore() {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace(ISLAND_HOME);
+}
+
+const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
+const ICON_GREEN = '#A8D18D';
+const SELECT_ORANGE = '#E89A3C';
+const TIP_MINT = '#D7EBD0';
+
+type Step = 'course' | 'character';
+
 /**
- * 고치 탐험 보내기 — 다마고치형 하루 루틴.
- * 파견 → 타이머 → 완료 수령 → 고치 알 연출.
+ * 모험 보내기 — 와프 2페이지
+ * 1) 코스 선택  2) 캐릭터 선택 + 보내기
  */
 export default function ExploreScreen() {
   const { scale } = useResponsive();
+  const insets = useSafeAreaInsets();
   const {
+    coins,
+    growthStage,
     exploreForestUnlocked,
     exploreRemaining,
     exploreDailyLimit,
@@ -28,7 +62,6 @@ export default function ExploreScreen() {
     exploreProgress,
     exploringGochiId,
     pendingExploreGochiId,
-    exploreEggCount,
     exploreEggReveal,
     startExplore,
     claimExploreEgg,
@@ -36,7 +69,9 @@ export default function ExploreScreen() {
     syncExplore,
   } = usePlayState();
 
-  const [selectedGochiId, setSelectedGochiId] = useState(EXPLORE_MOCK_GOCHIS[0]?.id ?? 'sprout');
+  const [step, setStep] = useState<Step>('course');
+  const [selectedCourseId, setSelectedCourseId] = useState<ExploreCourseId | null>(null);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<ExploreCharacterId | null>(null);
   const [sending, setSending] = useState(false);
   const [claiming, setClaiming] = useState(false);
 
@@ -46,32 +81,85 @@ export default function ExploreScreen() {
     }, [syncExplore]),
   );
 
-  const activeGochi = useMemo(() => {
+  const selectedCourse = useMemo(
+    () => getExploreCourse(selectedCourseId),
+    [selectedCourseId],
+  );
+
+  const selectedCharacter = useMemo(
+    () => getExploreCharacter(selectedCharacterId),
+    [selectedCharacterId],
+  );
+
+  const activeName = useMemo(() => {
     const id = isExploring
       ? exploringGochiId
       : hasExploreReward
         ? pendingExploreGochiId
-        : selectedGochiId;
-    return getExploreGochi(id) ?? EXPLORE_MOCK_GOCHIS[0];
-  }, [exploringGochiId, hasExploreReward, isExploring, pendingExploreGochiId, selectedGochiId]);
+        : selectedCharacterId;
+    return getExploreGochi(id)?.name ?? getExploreCharacter(id as ExploreCharacterId)?.name ?? '귤새';
+  }, [
+    exploringGochiId,
+    hasExploreReward,
+    isExploring,
+    pendingExploreGochiId,
+    selectedCharacterId,
+  ]);
 
-  const statusLabel = !exploreForestUnlocked
-    ? '서쪽 숲을 먼저 열어주세요'
-    : hasExploreReward
-      ? '탐험 완료! 보상을 받아 주세요'
-      : isExploring
-        ? `${activeGochi?.name ?? '고치'}가 숲을 탐험 중이에요`
-        : exploreRemaining <= 0
-          ? '오늘 탐험은 모두 끝났어요'
-          : '보낼 고치를 골라 주세요';
+  const pickDefaultCharacter = useCallback(
+    (courseId: ExploreCourseId) => {
+      const course = getExploreCourse(courseId);
+      if (!course) {
+        return;
+      }
+      const eligible = EXPLORE_CHARACTERS.filter((entry) =>
+        canSendExploreCharacter(entry, growthStage.level, course.hours),
+      );
+      const preferred =
+        eligible.find((entry) => entry.id === 'adult') ??
+        eligible.find((entry) => entry.id === 'young') ??
+        null;
+      setSelectedCharacterId(preferred?.id ?? null);
+    },
+    [growthStage.level],
+  );
+
+  const onSelectCourse = (courseId: ExploreCourseId) => {
+    if (!exploreForestUnlocked || exploreRemaining <= 0 || isExploring || hasExploreReward) {
+      return;
+    }
+    setSelectedCourseId(courseId);
+    pickDefaultCharacter(courseId);
+    setStep('character');
+  };
+
+  const onBack = () => {
+    if (step === 'character' && !isExploring && !hasExploreReward) {
+      setStep('course');
+      return;
+    }
+    leaveExplore();
+  };
+
+  const canDispatch =
+    canStartExplore &&
+    !!selectedCourse &&
+    !!selectedCharacter &&
+    canSendExploreCharacter(selectedCharacter, growthStage.level, selectedCourse.hours);
 
   const onDispatch = async () => {
-    if (!canStartExplore || sending || !selectedGochiId) {
+    if (!canDispatch || sending || !selectedCourse || !selectedCharacter) {
       return;
     }
     setSending(true);
     try {
-      await startExplore({ gochiId: selectedGochiId });
+      const ok = await startExplore({
+        gochiId: selectedCharacter.id,
+        durationMs: selectedCourse.durationMs,
+      });
+      if (ok) {
+        leaveExplore();
+      }
     } finally {
       setSending(false);
     }
@@ -89,178 +177,317 @@ export default function ExploreScreen() {
     }
   };
 
+  const padX = scale(16);
+  const border = scale(gachiUi.border);
+
   return (
-    <PixelScreen>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: scale(16),
+    <View style={{ flex: 1, backgroundColor: gachiUi.cream, paddingTop: insets.top }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: padX,
           paddingTop: scale(8),
-          paddingBottom: scale(20),
-          gap: scale(12),
+          paddingBottom: scale(4),
         }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.back()}
+        <GachiIconButton kind="squareBack" label="뒤로" size={32} onPress={onBack} />
+        <GalmuriText size={14} bold center>
+          모험 보내기
+        </GalmuriText>
+        <GachiCoinBadge value={coins} />
+      </View>
+
+      {isExploring || hasExploreReward ? (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: padX,
+            paddingTop: scale(12),
+            paddingBottom: Math.max(insets.bottom, scale(20)) + scale(12),
+            gap: scale(14),
+            alignItems: 'center',
+          }}>
+          <ExploreWaitingAnim gochiId={exploringGochiId ?? pendingExploreGochiId} variant="full" />
+          <View
             style={{
-              paddingHorizontal: scale(12),
-              paddingVertical: scale(8),
-              borderWidth: scale(2),
-              borderColor: pixel.ink,
-              backgroundColor: pixel.white,
+              width: '100%',
+              padding: scale(14),
+              borderWidth: border,
+              borderColor: gachiUi.ink,
+              backgroundColor: gachiUi.panel,
+              borderRadius: scale(8),
+              gap: scale(8),
+              alignItems: 'center',
             }}>
-            <PixelText size={12}>← 섬으로</PixelText>
-          </Pressable>
-          <View style={{ flexDirection: 'row', gap: scale(6) }}>
-            <PixelChip label={`알 ${exploreEggCount}`} bg={pixel.sand} />
-            <PixelChip
-              label={`오늘 ${exploreRemaining}/${exploreDailyLimit}`}
-              bg={exploreRemaining > 0 ? pixel.grass : pixel.ash}
-            />
-          </View>
-        </View>
-
-        <PixelText size={20} center>
-          숲 탐험
-        </PixelText>
-        <PixelText size={12} color={pixel.muted} center>
-          섬의 서쪽 숲으로 고치를 보내요.{'\n'}돌아오면 알을 발견할지도 몰라요.
-        </PixelText>
-
-        <View style={{ alignItems: 'center', gap: scale(12) }}>
-          {isExploring ? (
-            <ExploreWaitingAnim gochiId={exploringGochiId} variant="full" />
-          ) : (
-            <View
-              style={{
-                width: scale(180),
-                height: scale(180),
-                borderWidth: scale(pixel.border),
-                borderColor: pixel.ink,
-                backgroundColor: hasExploreReward ? pixel.sand : pixel.grass,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: scale(8),
-              }}>
-              <PixelSprite id="tree" size={scale(64)} />
-              <PixelSprite id={hasExploreReward ? 'egg' : (activeGochi?.sprite ?? 'sprout')} size={scale(44)} />
-            </View>
-          )}
-
-          <PixelPanel style={{ width: '100%', alignItems: 'center', gap: scale(8) }}>
-            <PixelText size={13} center>
-              {statusLabel}
-            </PixelText>
+            <GalmuriText size={12} bold center>
+              {hasExploreReward
+                ? '모험 완료! 보상을 받아 주세요'
+                : `${activeName}가 모험 중이에요`}
+            </GalmuriText>
             {isExploring ? (
               <>
-                <PixelText size={28} center color={pixel.grassDeep}>
+                <GalmuriText size={20} bold color={gachiUi.greenDeep} center>
                   {exploreRemainLabel}
-                </PixelText>
+                </GalmuriText>
                 <View
                   style={{
                     width: '100%',
-                    height: scale(14),
-                    borderWidth: scale(2),
-                    borderColor: pixel.ink,
-                    backgroundColor: pixel.white,
+                    height: scale(12),
+                    borderWidth: border,
+                    borderColor: gachiUi.ink,
+                    backgroundColor: gachiUi.white,
                     overflow: 'hidden',
+                    borderRadius: scale(4),
                   }}>
                   <View
                     style={{
                       width: `${Math.round(Math.min(1, Math.max(0, exploreProgress)) * 100)}%`,
                       height: '100%',
-                      backgroundColor: pixel.leaf,
+                      backgroundColor: gachiUi.green,
                     }}
                   />
                 </View>
-                <PixelText size={11} color={pixel.muted} center>
-                  {activeGochi?.name}가 풀숲을 뒤지는 중 · {Math.round(exploreProgress * 100)}%
-                </PixelText>
               </>
-            ) : hasExploreReward ? (
-              <PixelText size={11} color={pixel.muted} center>
-                {activeGochi?.name ?? '고치'}가 고치 알을 들고 돌아왔어요
-              </PixelText>
             ) : (
-              <PixelText size={11} color={pixel.muted} center>
-                탐험은 약 3초 · 하루 {exploreDailyLimit}번
-              </PixelText>
+              <GalmuriText size={9} color={gachiUi.inkSoft} center>
+                {activeName}가 고치 알을 들고 돌아왔어요
+              </GalmuriText>
             )}
-          </PixelPanel>
-        </View>
+          </View>
+          {hasExploreReward ? (
+            <GachiButton
+              label={claiming ? '받는 중…' : '보상 받기'}
+              tone="green"
+              width="wide"
+              disabled={claiming}
+              onPress={() => {
+                void onClaim();
+              }}
+            />
+          ) : null}
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: padX,
+            paddingTop: scale(8),
+            paddingBottom: Math.max(insets.bottom, scale(20)) + scale(12),
+            gap: scale(12),
+          }}>
+          {step === 'course' ? (
+            <>
+              <GalmuriText size={9} color={gachiUi.inkSoft} center>
+                오늘 남은 모험 {exploreRemaining}/{exploreDailyLimit} · 매일 0시 충전
+              </GalmuriText>
 
-        {!isExploring && !hasExploreReward ? (
-          <>
-            <PixelText size={14}>보낼 고치</PixelText>
-            <View style={{ gap: scale(8) }}>
-              {EXPLORE_MOCK_GOCHIS.map((gochi) => {
-                const selected = selectedGochiId === gochi.id;
+              {!exploreForestUnlocked ? (
+                <View
+                  style={{
+                    padding: scale(12),
+                    borderWidth: border,
+                    borderColor: gachiUi.ink,
+                    backgroundColor: gachiUi.beige,
+                    borderRadius: scale(8),
+                  }}>
+                  <GalmuriText size={11} bold center>
+                    서쪽 숲을 먼저 열어주세요
+                  </GalmuriText>
+                  <GalmuriText size={9} color={gachiUi.inkSoft} center>
+                    섬 넓히기로 서쪽 숲을 열면 모험할 수 있어요
+                  </GalmuriText>
+                </View>
+              ) : null}
+
+              {EXPLORE_COURSES.map((course) => {
+                const disabled = !exploreForestUnlocked || exploreRemaining <= 0;
                 return (
-                  <Pressable
-                    key={gochi.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    disabled={!exploreForestUnlocked || exploreRemaining <= 0}
-                    onPress={() => setSelectedGochiId(gochi.id)}
+                  <View
+                    key={course.id}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: scale(10),
-                      padding: scale(10),
-                      borderWidth: scale(2),
-                      borderColor: pixel.ink,
-                      backgroundColor: selected ? pixel.sand : pixel.white,
-                      opacity: !exploreForestUnlocked || exploreRemaining <= 0 ? 0.5 : 1,
+                      gap: scale(12),
+                      padding: scale(12),
+                      borderWidth: border,
+                      borderColor: gachiUi.ink,
+                      backgroundColor: gachiUi.panel,
+                      borderRadius: scale(10),
+                      opacity: disabled ? 0.55 : 1,
                     }}>
-                    <PixelSprite id={gochi.sprite} size={scale(36)} />
-                    <View style={{ flex: 1, gap: scale(2) }}>
-                      <PixelText size={13}>{gochi.name}</PixelText>
-                      <PixelText size={11} color={pixel.muted}>
-                        {gochi.detail}
-                      </PixelText>
+                    <View
+                      style={{
+                        width: scale(56),
+                        height: scale(56),
+                        borderRadius: scale(8),
+                        backgroundColor: ICON_GREEN,
+                        borderWidth: border,
+                        borderColor: gachiUi.ink,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                      <Image
+                        source={course.icon}
+                        style={{ width: scale(44), height: scale(44), ...pixelImageStyle }}
+                        contentFit="contain"
+                      />
                     </View>
-                    {selected ? <PixelChip label="선택" bg={pixel.leaf} /> : null}
-                  </Pressable>
+                    <View style={{ flex: 1, gap: scale(4) }}>
+                      <GalmuriText size={12} bold>
+                        {course.name}
+                      </GalmuriText>
+                      <GalmuriText size={9} color={gachiUi.inkSoft}>
+                        {course.hours}시간 · 알 {course.eggChance}% / {course.itemLabel}{' '}
+                        {course.itemChance}%
+                      </GalmuriText>
+                      <View style={{ alignItems: 'flex-end', marginTop: scale(4) }}>
+                        <GachiButton
+                          label="선택"
+                          tone="beige"
+                          disabled={disabled}
+                          onPress={() => onSelectCourse(course.id)}
+                        />
+                      </View>
+                    </View>
+                  </View>
                 );
               })}
-            </View>
-          </>
-        ) : null}
 
-        {hasExploreReward ? (
-          <PixelButton
-            label={claiming ? '받는 중…' : '탐험 완료! 보상 받기'}
-            tone="orange"
-            disabled={claiming}
-            onPress={() => {
-              void onClaim();
-            }}
-          />
-        ) : (
-          <PixelButton
-            label={
-              sending
-                ? '보내는 중…'
-                : isExploring
-                  ? '탐험 중…'
-                  : canStartExplore
-                    ? '고치 탐험 보내기'
-                    : '지금은 보낼 수 없어요'
-            }
-            tone="green"
-            disabled={!canStartExplore || sending}
-            onPress={() => {
-              void onDispatch();
-            }}
-          />
-        )}
-        {!exploreForestUnlocked ? (
-          <PixelText size={11} color={pixel.muted} center>
-            섬 넓히기로 서쪽 숲을 열면 탐험할 수 있어요
-          </PixelText>
-        ) : null}
-      </ScrollView>
+              <View
+                style={{
+                  paddingVertical: scale(10),
+                  paddingHorizontal: scale(12),
+                  borderWidth: border,
+                  borderColor: gachiUi.ink,
+                  backgroundColor: TIP_MINT,
+                  borderRadius: scale(8),
+                }}>
+                <GalmuriText size={9} center>
+                  귤새는 숲을 좋아해요 · 동백 숲길 보상 +10%
+                </GalmuriText>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={{ gap: scale(4) }}>
+                <GalmuriText size={12} bold>
+                  누구를 보낼까요?
+                </GalmuriText>
+                <GalmuriText size={9} color={gachiUi.inkSoft}>
+                  어디로 어떤 캐릭터를 보내느냐에 따라 결과가 달라져요
+                </GalmuriText>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: scale(8) }}>
+                {EXPLORE_CHARACTERS.filter((character) => character.id !== 'egg').map((character) => {
+                  const unlocked = selectedCourse
+                    ? canSendExploreCharacter(character, growthStage.level, selectedCourse.hours)
+                    : false;
+                  const selected = selectedCharacterId === character.id;
+                  return (
+                    <Pressable
+                      key={character.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected, disabled: !unlocked }}
+                      disabled={!unlocked}
+                      onPress={() => setSelectedCharacterId(character.id)}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        gap: scale(6),
+                        paddingVertical: scale(10),
+                        paddingHorizontal: scale(4),
+                        borderWidth: scale(selected ? 3 : gachiUi.border),
+                        borderColor: selected ? SELECT_ORANGE : gachiUi.ink,
+                        backgroundColor: gachiUi.panel,
+                        borderRadius: scale(10),
+                        opacity: unlocked ? 1 : 0.45,
+                      }}>
+                      <Image
+                        source={character.icon}
+                        style={{ width: scale(48), height: scale(48), ...pixelImageStyle }}
+                        contentFit="contain"
+                      />
+                      <GalmuriText size={9} bold center numberOfLines={1}>
+                        {character.name}
+                      </GalmuriText>
+                      <GalmuriText size={7} color={gachiUi.inkSoft} center numberOfLines={2}>
+                        {character.detail}
+                      </GalmuriText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {selectedCourse ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: scale(12),
+                    padding: scale(14),
+                    borderWidth: border,
+                    borderColor: gachiUi.ink,
+                    backgroundColor: gachiUi.panel,
+                    borderRadius: scale(10),
+                  }}>
+                  <View
+                    style={{
+                      width: scale(52),
+                      height: scale(52),
+                      borderRadius: scale(8),
+                      backgroundColor: ICON_GREEN,
+                      borderWidth: border,
+                      borderColor: gachiUi.ink,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <Image
+                      source={selectedCourse.icon}
+                      style={{ width: scale(40), height: scale(40), ...pixelImageStyle }}
+                      contentFit="contain"
+                    />
+                  </View>
+                  <View style={{ flex: 1, gap: scale(4) }}>
+                    <GalmuriText size={11} bold>
+                      {selectedCourse.name} · {selectedCourse.hours}시간
+                    </GalmuriText>
+                    <GalmuriText size={9} color={gachiUi.inkSoft}>
+                      {formatExploreReturnLabel(selectedCourse.hours)}
+                    </GalmuriText>
+                    <GalmuriText size={8} color={gachiUi.inkSoft}>
+                      오늘 5,000걸음 걸으면 30분 단축
+                    </GalmuriText>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={{ alignItems: 'center', marginTop: scale(8) }}>
+                <AssetImageButton
+                  source={uiButtons.greenAdventure}
+                  label={sending ? '보내는 중…' : '모험 보내기'}
+                  width={170}
+                  height={40}
+                  disabled={!canDispatch || sending}
+                  onPress={() => {
+                    void onDispatch();
+                  }}
+                />
+                {!canDispatch && exploreForestUnlocked ? (
+                  <GalmuriText size={8} color={gachiUi.inkSoft} center style={{ marginTop: scale(8) }}>
+                    {exploreRemaining <= 0
+                      ? '오늘 모험은 모두 끝났어요'
+                      : !selectedCharacter
+                        ? '이 코스에 보낼 수 있는 캐릭터가 없어요'
+                        : '보낼 캐릭터를 골라 주세요'}
+                  </GalmuriText>
+                ) : null}
+              </View>
+            </>
+          )}
+        </ScrollView>
+      )}
 
       {exploreEggReveal ? (
         <ExploreEggReward
@@ -270,6 +497,6 @@ export default function ExploreScreen() {
           onDone={acknowledgeExploreEggReveal}
         />
       ) : null}
-    </PixelScreen>
+    </View>
   );
 }

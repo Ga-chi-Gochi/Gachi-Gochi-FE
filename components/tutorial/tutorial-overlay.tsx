@@ -20,10 +20,12 @@ type TutorialOverlayProps = {
   body: string;
   /** 본문 아래에 한 줄 더 얹는 안내(예: 어느 버튼을 눌러야 하는지) */
   hint?: string;
-  /** 화면 크기를 받아 구멍 하나를 돌려준다. 없으면 구멍 없이 전체를 어둡게 덮는다 */
-  hole?: (box: OverlayBox) => SpotlightHole;
+  /** 화면 크기를 받아 구멍(하나 또는 여러 개)을 돌려준다. 없으면 구멍 없이 전체를 어둡게 덮는다 */
+  hole?: (box: OverlayBox) => SpotlightHole | SpotlightHole[] | null;
   /** 카드를 구멍 위·아래·화면 가운데 중 어디에 놓을지 */
   placement: 'above' | 'below' | 'center';
+  /** 안내 카드를 왼쪽·가운데·오른쪽으로. 왼쪽 위 닫기처럼 구멍을 따라갈 때 start */
+  align?: 'start' | 'center' | 'end';
   /** above 일 때 꼬리가 가리킬 곳이 화면 오른쪽 끝에서 얼마나 떨어져 있는지. 없으면 가운데 */
   tailFromRight?: number;
   primary?: { label: string; onPress: () => void; disabled?: boolean };
@@ -49,6 +51,7 @@ export function TutorialOverlay({
   hint,
   hole,
   placement,
+  align = 'center',
   tailFromRight,
   primary,
   blockOutside = true,
@@ -76,16 +79,19 @@ export function TutorialOverlay({
   }, [interceptBack]);
 
   const measured = box.width > 0;
-  const target = measured && hole ? hole(box) : null;
-  const bounds = target ? holeBounds(target) : null;
+  const raw = measured && hole ? hole(box) : null;
+  const targets = raw ? (Array.isArray(raw) ? raw : [raw]) : [];
+  const bounds = targets.length ? unionHoleBounds(targets) : null;
 
   const cardPosition =
     placement === 'above' && bounds
       ? ({ bottom: box.height - bounds.top + scale(6) } as const)
       : placement === 'below' && bounds
-        ? ({ top: bounds.bottom + scale(12) } as const)
+        ? ({ top: bounds.bottom + scale(10) } as const)
         : ({ top: 0, bottom: 0, justifyContent: 'center' } as const);
   const tailInset = placement === 'above' && tailFromRight !== undefined ? tailFromRight - scale(EDGE) : undefined;
+  const cardAlign =
+    align === 'start' ? 'flex-start' : align === 'end' || tailInset !== undefined ? 'flex-end' : 'center';
 
   return (
     <View
@@ -97,8 +103,8 @@ export function TutorialOverlay({
       style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex }}>
       {measured ? (
         <>
-          {target ? (
-            <GuideSpotlight width={box.width} height={box.height} holes={[target]} />
+          {targets.length > 0 ? (
+            <GuideSpotlight width={box.width} height={box.height} holes={targets} />
           ) : (
             <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: pixel.dim }} />
           )}
@@ -106,10 +112,10 @@ export function TutorialOverlay({
           <View
             pointerEvents="box-none"
             style={[
-              { position: 'absolute', left: scale(EDGE), right: scale(EDGE), alignItems: tailInset !== undefined ? 'flex-end' : 'center' },
+              { position: 'absolute', left: scale(EDGE), right: scale(EDGE), alignItems: cardAlign },
               cardPosition,
             ]}>
-            <View style={{ width: '100%', maxWidth: scale(360) }}>
+            <View style={{ width: '100%', maxWidth: scale(align === 'start' || align === 'end' ? 300 : 360) }}>
               <GuideSpeech tail={placement === 'above'} tailInset={tailInset}>
                 {confirming ? (
                   <>
@@ -152,6 +158,25 @@ export function TutorialOverlay({
         </>
       ) : null}
     </View>
+  );
+}
+
+/** 여러 구멍을 감싸는 가장 작은 네모 */
+function unionHoleBounds(holes: SpotlightHole[]) {
+  return holes.reduce(
+    (acc, entry) => {
+      const next = holeBounds(entry);
+      if (!acc) {
+        return next;
+      }
+      return {
+        left: Math.min(acc.left, next.left),
+        top: Math.min(acc.top, next.top),
+        right: Math.max(acc.right, next.right),
+        bottom: Math.max(acc.bottom, next.bottom),
+      };
+    },
+    null as ReturnType<typeof holeBounds> | null,
   );
 }
 

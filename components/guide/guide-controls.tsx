@@ -1,8 +1,9 @@
 import { type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 
-import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
-import { pixel } from '@/constants/pixel-theme';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiButton } from '@/components/gachi-ui/gachi-button';
+import { gachiUi } from '@/constants/gachi-ui';
 import { useResponsive } from '@/hooks/use-responsive';
 
 /** 가이드 글자 색. dark 는 밝은 배경 위, light 는 어두운 어둡힘 위 */
@@ -16,11 +17,23 @@ export function GuideFrame({ children, style }: { children: ReactNode; style?: V
   return <View style={[{ width: '100%', maxWidth: scale(FRAME_MAX), alignSelf: 'center' }, style]}>{children}</View>;
 }
 
-/** 섬 위에 올리지 않는 장면의 배경. PixelScreen(하늘색 + 위쪽 진한 띠)과 같다 */
+/** 로그인과 같은 크림 배경. 위쪽만 살짝 진한 베이지 */
 export function GuideBackdrop() {
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: pixel.sky }}>
-      <View style={{ position: 'absolute', top: 0, right: 0, left: 0, height: '42%', backgroundColor: pixel.skyDeep, opacity: 0.35 }} />
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: gachiUi.cream }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          left: 0,
+          height: '42%',
+          backgroundColor: gachiUi.beige,
+          opacity: 0.35,
+        }}
+      />
     </View>
   );
 }
@@ -40,8 +53,8 @@ export function GuideHeader({
   onClose: () => void;
 }) {
   const { scale } = useResponsive();
-  const color = tone === 'light' ? pixel.white : pixel.ink;
-  const rest = tone === 'light' ? 'rgba(255,253,248,0.45)' : 'rgba(26,21,32,0.28)';
+  const color = tone === 'light' ? gachiUi.white : gachiUi.ink;
+  const rest = tone === 'light' ? 'rgba(255,253,248,0.45)' : 'rgba(61,46,34,0.28)';
   return (
     <GuideFrame style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(24) }}>
       <Pressable
@@ -50,9 +63,9 @@ export function GuideHeader({
         onPress={onClose}
         hitSlop={8}
         style={{ minWidth: scale(44), minHeight: scale(44), justifyContent: 'center' }}>
-        <PixelText size={14} color={color}>
+        <GalmuriText size={9} color={color}>
           {closeLabel}
-        </PixelText>
+        </GalmuriText>
       </Pressable>
       <View
         accessibilityRole="progressbar"
@@ -70,8 +83,9 @@ export function GuideHeader({
               style={{
                 width: scale(active ? 20 : 8),
                 height: scale(8),
-                backgroundColor: active ? pixel.tangerine : rest,
-                borderWidth: active ? scale(2) : 0,
+                borderRadius: scale(4),
+                backgroundColor: active ? gachiUi.green : rest,
+                borderWidth: active ? scale(gachiUi.border) : 0,
                 borderColor: color,
               }}
             />
@@ -85,19 +99,31 @@ export function GuideHeader({
 /** 도트 무대. 알과 귤새가 모래 위에 서 있는 네모 프레임 */
 export function GuideStage({ size, children }: { size: number; children: ReactNode }) {
   const { scale } = useResponsive();
-  const border = scale(pixel.border);
+  const border = scale(gachiUi.border);
   const sand = size * 0.3;
   return (
     <View
       style={{
         width: size,
         height: size,
-        backgroundColor: pixel.panel,
+        backgroundColor: gachiUi.panel,
         borderWidth: border,
-        borderColor: pixel.ink,
+        borderColor: gachiUi.ink,
+        borderRadius: scale(8),
         overflow: 'hidden',
       }}>
-      <View style={{ position: 'absolute', right: 0, bottom: 0, left: 0, height: sand, backgroundColor: pixel.sand, borderTopWidth: border, borderColor: pixel.ink }} />
+      <View
+        style={{
+          position: 'absolute',
+          right: 0,
+          bottom: 0,
+          left: 0,
+          height: sand,
+          backgroundColor: gachiUi.beige,
+          borderTopWidth: border,
+          borderColor: gachiUi.ink,
+        }}
+      />
       <View style={{ position: 'absolute', right: 0, bottom: sand - scale(8), left: 0, alignItems: 'center' }}>{children}</View>
     </View>
   );
@@ -115,15 +141,16 @@ export function GuideChip({ label, selected, onPress }: { label: string; selecte
         minHeight: scale(44),
         minWidth: scale(44),
         paddingHorizontal: scale(14),
-        backgroundColor: selected ? pixel.tangerine : pressed ? pixel.sand : pixel.white,
-        borderWidth: scale(2),
-        borderColor: pixel.ink,
+        backgroundColor: selected ? gachiUi.green : pressed ? gachiUi.beige : gachiUi.white,
+        borderWidth: scale(gachiUi.border),
+        borderColor: gachiUi.ink,
+        borderRadius: scale(8),
         alignItems: 'center',
         justifyContent: 'center',
       })}>
-      <PixelText size={14} color={selected ? pixel.white : pixel.ink}>
+      <GalmuriText size={9} bold={selected} color={selected ? gachiUi.white : gachiUi.ink}>
         {label}
-      </PixelText>
+      </GalmuriText>
     </Pressable>
   );
 }
@@ -131,9 +158,8 @@ export function GuideChip({ label, selected, onPress }: { label: string; selecte
 /** 말풍선 꼬리. 테두리 두께와 같은 단으로 줄어드는 계단식 */
 function GuideTail({ inset }: { inset?: number }) {
   const { scale } = useResponsive();
-  const unit = scale(pixel.border);
+  const unit = scale(gachiUi.border);
   const inner = [10, 8, 6, 4, 2];
-  // inset 이 있으면 카드 오른쪽 끝에서 그만큼 떨어진 곳을 가리킨다(꼬리 폭 12단의 절반을 빼서 가운데를 맞춘다)
   const placement =
     inset === undefined
       ? ({ alignSelf: 'center' } as const)
@@ -141,11 +167,11 @@ function GuideTail({ inset }: { inset?: number }) {
   return (
     <View pointerEvents="none" style={{ ...placement, alignItems: 'center', marginTop: -unit }}>
       {inner.map((steps) => (
-        <View key={steps} style={{ width: steps * unit + unit * 2, height: unit, backgroundColor: pixel.ink, alignItems: 'center' }}>
-          <View style={{ width: steps * unit, height: unit, backgroundColor: pixel.panel }} />
+        <View key={steps} style={{ width: steps * unit + unit * 2, height: unit, backgroundColor: gachiUi.ink, alignItems: 'center' }}>
+          <View style={{ width: steps * unit, height: unit, backgroundColor: gachiUi.panel }} />
         </View>
       ))}
-      <View style={{ width: unit * 4, height: unit, backgroundColor: pixel.ink }} />
+      <View style={{ width: unit * 4, height: unit, backgroundColor: gachiUi.ink }} />
     </View>
   );
 }
@@ -166,8 +192,17 @@ export function GuideSpeech({
   const { scale } = useResponsive();
   return (
     <View>
-      {/* compact: 섬을 덜 가리도록 안쪽 여백을 줄인 카드 */}
-      <PixelPanel style={{ padding: scale(compact ? 14 : 18), gap: scale(compact ? 10 : 14) }}>{children}</PixelPanel>
+      <View
+        style={{
+          backgroundColor: gachiUi.panel,
+          borderWidth: scale(gachiUi.border),
+          borderColor: gachiUi.ink,
+          borderRadius: scale(8),
+          padding: scale(compact ? 14 : 18),
+          gap: scale(compact ? 10 : 14),
+        }}>
+        {children}
+      </View>
       {tail ? <GuideTail inset={tailInset} /> : null}
     </View>
   );
@@ -179,24 +214,19 @@ export function GuideChoices({
   right,
   onLeft,
   onRight,
-  large = true,
 }: {
   left: string;
   right: string;
   onLeft: () => void;
   onRight: () => void;
-  /** false 면 작은 카드에 맞춰 버튼 높이를 줄인다 */
+  /** 호환용. GachiButton 은 large 구분 없이 wide/hug 만 쓴다 */
   large?: boolean;
 }) {
   const { scale } = useResponsive();
   return (
-    <View style={{ flexDirection: 'row', gap: scale(10) }}>
-      <View style={{ flex: 1 }}>
-        <PixelButton large={large} tone="ghost" label={left} onPress={onLeft} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <PixelButton large={large} label={right} onPress={onRight} />
-      </View>
+    <View style={{ flexDirection: 'row', gap: scale(10), justifyContent: 'center' }}>
+      <GachiButton label={left} tone="beige" onPress={onLeft} />
+      <GachiButton label={right} tone="green" onPress={onRight} />
     </View>
   );
 }

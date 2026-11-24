@@ -131,6 +131,7 @@ const DEFAULT_STATE: GameState = {
   placing: false,
   petOpen: false,
   locked: false,
+  noticeEgg: false,
   explore: null,
   look: 1,
 };
@@ -193,6 +194,10 @@ export class IslandScene extends Phaser.Scene {
   private creature!: Phaser.GameObjects.Container;
   private creatureBody!: Phaser.GameObjects.Image;
   private creatureShadow!: Phaser.GameObjects.Image;
+  /** 온보딩: 알을 가리키는 픽셀 느낌표·반짝이 */
+  private notice!: Phaser.GameObjects.Container;
+  private noticeBang!: Phaser.GameObjects.Image;
+  private noticeSparks: Phaser.GameObjects.Image[] = [];
   private explore!: Phaser.GameObjects.Container;
   private gas!: Phaser.GameObjects.Graphics;
 
@@ -304,9 +309,10 @@ export class IslandScene extends Phaser.Scene {
     this.creatureBody = this.add.image(0, 0, 'juvenile-idle', 0);
     this.creature.add([this.creatureShadow, this.creatureBody]);
     this.creature.setVisible(false);
+    this.buildNoticeMarks();
     this.explore = this.add.container(0, 0).setVisible(false);
     // 깊은 바다는 흔들림(quake) 밖에 둔다. 원래도 깊은 바다는 안 흔들렸다.
-    this.world.add([this.sea, this.quake, this.decor, this.creature, this.explore]);
+    this.world.add([this.sea, this.quake, this.decor, this.creature, this.notice, this.explore]);
 
     this.gas = this.add.graphics();
     this.overlay.add(this.gas);
@@ -1150,7 +1156,7 @@ export class IslandScene extends Phaser.Scene {
     }
     w.plan = grid ? (from, to) => planRoute(grid, footOffset, from, to) : undefined;
 
-    const visible = !s.placing && !s.petOpen && points.length > 0;
+    const visible = !s.placing && !s.petOpen && !s.hideCreature && points.length > 0;
     const wasVisible = this.creature.visible;
     this.creature.setVisible(visible);
     if (!visible) {
@@ -1180,7 +1186,10 @@ export class IslandScene extends Phaser.Scene {
   private drawCreature(delta: number) {
     const w = this.walk;
     const engine = w.engine;
-    if (!engine || !this.creature.visible) return;
+    if (!engine || !this.creature.visible) {
+      this.notice.setVisible(false);
+      return;
+    }
     const stageId = stageIdFor(this.state.level);
     if (engine.stageId !== stageId) {
       engine.stageId = stageId;
@@ -1205,6 +1214,86 @@ export class IslandScene extends Phaser.Scene {
     this.creature.setPosition(engine.x, engine.y);
     this.creatureBody.y = currentLift(engine, w.unit);
     this.creatureShadow.y = 0;
+    this.drawNotice(this.time.now);
+  }
+
+  /** 픽셀 느낌표·반짝이 텍스처를 한 번만 만든다 */
+  private buildNoticeMarks() {
+    // 잔디 위에서 잘 보이게: 먹색 테두리 + 귤/금색 속
+    if (!this.textures.exists('pixel-bang-v2')) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x3d2e22, 1);
+      g.fillRect(1, 0, 6, 2);
+      g.fillRect(0, 2, 8, 11);
+      g.fillRect(1, 15, 6, 2);
+      g.fillRect(2, 19, 4, 4);
+      g.fillStyle(0xff9a1a, 1);
+      g.fillRect(2, 2, 4, 9);
+      g.fillRect(3, 20, 2, 2);
+      g.fillStyle(0xffe56a, 1);
+      g.fillRect(2, 2, 2, 4);
+      g.fillRect(3, 20, 1, 1);
+      g.generateTexture('pixel-bang-v2', 8, 23);
+      g.destroy();
+    }
+    if (!this.textures.exists('pixel-spark-v2')) {
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x3d2e22, 1);
+      g.fillRect(3, 0, 2, 10);
+      g.fillRect(0, 4, 10, 2);
+      g.fillStyle(0xffb400, 1);
+      g.fillRect(3, 1, 2, 8);
+      g.fillRect(1, 4, 8, 2);
+      g.fillStyle(0xfff6a0, 1);
+      g.fillRect(4, 2, 1, 5);
+      g.fillRect(2, 4, 5, 1);
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(4, 4, 2, 2);
+      g.generateTexture('pixel-spark-v2', 10, 10);
+      g.destroy();
+    }
+    this.noticeBang = this.add.image(0, 0, 'pixel-bang-v2').setOrigin(0.5, 1);
+    this.noticeSparks = [
+      this.add.image(0, 0, 'pixel-spark-v2').setOrigin(0.5),
+      this.add.image(0, 0, 'pixel-spark-v2').setOrigin(0.5),
+      this.add.image(0, 0, 'pixel-spark-v2').setOrigin(0.5),
+    ];
+    // 세 반짝이 모두 같은 금색 톤
+    this.noticeSparks.forEach((spark) => spark.clearTint());
+    this.notice = this.add.container(0, 0, [this.noticeBang, ...this.noticeSparks]).setVisible(false);
+  }
+
+  /** 알 위·옆에 느낌표가 통통 튀고 별이 반짝인다 */
+  private drawNotice(now: number) {
+    const show = Boolean(this.state.noticeEgg) && this.creature.visible;
+    this.notice.setVisible(show);
+    if (!show) {
+      return;
+    }
+    const unit = Math.max(1, this.state.factor);
+    const size = this.walk.shown;
+    const bob = Math.sin(now / 220) * 3 * unit;
+    const pop = 1 + 0.1 * Math.sin(now / 180);
+    // 기준점을 알 몸통 중심에 두고, 느낌표는 위·반짝이는 좌우·아래에 붙인다
+    this.notice.setPosition(this.creature.x, this.creature.y - size * 0.12);
+    this.noticeBang.setPosition(0, -size * 0.62 + bob);
+    this.noticeBang.setScale(2.15 * unit * pop);
+    this.noticeBang.setAngle(Math.sin(now / 260) * 6);
+
+    const sparkOffsets = [
+      { x: -size * 0.48, y: -size * 0.08, phase: 0 },
+      { x: size * 0.5, y: -size * 0.12, phase: 1.7 },
+      // 알과 겹치지 않게 발 더 아래쪽으로
+      { x: 0, y: size * 0.92, phase: 3.1 },
+    ];
+    this.noticeSparks.forEach((spark, index) => {
+      const offset = sparkOffsets[index]!;
+      const pulse = 0.55 + 0.45 * Math.max(0, Math.sin(now / 160 + offset.phase));
+      spark.setPosition(offset.x + Math.sin(now / 300 + offset.phase) * 1.5, offset.y + bob * 0.25);
+      spark.setScale(unit * (1.2 + pulse * 0.55));
+      spark.setAlpha(0.7 + pulse * 0.3);
+      spark.setAngle((now / 18 + index * 40) % 360);
+    });
   }
 
   // ------------------------------------------------------------------ 탐험 중 미니 수색 (ExploreWaitingAnim map)

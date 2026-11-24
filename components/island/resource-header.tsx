@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
+import { HomeLevelBar, HomeTopIcons } from '@/components/home-top-bar';
 import { usePlayState } from '@/components/play-state';
 import { useResponsive } from '@/hooks/use-responsive';
 
@@ -22,8 +22,8 @@ export function ResourceHeader({
 }: ResourceHeaderProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { iconsInset } = useHomeTopLayout();
   const { resetLocalData } = usePlayState();
+  const top = Math.max(scale(32), insets.top);
 
   return (
     <View
@@ -36,23 +36,16 @@ export function ResourceHeader({
         left: 0,
         zIndex: 20,
       }}>
-      <View
-        pointerEvents="box-none"
-        style={{
-          marginTop: insets.top + scale(8),
-          marginLeft: scale(14),
-          marginRight: scale(14) + iconsInset,
-          flexDirection: 'row',
-          alignItems: 'flex-start',
-        }}>
-        <View>
-          <HomeTopBar />
-        </View>
+      <View pointerEvents="box-none" style={{ position: 'absolute', top, left: scale(32) }}>
+        <HomeLevelBar />
       </View>
 
       <HomeTopIcons
-        top={insets.top + scale(8)}
-        side={scale(14)}
+        top={top}
+        side={scale(22)}
+        iconSize={40}
+        iconGap={8}
+        menuSource={require('@/assets/pixel/btn-square-menu.png')}
         menuActions={{ onProfile, onSettings, onToggleSound, soundOn, onReset: resetLocalData }}
       />
     </View>

@@ -1,4 +1,5 @@
 /** Sprout Lands 풍 섬 단계. 기디 에셋 오면 레이아웃만 유지하고 스프라이트 교체. */
+import { ISLAND_LAST_STAGE } from '@/constants/island-stages';
 
 export type IslandZoneId = 'core' | 'east' | 'west' | 'north' | 'south';
 
@@ -72,7 +73,7 @@ export const ISLAND_ZONES: IslandZone[] = [
   },
 ];
 
-export const ISLAND_STAGE_MAX = ISLAND_ZONES.length;
+export const ISLAND_STAGE_MAX: number = ISLAND_LAST_STAGE;
 
 export function getZone(id: IslandZoneId): IslandZone | undefined {
   return ISLAND_ZONES.find((zone) => zone.id === id);
@@ -82,11 +83,14 @@ export function getIslandStage(unlocked: IslandZoneId[]): number {
   const stages = unlocked
     .map((id) => getZone(id)?.stage ?? 1)
     .filter((stage) => stage > 0);
-  return stages.length === 0 ? 1 : Math.max(...stages);
+  return stages.length === 0 ? 1 : Math.min(ISLAND_STAGE_MAX, Math.max(...stages));
 }
 
 export function getNextExpandZone(unlocked: IslandZoneId[]): IslandZone | null {
   const stage = getIslandStage(unlocked);
+  if (stage >= ISLAND_STAGE_MAX) {
+    return null;
+  }
   return ISLAND_ZONES.find((zone) => zone.stage === stage + 1) ?? null;
 }
 

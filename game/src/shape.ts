@@ -1,39 +1,11 @@
 // 섬 땅·얕은 물·해안 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
 // 좌표 단위는 RN 화면 dp 와 같다. 한 칸 CELL = 32.
+import { ISLAND_STAGE_ART, isLandCell, type IslandStageArt, type IslandStageId } from '@/constants/island-stages';
 import type { IslandZoneId } from '@/constants/island-zones';
 
 import { MOTION_SEQ, type MotionSheet } from './motion';
 
 export const CELL = 32;
-
-export const REVEAL_MS = 380;
-
-type LandKind = 'grass' | 'sand';
-/** 남쪽은 꽉 찬 모래. 그 외 가장자리는 바깥이 비어 있는 타일로 둥글게 깎는다. */
-type SandRim = 'fill' | 'n' | 'e' | 'w' | 'ne' | 'nw';
-
-export type IslandCell = {
-  key: string;
-  x: number;
-  y: number;
-  kind: LandKind | 'coast';
-  rim?: SandRim;
-  /** 해안기 줄. 0이 모래와 맞닿고 4가 깊은 바다 쪽이다. */
-  coastRow?: number;
-  /** 해안기 1–5 중 몇 번째인지. 같은 가로 위치는 같은 장을 쓴다. */
-  coastCol?: number;
-  /** 넓히기로 새로 생긴 칸. 가운데에서 멀수록 늦게 올라온다. */
-  riseDelay?: number;
-  /** 잔디 타일 대신 모서리를 작은 픽셀로 칠한다. */
-  fine?: boolean;
-};
-
-const keyOf = (x: number, y: number) => `${x},${y}`;
-
-export function delayFor(x: number, y: number, cx: number, cy: number) {
-  const dist = Math.hypot((x + 0.5) * CELL - cx, (y + 0.5) * CELL - cy);
-  return 160 + Math.floor(dist / CELL) * 28;
-}
 
 /** 알이 서는 잔디. 휴화산 바로 남쪽이다. */
 export const VOLCANO_COLS = 4;
@@ -78,303 +50,108 @@ export const CRATER_PIXELS: CraterPixel[] = CRATER_SPANS.flatMap((span, row) => 
   return pixels;
 });
 
-export const SEA_PLAIN_SPAN = CELL * 2;
-export const SEA_PLAIN_COLOR = '#2ca6a4';
-export const GRASS_CENTER_COLOR = '#3f9a5a';
+export const SEA_PLAIN_COLOR = '#32b5b3';
+export const SHORE_FOAM = false;
 export const SHORE_TUCK = 4;
 export const SOFT_SHORE_SHEET: MotionSheet = { ...MOTION_SEQ['sea-shore'].sheet, body: 'tile-sea-shore-soft' };
 
-type CellRect = { x0: number; y0: number; x1: number; y1: number };
+export const VOLCANO_ART_W = VOLCANO_COLS * CELL;
+export const VOLCANO_ART_H = VOLCANO_ROWS * CELL;
 
-const BLOCK_ZONES: Record<IslandZoneId, CellRect> = {
-  core: { x0: -4, y0: 0, x1: 3, y1: 6 },
-  north: { x0: -3, y0: -3, x1: 2, y1: -1 },
-  south: { x0: -3, y0: 7, x1: 2, y1: 9 },
-  west: { x0: -6, y0: 1, x1: -5, y1: 4 },
-  east: { x0: 4, y0: 2, x1: 5, y1: 5 },
-};
-const BLOCK_CORE_MIN_TOP = 4;
-const BLOCK_BEACH_FROM_CORE = 10;
-const BLOCK_BEACH_ROWS = 2;
-const BLOCK_ROWS_BELOW_BEACH = 4;
-const BLOCK_BEACH_OVERHANG = 0.4;
+export type CellPos = { col: number; row: number };
+export type WorldBox = { left: number; top: number; width: number; height: number };
 
-export type BlockLayout = {
-  center: number;
-  coreTop: number;
-  beachTop: number;
-  beachBottom: number;
-  shoreRow: number;
-  minCol: number;
-  maxCol: number;
-  visibleCols: number;
-};
+export function stageArt(stage: IslandStageId): IslandStageArt {
+  return ISLAND_STAGE_ART[stage];
+}
 
-export function blockLayout(width: number, height: number): BlockLayout {
-  const rows = Math.floor(height / CELL);
-  const coreTop = Math.max(BLOCK_CORE_MIN_TOP, rows - BLOCK_ROWS_BELOW_BEACH - BLOCK_BEACH_ROWS - BLOCK_BEACH_FROM_CORE);
-  const beachTop = coreTop + BLOCK_BEACH_FROM_CORE;
-  const fullCols = Math.ceil(width / CELL);
-  const overhang = Math.ceil(fullCols * BLOCK_BEACH_OVERHANG);
+export function volcanoScale(stage: IslandStageId) {
+  const [x0, , x1] = stageArt(stage).volcanoBox;
+  return (x1 - x0) / VOLCANO_ART_W;
+}
+
+export function volcanoFrame(stage: IslandStageId) {
+  const [ax, ay] = stageArt(stage).volcanoAnchor;
+  const scale = volcanoScale(stage);
+  return { x: ax - (VOLCANO_ART_W * scale) / 2, y: ay - VOLCANO_ART_H * scale, scale };
+}
+
+export function craterCloudPoint(stage: IslandStageId) {
+  const f = volcanoFrame(stage);
+  return { x: stageArt(stage).volcanoAnchor[0], y: f.y + 6 * f.scale };
+}
+
+export function volcanoCells(stage: IslandStageId) {
+  const f = volcanoFrame(stage);
   return {
-    center: Math.round(width / 2 / CELL),
-    coreTop,
-    beachTop,
-    beachBottom: beachTop + BLOCK_BEACH_ROWS - 1,
-    shoreRow: beachTop + BLOCK_BEACH_ROWS,
-    minCol: -overhang,
-    maxCol: fullCols - 1 + overhang,
-    visibleCols: Math.floor(width / CELL),
+    col0: Math.floor(f.x / CELL),
+    row0: Math.floor(f.y / CELL),
+    col1: Math.ceil((f.x + VOLCANO_ART_W * f.scale) / CELL) - 1,
+    row1: Math.ceil((f.y + VOLCANO_ART_H * f.scale) / CELL) - 1,
   };
 }
 
-function blockZoneRect(layout: BlockLayout, zoneId: IslandZoneId): CellRect {
-  const rect = BLOCK_ZONES[zoneId];
-  return {
-    x0: layout.center + rect.x0,
-    y0: layout.coreTop + rect.y0,
-    x1: layout.center + rect.x1,
-    y1: layout.coreTop + rect.y1,
-  };
+export function nearVolcano(stage: IslandStageId, col: number, row: number) {
+  const v = volcanoCells(stage);
+  return col >= v.col0 - 1 && col <= v.col1 + 1 && row >= v.row0 - 1 && row <= v.row1 + 1;
 }
 
-function isBeachRow(layout: BlockLayout, y: number) {
-  return y >= layout.beachTop && y <= layout.beachBottom;
+export function isWalkableCell(stage: IslandStageId, col: number, row: number) {
+  return isLandCell(stageArt(stage), col, row) && !nearVolcano(stage, col, row);
 }
 
-function blockLandSet(layout: BlockLayout, zones: readonly IslandZoneId[]) {
-  const land = new Set<string>();
-  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
-    const rect = blockZoneRect(layout, zoneId);
-    for (let y = rect.y0; y <= rect.y1; y += 1) {
-      for (let x = rect.x0; x <= rect.x1; x += 1) {
-        land.add(keyOf(x, y));
+export function isWalkable(stage: IslandStageId, px: number, py: number) {
+  return isWalkableCell(stage, Math.floor(px / CELL), Math.floor(py / CELL));
+}
+
+export function walkableCells(stage: IslandStageId) {
+  const art = stageArt(stage);
+  const cells: CellPos[] = [];
+  for (let row = 0; row < art.rows; row += 1) {
+    for (let col = 0; col < art.cols; col += 1) {
+      if (isWalkableCell(stage, col, row)) cells.push({ col, row });
+    }
+  }
+  return cells;
+}
+
+export function walkTargetCells(stage: IslandStageId): CellPos[] {
+  const v = volcanoCells(stage);
+  return [
+    { col: v.col0 - 1, row: v.row0 - 1 },
+    { col: v.col1 + 1, row: v.row0 - 1 },
+    { col: v.col0 - 1, row: v.row1 + 4 },
+    { col: v.col1 + 1, row: v.row1 + 4 },
+  ];
+}
+
+export function shoreCells(stage: IslandStageId): CellPos[] {
+  const art = stageArt(stage);
+  const cells: CellPos[] = [];
+  for (let col = 0; col < art.cols; col += 1) {
+    for (let row = art.rows; row >= 1; row -= 1) {
+      if (isLandCell(art, col, row - 1) && !isLandCell(art, col, row)) {
+        cells.push({ col, row });
+        break;
       }
     }
   }
-  return land;
+  return cells;
 }
 
-let blockLandCache: { key: string; land: Set<string> } | null = null;
-
-function cachedBlockLand(width: number, height: number, layout: BlockLayout, zones: readonly IslandZoneId[]) {
-  const key = `${width}x${height}:${[...zones].sort().join(',')}`;
-  if (blockLandCache?.key !== key) {
-    blockLandCache = { key, land: blockLandSet(layout, zones) };
-  }
-  return blockLandCache.land;
-}
-
-function blockLandAt(layout: BlockLayout, land: Set<string>, x: number, y: number) {
-  return isBeachRow(layout, y) || land.has(keyOf(x, y));
-}
-
-export function blockZoneFrame(zoneId: IslandZoneId, width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return null;
-  }
-  const rect = blockZoneRect(blockLayout(width, height), zoneId);
-  return {
-    left: rect.x0 * CELL,
-    top: rect.y0 * CELL,
-    width: (rect.x1 - rect.x0 + 1) * CELL,
-    height: (rect.y1 - rect.y0 + 1) * CELL,
-  };
-}
-
-export function blockWalkPoints(zones: readonly IslandZoneId[], width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return null;
-  }
-  const layout = blockLayout(width, height);
-  const points: { x: number; y: number }[] = [];
-  for (const zoneId of new Set<IslandZoneId>(['core', ...zones])) {
-    const rect = blockZoneRect(layout, zoneId);
-    for (let y = rect.y0; y <= rect.y1; y += 1) {
-      for (let x = rect.x0; x <= rect.x1; x += 1) {
-        const px = (x + 0.5) * CELL;
-        const py = (y + 0.5) * CELL;
-        if (isWalkable(px, py, width, height, zones)) {
-          points.push({ x: px, y: py });
-        }
-      }
-    }
-  }
-  return points;
-}
-
-export type GrassPiece = string | 'flat';
-
-export type BlockTile = {
-  key: string;
-  x: number;
-  y: number;
-  sand: string | null;
-  grass: GrassPiece | null;
-  riseDelay?: number;
+const ZONE_SHARE: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
+  core: { x: 0.25, y: 0.55, w: 0.5, h: 0.25 },
+  east: { x: 0.62, y: 0.25, w: 0.28, h: 0.3 },
+  west: { x: 0.08, y: 0.35, w: 0.28, h: 0.25 },
+  north: { x: 0.4, y: 0.06, w: 0.4, h: 0.16 },
+  south: { x: 0.3, y: 0.8, w: 0.4, h: 0.1 },
 };
 
-function sandPiece(n: boolean, s: boolean, w: boolean, e: boolean): string {
-  if (!n && !w && s && e) return 'tile-sand-corner-top-left';
-  if (!n && !e && s && w) return 'tile-sand-corner-top-right';
-  if (!s && !w && n && e) return 'tile-sand-corner-bottom-left';
-  if (!s && !e && n && w) return 'tile-sand-corner-bottom-right';
-  return 'sand-fill';
+export function zoneFrame(stage: IslandStageId, zoneId: IslandZoneId): WorldBox {
+  const art = stageArt(stage);
+  const s = ZONE_SHARE[zoneId];
+  return { left: s.x * art.width, top: s.y * art.height, width: s.w * art.width, height: s.h * art.height };
 }
-
-type Around = { n: boolean; s: boolean; w: boolean; e: boolean; nw: boolean; ne: boolean; sw: boolean; se: boolean };
-
-function grassPiece({ n, s, w, e, nw, ne, sw, se }: Around): GrassPiece {
-  if (!n && !w) return 'tile-grass-corner-top-left';
-  if (!n && !e) return 'tile-grass-corner-top-right';
-  if (!s && !w) return 'tile-grass-corner-bottom-left';
-  if (!s && !e) return 'tile-grass-corner-bottom-right';
-  if (!n) return 'tile-grass-side-top';
-  if (!s) return 'tile-grass-side-bottom';
-  if (!w) return 'tile-grass-side-left';
-  if (!e) return 'tile-grass-side-right';
-  if (!nw) return 'tile-grass-inner-top-left';
-  if (!ne) return 'tile-grass-inner-top-right';
-  if (!sw) return 'tile-grass-inner-bottom-left';
-  if (!se) return 'tile-grass-inner-bottom-right';
-  return 'flat';
-}
-
-export type BlockIsland = { tiles: BlockTile[]; shore: IslandCell[]; layout: BlockLayout };
-
-export function buildBlockIsland(width: number, height: number, zones: readonly IslandZoneId[], growingZoneId: IslandZoneId | null): BlockIsland {
-  const layout = blockLayout(width, height);
-  const growing = growingZoneId && growingZoneId !== 'core' ? growingZoneId : null;
-  const settledZones = zones.filter((zoneId) => zoneId !== growing);
-  const fullZones = growing ? [...settledZones, growing] : settledZones;
-  const settled = blockLandSet(layout, settledZones);
-  const land = growing ? blockLandSet(layout, fullZones) : settled;
-  const landAt = (x: number, y: number) => blockLandAt(layout, land, x, y);
-  const grassAt = (x: number, y: number) => {
-    if (isBeachRow(layout, y) || !land.has(keyOf(x, y))) {
-      return false;
-    }
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        if (!landAt(x + dx, y + dy)) {
-          return false;
-        }
-      }
-    }
-    return true;
-  };
-  const origin = { cx: layout.center * CELL, cy: (layout.coreTop + 3.5) * CELL };
-  const tiles: BlockTile[] = [];
-  const place = (x: number, y: number) => {
-    const n = landAt(x, y - 1);
-    const s = landAt(x, y + 1);
-    const w = landAt(x - 1, y);
-    const e = landAt(x + 1, y);
-    const grass = grassAt(x, y)
-      ? grassPiece({
-          n: grassAt(x, y - 1),
-          s: grassAt(x, y + 1),
-          w: grassAt(x - 1, y),
-          e: grassAt(x + 1, y),
-          nw: grassAt(x - 1, y - 1),
-          ne: grassAt(x + 1, y - 1),
-          sw: grassAt(x - 1, y + 1),
-          se: grassAt(x + 1, y + 1),
-        })
-      : null;
-    const fresh = growing != null && !isBeachRow(layout, y) && !settled.has(keyOf(x, y));
-    tiles.push({
-      key: keyOf(x, y),
-      x,
-      y,
-      sand: grass === 'flat' ? null : sandPiece(n, s, w, e),
-      grass,
-      riseDelay: fresh ? delayFor(x, y, origin.cx, origin.cy) : undefined,
-    });
-  };
-  for (const key of land) {
-    const [x, y] = key.split(',').map(Number);
-    if (!isBeachRow(layout, y)) {
-      place(x, y);
-    }
-  }
-  for (let y = layout.beachTop; y <= layout.beachBottom; y += 1) {
-    for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
-      place(x, y);
-    }
-  }
-  const shore: IslandCell[] = [];
-  for (let x = layout.minCol; x <= layout.maxCol; x += 1) {
-    shore.push({ key: `shore-${x}`, x, y: layout.shoreRow, kind: 'coast', coastRow: 0 });
-  }
-  return { tiles, shore, layout };
-}
-
-export function islandCenterCol(width: number, height: number) {
-  return blockLayout(width, height).center;
-}
-
-export function volcanoOrigin(width: number, height: number) {
-  const layout = blockLayout(width, height);
-  return {
-    x: layout.center - Math.floor(VOLCANO_COLS / 2),
-    y: layout.coreTop + 2,
-  };
-}
-
-export function volcanoMouthPoint(width: number, height: number) {
-  const origin = volcanoOrigin(width, height);
-  return { x: (origin.x + VOLCANO_COLS / 2) * CELL, y: (origin.y + VOLCANO_ROWS - 1) * CELL };
-}
-
-/** 구름이 피어나는 화구. 섬 배치 좌표다. */
-export function craterCloudPoint(width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return { x: 0, y: 0 };
-  }
-  const origin = volcanoOrigin(width, height);
-  return {
-    x: (origin.x + VOLCANO_COLS / 2) * CELL,
-    y: origin.y * CELL + 6,
-  };
-}
-
-export function isWalkable(px: number, py: number, width: number, height: number, zones: readonly IslandZoneId[]) {
-  if (width <= 0 || height <= 0) {
-    return false;
-  }
-  const x = Math.floor(px / CELL);
-  const y = Math.floor(py / CELL);
-  const layout = blockLayout(width, height);
-  if (x < 0 || y < 0 || x >= layout.visibleCols) {
-    return false;
-  }
-  if (!blockLandAt(layout, cachedBlockLand(width, height, layout, zones), x, y)) {
-    return false;
-  }
-  const origin = volcanoOrigin(width, height);
-  const nearVolcano = x >= origin.x - 1 && x <= origin.x + VOLCANO_COLS && y >= origin.y - 1 && y <= origin.y + VOLCANO_ROWS;
-  return !nearVolcano;
-}
-
-export function sandStandX(width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return 0;
-  }
-  const origin = volcanoOrigin(width, height);
-  return (origin.x + VOLCANO_COLS / 2) * CELL;
-}
-
-export function sandStandY(width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return 0;
-  }
-  const origin = volcanoOrigin(width, height);
-  return (origin.y + VOLCANO_ROWS + 0.5) * CELL;
-}
-
-/** 잔디 타일 사이로 바다가 비치지 않게 1px 겹친다. */
-export const TILE_BLEED = 1;
 
 export function mix(x: number, y: number, n = 0) {
   let value = Math.imul(x + 1, 374761393) ^ Math.imul(y + 3, 668265263) ^ Math.imul(n + 5, 1442695041);

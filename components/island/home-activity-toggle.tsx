@@ -23,7 +23,6 @@ const fabOpen = require('@/assets/pixel/fab-open.png') as ImageSource;
 
 const AREA = 212;
 const FAB_SIZE = 100;
-const LIFT = 20;
 const FAB_CENTER = AREA - FAB_SIZE / 2;
 const OPEN_MS = 280;
 const CLOSE_MS = 200;
@@ -100,8 +99,8 @@ export function HomeActivityToggle() {
         pointerEvents="box-none"
         style={{
           position: 'absolute',
-          right: scale(12),
-          bottom: Math.max(insets.bottom, scale(12)) + scale(LIFT),
+          right: scale(22),
+          bottom: Math.max(insets.bottom, scale(24)),
           width: scale(AREA),
           height: scale(AREA),
           zIndex: 40,

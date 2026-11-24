@@ -2,26 +2,21 @@ import { createContext, useContext } from 'react';
 import { Platform } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
+import { ISLAND_STAGE_ART, toIslandStage } from '@/constants/island-stages';
+
 export const CELL = 32;
 
-const VOLCANO_COLS = 4;
-const BLOCK_CORE_MIN_TOP = 4;
-const BLOCK_BEACH_FROM_CORE = 10;
-const BLOCK_BEACH_ROWS = 2;
-const BLOCK_ROWS_BELOW_BEACH = 4;
+const VOLCANO_ART_W = 4 * CELL;
+const VOLCANO_ART_H = 3 * CELL;
 
-export function craterCloudPoint(width: number, height: number) {
-  if (width <= 0 || height <= 0) {
-    return { x: 0, y: 0 };
-  }
-  const rows = Math.floor(height / CELL);
-  const coreTop = Math.max(BLOCK_CORE_MIN_TOP, rows - BLOCK_ROWS_BELOW_BEACH - BLOCK_BEACH_ROWS - BLOCK_BEACH_FROM_CORE);
-  const center = Math.round(width / 2 / CELL);
-  const originX = center - Math.floor(VOLCANO_COLS / 2);
-  const originY = coreTop + 2;
+export function craterCloudPoint(stage: number) {
+  const art = ISLAND_STAGE_ART[toIslandStage(stage)];
+  const [x0, , x1] = art.volcanoBox;
+  const [ax, ay] = art.volcanoAnchor;
+  const scale = (x1 - x0) / VOLCANO_ART_W;
   return {
-    x: (originX + VOLCANO_COLS / 2) * CELL,
-    y: originY * CELL + 6,
+    x: ax,
+    y: ay - VOLCANO_ART_H * scale + 6 * scale,
   };
 }
 

@@ -2,8 +2,9 @@
 // 좌표 단위는 RN 화면 dp. 카메라 배율에 기기 픽셀 비율(dpr)을 곱해서, 1dp = 도트 1칸이 기기 픽셀 정수배로 그려지게 한다.
 import Phaser from 'phaser';
 
+import { toIslandStage, type IslandStageId } from '@/constants/island-stages';
 import type { IslandZoneId } from '@/constants/island-zones';
-import { ISLAND_ZONES } from '@/constants/island-zones';
+import { ISLAND_ZONES, getIslandStage } from '@/constants/island-zones';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
@@ -24,28 +25,23 @@ import {
 } from './gas';
 import {
   CELL,
-  GRASS_CENTER_COLOR,
   SEA_PLAIN_COLOR,
-  SEA_PLAIN_SPAN,
+  SHORE_FOAM,
   SHORE_TUCK,
   SOFT_SHORE_SHEET,
-  REVEAL_MS,
   CRATER_MID,
   CRATER_PIXELS,
   CRATER_SPANS,
-  TILE_BLEED,
   VOLCANO_COLS,
   VOLCANO_ROWS,
-  blockZoneFrame,
-  buildBlockIsland,
   craterCloudPoint,
-  islandCenterCol,
   magmaColor,
+  shoreCells,
   spills,
+  stageArt,
   surgeFill,
-  volcanoOrigin,
-  type BlockIsland,
-  type BlockTile,
+  volcanoFrame,
+  zoneFrame,
 } from './shape';
 import {
   MAX_TICK_MS,
@@ -61,10 +57,14 @@ import { MOTION_RULES, MOTION_SEQ } from './motion';
 import { SeaClock, waveLag } from './seaClock';
 import { keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
 
-import sandFillUrl from '../assets/sand-fill.png';
-import eggUrl from '../assets/gyulsae-egg.png';
-import youngUrl from '../assets/gyulsae-young.png';
-import adultUrl from '../assets/gyulsae-adult.png';
+import eggUrl from '../assets/island-v3/gyulsae-egg.png';
+import youngUrl from '../assets/island-v3/gyulsae-young.png';
+import adultUrl from '../assets/island-v3/gyulsae-adult.png';
+import seaPlainUrl from '../assets/island-v3/sea-plain.png';
+import stage1Url from '../assets/island-v3/stage1.png';
+import stage2Url from '../assets/island-v3/stage2.png';
+import stage3Url from '../assets/island-v3/stage3.png';
+import seaShoreSoftUrl from '../assets/tiles-v2/sea-shore-soft.png';
 
 const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: true, import: 'default' }) as Record<
   string,
@@ -74,7 +74,7 @@ const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: tr
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
-const tileUrls = import.meta.glob('../assets/tiles-v2/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+const stageUrls: Record<IslandStageId, string> = { 1: stage1Url, 2: stage2Url, 3: stage3Url };
 
 const animUrls = import.meta.glob('../assets/anims/*/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
@@ -82,6 +82,7 @@ const animUrls = import.meta.glob('../assets/anims/*/*.png', { eager: true, impo
 const MIN_ZOOM = 0.62;
 const MAX_ZOOM = 2.8;
 const PAN_START = 12;
+const HOME = { width: 390, height: 844, centerX: 204, centerY: 488, tile: 40, spanX: 340, spanY: 552 };
 
 function clampPan(zoom: number, x: number, y: number, width: number, height: number) {
   const span = Math.abs(zoom - 1);
@@ -92,16 +93,6 @@ function clampPan(zoom: number, x: number, y: number, width: number, height: num
     y: Math.min(maxY, Math.max(-maxY, y)),
   };
 }
-
-// ------------------------------------------------------------------ 섬 위 구역 (beach-play.tsx)
-const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
-  core: { x: 0.24, y: 0.28, w: 0.52, h: 0.44 },
-  west: { x: 0.0, y: 0.34, w: 0.24, h: 0.36 },
-  east: { x: 0.76, y: 0.34, w: 0.24, h: 0.36 },
-  north: { x: 0.24, y: 0.16, w: 0.52, h: 0.14 },
-  south: { x: 0.24, y: 0.7, w: 0.52, h: 0.12 },
-};
-
 
 const DEFAULT_STATE: GameState = {
   zones: ['core'],
@@ -153,10 +144,10 @@ export class IslandScene extends Phaser.Scene {
   private sea!: Phaser.GameObjects.Container;
   private seaClock = new SeaClock();
   private centerCol = 0;
+  private stage: IslandStageId = 1;
   private water!: Phaser.GameObjects.Container;
   private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
   private quake!: Phaser.GameObjects.Container;
-  private rising!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
   private volcano!: Phaser.GameObjects.Container;
   private lava!: Phaser.GameObjects.Graphics;
@@ -172,9 +163,7 @@ export class IslandScene extends Phaser.Scene {
   private camDirty = false;
 
   private terrainKey = '';
-  private terrainSeq = 0;
   private decorKey = '';
-  private volcanoAt = { x: 0, y: 0 };
 
   // 분화
   private eruptAt = -1;
@@ -232,13 +221,9 @@ export class IslandScene extends Phaser.Scene {
       const m = /anims\/([\w-]+)\/(sheet|shadow)\.png$/.exec(path);
       if (m) this.load.spritesheet(m[2] === 'sheet' ? m[1] : `${m[1]}-shadow`, url, { frameWidth: 32, frameHeight: 32 });
     }
-    for (const [path, url] of Object.entries(tileUrls)) {
-      const name = /([\w-]+)\.png$/.exec(path)?.[1];
-      if (!name) continue;
-      if (name === 'sea-shore-soft') this.load.spritesheet(`tile-${name}`, url, { frameWidth: 32, frameHeight: 32 });
-      else this.load.image(`tile-${name}`, url);
-    }
-    this.load.image('sand-fill', sandFillUrl);
+    this.load.spritesheet('tile-sea-shore-soft', seaShoreSoftUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.image('v3-sea-plain', seaPlainUrl);
+    for (const [id, url] of Object.entries(stageUrls)) this.load.image(`v3-stage${id}`, url);
     this.load.image('gyulsae-egg', eggUrl);
     this.load.image('gyulsae-young', youngUrl);
     this.load.image('gyulsae-adult', adultUrl);
@@ -272,11 +257,10 @@ export class IslandScene extends Phaser.Scene {
     this.quake = this.add.container(0, 0);
     // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
     this.water = this.add.container(0, 0);
-    this.rising = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
     this.volcano = this.add.container(0, 0);
     this.lava = this.add.graphics();
-    this.quake.add([this.water, this.rising, this.terrain, this.volcano, this.lava]);
+    this.quake.add([this.terrain, this.water, this.volcano, this.lava]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
@@ -320,15 +304,15 @@ export class IslandScene extends Phaser.Scene {
    * 칸마다 시간차(waveLag)가 다르고 세로로는 같으므로, 한 줄을 캔버스에 그려 세로로 반복해 깐다.
    */
   private layoutSea() {
-    const x0 = Math.floor((-1.2 * this.W) / CELL) * CELL;
-    const y0 = Math.floor((-1.2 * this.H) / CELL) * CELL;
-    const x1 = Math.ceil((2.2 * this.W) / CELL) * CELL;
-    const y1 = Math.ceil((2.2 * this.H) / CELL) * CELL;
-    this.centerCol = islandCenterCol(this.W, this.H);
+    const art = stageArt(this.stage);
+    this.centerCol = Math.floor(art.cols / 2);
+    const reach = Math.ceil((3 * Math.max(this.W, this.H)) / (this.baseDp() * MIN_ZOOM) / CELL) * CELL;
+    const x0 = Math.floor((art.width / 2 - reach) / CELL) * CELL;
+    const y0 = Math.floor((art.height / 2 - reach) / CELL) * CELL;
+    const x1 = Math.ceil((art.width / 2 + reach) / CELL) * CELL;
+    const y1 = Math.ceil((art.height / 2 + reach) / CELL) * CELL;
     this.sea.removeAll(true);
-    const px0 = Math.floor(x0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
-    const py0 = Math.floor(y0 / SEA_PLAIN_SPAN) * SEA_PLAIN_SPAN;
-    this.sea.add(this.add.tileSprite(px0, py0, x1 - px0, y1 - py0, 'tile-sea-plain-2x2').setOrigin(0));
+    this.sea.add(this.add.tileSprite(x0, y0, x1 - x0, y1 - y0, 'v3-sea-plain').setOrigin(0));
   }
 
   private stepWater() {
@@ -363,12 +347,37 @@ export class IslandScene extends Phaser.Scene {
     this.worldCam.setSize(this.scale.width, this.scale.height);
   }
 
+  private baseDp() {
+    const art = stageArt(this.stage);
+    const fx = this.W / HOME.width;
+    const fy = this.H / HOME.height;
+    const tile = Math.min(HOME.tile * Math.min(fx, fy), (HOME.spanX * fx) / art.cols, (HOME.spanY * fy) / art.rows);
+    return tile / CELL;
+  }
+
   private viewZoom() {
-    return Math.max(1, Math.round(this.dpr * this.cam.z * CELL)) / CELL;
+    return Math.max(1, Math.round(this.dpr * this.baseDp() * this.cam.z * CELL)) / CELL;
   }
 
   private shownZoom() {
     return this.viewZoom() / this.dpr;
+  }
+
+  private viewCenter() {
+    const art = stageArt(this.stage);
+    const zd = this.shownZoom();
+    const sx0 = (this.W * HOME.centerX) / HOME.width;
+    const sy0 = (this.H * HOME.centerY) / HOME.height;
+    return {
+      cx: art.width / 2 + (this.W / 2 - sx0 - this.cam.x) / zd,
+      cy: art.height / 2 + (this.H / 2 - sy0 - this.cam.y) / zd,
+    };
+  }
+
+  private toScreen(wx: number, wy: number) {
+    const zd = this.shownZoom();
+    const { cx, cy } = this.viewCenter();
+    return { x: this.W / 2 + (wx - cx) * zd, y: this.H / 2 + (wy - cy) * zd };
   }
 
   private snap(v: number) {
@@ -377,13 +386,12 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private applyCamera(force = false) {
-    const { x, y } = this.cam;
+    const { cx, cy } = this.viewCenter();
     const Z = this.viewZoom();
-    const zoom = Z / this.dpr;
     const Wd = this.scale.width;
     const Hd = this.scale.height;
-    const qx = Math.round((this.W / 2 - x / zoom) * Z - Wd / 2);
-    const qy = Math.round((this.H / 2 - y / zoom) * Z - Hd / 2);
+    const qx = Math.round(cx * Z - Wd / 2);
+    const qy = Math.round(cy * Z - Hd / 2);
     this.worldCam.setZoom(Z);
     this.worldCam.setScroll((qx + Wd / 2) / Z - Wd / 2, (qy + Hd / 2) / Z - Hd / 2);
     this.camDirty = true;
@@ -395,15 +403,22 @@ export class IslandScene extends Phaser.Scene {
     if (!this.camDirty || (!force && now - this.camSentAt < 60)) return;
     this.camDirty = false;
     this.camSentAt = now;
-    send({ type: 'camera', zoom: this.shownZoom(), x: this.cam.x, y: this.cam.y, w: this.W, h: this.H, zones: this.blockZoneBoxes() });
+    const zd = this.shownZoom();
+    const { cx, cy } = this.viewCenter();
+    send({
+      type: 'camera',
+      zoom: zd,
+      x: (this.W / 2 - cx) * zd,
+      y: (this.H / 2 - cy) * zd,
+      w: this.W,
+      h: this.H,
+      zones: this.zoneBoxes(),
+    });
   }
 
-  private blockZoneBoxes(): ZoneBoxes {
+  private zoneBoxes(): ZoneBoxes {
     const boxes: ZoneBoxes = {};
-    for (const zone of ISLAND_ZONES) {
-      const frame = blockZoneFrame(zone.id, this.W, this.H);
-      if (frame) boxes[zone.id] = frame;
-    }
+    for (const zone of ISLAND_ZONES) boxes[zone.id] = zoneFrame(this.stage, zone.id);
     return boxes;
   }
 
@@ -411,11 +426,6 @@ export class IslandScene extends Phaser.Scene {
     const W = this.scale.width / this.dpr;
     const H = this.scale.height / this.dpr;
     if (Math.abs(W - this.W) < 0.5 && Math.abs(H - this.H) < 0.5) return;
-    if (this.walk.engine) {
-      const from = volcanoOrigin(this.W, this.H);
-      const to = volcanoOrigin(W, H);
-      shiftEngine(this.walk.engine, (to.x - from.x) * CELL, (to.y - from.y) * CELL);
-    }
     this.W = W;
     this.H = H;
     this.layoutSea();
@@ -561,105 +571,46 @@ export class IslandScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ 섬 땅 (BeachHome)
   private buildTerrain() {
-    const { W, H } = this;
-    const s = this.state;
-    this.buildBlocks(buildBlockIsland(W, H, s.zones, s.growing));
+    const next = toIslandStage(getIslandStage(this.state.zones));
+    if (next !== this.stage) {
+      const [ax0, ay0] = stageArt(this.stage).volcanoAnchor;
+      const [ax1, ay1] = stageArt(next).volcanoAnchor;
+      if (this.walk.engine) shiftEngine(this.walk.engine, ax1 - ax0, ay1 - ay0);
+      this.stage = next;
+      this.cam = { z: 1, x: 0, y: 0 };
+      this.layoutSea();
+      this.applyCamera(true);
+    }
+    this.terrain.setTexture(`v3-stage${this.stage}`).setPosition(0, 0).setVisible(true);
+    this.buildShore();
     this.placeVolcano();
   }
 
   private placeVolcano() {
-    // 화산 칸 (휴화산 4×3)
-    const origin = volcanoOrigin(this.W, this.H);
-    this.volcanoAt = { x: origin.x * CELL, y: origin.y * CELL };
+    const f = volcanoFrame(this.stage);
     this.volcano.removeAll(true);
+    this.volcano.setPosition(f.x, f.y).setScale(f.scale);
     for (let r = 0; r < VOLCANO_ROWS; r += 1) {
       for (let c = 0; c < VOLCANO_COLS; c += 1) {
-        const img = this.add
-          .image((origin.x + c) * CELL, (origin.y + r) * CELL, `volcano-${r}-${c}`)
-          .setOrigin(0)
-          .setDisplaySize(CELL, CELL);
-        this.volcano.add(img);
+        this.volcano.add(this.add.image(c * CELL, r * CELL, `volcano-${r}-${c}`).setOrigin(0).setDisplaySize(CELL, CELL));
       }
     }
+    this.lava.setPosition(f.x, f.y).setScale(f.scale);
   }
 
-  private buildBlocks(island: BlockIsland) {
-    const still = island.tiles.filter((t) => t.riseDelay == null);
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const t of still) {
-      x0 = Math.min(x0, t.x * CELL);
-      y0 = Math.min(y0, t.y * CELL);
-      x1 = Math.max(x1, (t.x + 1) * CELL + TILE_BLEED);
-      y1 = Math.max(y1, (t.y + 1) * CELL + TILE_BLEED);
-    }
-    const oldKey = this.terrain.texture.key;
-    const size = CELL + TILE_BLEED;
-    if (Number.isFinite(x0)) {
-      const key = `terrain-${(this.terrainSeq += 1)}`;
-      const tex = this.textures.createCanvas(key, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
-      if (tex) {
-        const ctx = tex.getContext();
-        ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = GRASS_CENTER_COLOR;
-        for (const t of still) {
-          if (t.grass === 'flat') ctx.fillRect(t.x * CELL - x0, t.y * CELL - y0, size, size);
-        }
-        const draw = (texture: string, t: BlockTile) => {
-          const img = this.textures.get(texture).getSourceImage() as CanvasImageSource;
-          ctx.drawImage(img, t.x * CELL - x0, t.y * CELL - y0, size, size);
-        };
-        for (const t of still) {
-          if (t.grass === 'flat') continue;
-          if (t.sand) draw(t.sand, t);
-          if (t.grass) draw(t.grass, t);
-        }
-        tex.refresh();
-        this.terrain.setTexture(key).setPosition(x0, y0).setVisible(true);
-      }
-    } else {
-      this.terrain.setVisible(false);
-    }
-    if (oldKey.startsWith('terrain-')) this.textures.remove(oldKey);
-
-    this.tweens.killTweensOf(this.rising.list);
-    this.rising.removeAll(true);
-    for (const t of island.tiles) {
-      if (t.riseDelay != null) this.rising.add(this.risingBlock(t));
-    }
-
+  private buildShore() {
     this.tweens.killTweensOf(this.water.list);
     this.water.removeAll(true);
     this.rampBlocks = [];
+    if (!SHORE_FOAM) return;
     const shoreKey = SOFT_SHORE_SHEET.body as unknown as string;
-    for (const cell of island.shore) {
-      const lag = waveLag(cell.x, this.centerCol);
-      const img = this.add.image(cell.x * CELL, cell.y * CELL - SHORE_TUCK, shoreKey, this.seaClock.shown(lag)).setOrigin(0);
+    for (const cell of shoreCells(this.stage)) {
+      const lag = waveLag(cell.col, this.centerCol);
+      const img = this.add.image(cell.col * CELL, cell.row * CELL - SHORE_TUCK, shoreKey, this.seaClock.shown(lag)).setOrigin(0);
       this.rampBlocks.push({ img, lag });
       this.water.add(img);
     }
     this.stepWater();
-  }
-
-  private risingBlock(tile: BlockTile) {
-    const half = CELL / 2;
-    const size = CELL + TILE_BLEED;
-    const box = this.add.container(tile.x * CELL + half, tile.y * CELL + half);
-    if (tile.sand) box.add(this.add.image(-half, -half, tile.sand).setOrigin(0).setDisplaySize(size, size));
-    if (tile.grass === 'flat') box.add(this.add.rectangle(-half, -half, size, size, hex(GRASS_CENTER_COLOR)).setOrigin(0));
-    else if (tile.grass) box.add(this.add.image(-half, -half, tile.grass).setOrigin(0).setDisplaySize(size, size));
-    box.setScale(0.45).setAlpha(0);
-    this.tweens.add({
-      targets: box,
-      scale: 1,
-      alpha: 1,
-      duration: REVEAL_MS,
-      delay: tile.riseDelay ?? 0,
-      ease: 'Cubic.Out',
-    });
-    return box;
   }
 
   // ------------------------------------------------------------------ 분화: 흔들림·용암·화산재
@@ -669,9 +620,8 @@ export class IslandScene extends Phaser.Scene {
     this.calmed = false;
     this.spilled = false;
     // AshCloud 는 분화가 시작될 때 자리를 잡는다 (그때 카메라 기준 화구 위치)
-    const mouth = craterCloudPoint(this.W, this.H);
-    const originX = this.W / 2 + (mouth.x - this.W / 2) * this.shownZoom() + this.cam.x;
-    const originY = this.H / 2 + (mouth.y - this.H / 2) * this.shownZoom() + this.cam.y;
+    const mouth = craterCloudPoint(this.stage);
+    const { x: originX, y: originY } = this.toScreen(mouth.x, mouth.y);
     this.gasState = {
       started: this.time.now,
       originX,
@@ -721,7 +671,6 @@ export class IslandScene extends Phaser.Scene {
     const fullRows = Math.floor(rowProgress);
     const partial = rowProgress - fullRows;
     const surfaceRow = Math.min(CRATER_SPANS.length - 1, fullRows);
-    const { x: ox, y: oy } = this.volcanoAt;
     for (const p of CRATER_PIXELS) {
       const shown = p.row < fullRows || (p.row === fullRows && p.fromCenter <= partial);
       if (!shown) continue;
@@ -735,8 +684,8 @@ export class IslandScene extends Phaser.Scene {
       const fade = overflow && spill > 0.72 ? 1 - (spill - 0.72) / 0.28 : 1;
       g.fillStyle(hex(magmaColor(p, onSurface, elapsed)), fade);
       g.fillRect(
-        ox + p.x + (overflow ? Math.sign(p.x - CRATER_MID) * 3 * spill : 0),
-        oy + p.y - bob - (overflow ? lift * spill : 0),
+        p.x + (overflow ? Math.sign(p.x - CRATER_MID) * 3 * spill : 0),
+        p.y - bob - (overflow ? lift * spill : 0),
         2,
         2,
       );
@@ -826,15 +775,16 @@ export class IslandScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ 장식 (BeachPlay decor + PlacedDecorDrop)
   private frameBox(id: IslandZoneId) {
-    const block = blockZoneFrame(id, this.W, this.H);
-    if (block) return block;
-    const f = ZONE_FRAME[id];
-    return { left: f.x * this.W, top: f.y * this.H, width: f.w * this.W, height: f.h * this.H };
+    return zoneFrame(this.stage, id);
   }
 
   /** RN useResponsive().scale 과 같다: PixelRatio.roundToNearestPixel(n × factor) */
   private sc(n: number) {
     return Math.round(n * this.state.factor * this.dpr) / this.dpr;
+  }
+
+  private wu(n: number) {
+    return this.sc(n) / this.baseDp();
   }
 
   private dotSprite(id: string, size: number) {
@@ -865,17 +815,17 @@ export class IslandScene extends Phaser.Scene {
       const y = frame.top + frame.height * 0.45;
       for (const entry of list.slice(0, 3)) {
         const isFresh = s.lastPlaced?.itemId === entry.itemId;
-        const size = this.sc(isFresh ? 32 : 24);
+        const size = this.wu(isFresh ? 32 : 24);
         if (isFresh) {
           this.dropDecor(entry.sprite, x, y, size, this.freshShown !== entry.itemId);
-          x += size + this.sc(4);
+          x += size + this.wu(4);
           continue;
         }
         const spr = this.dotSprite(entry.sprite, size);
         if (!spr) continue;
         spr.img.setPosition(x, y);
         this.decor.add(spr.img);
-        x += spr.w + this.sc(4);
+        x += spr.w + this.wu(4);
       }
     }
     this.freshShown = s.lastPlaced?.itemId ?? null;
@@ -932,15 +882,13 @@ export class IslandScene extends Phaser.Scene {
   private updateWalkers() {
     const s = this.state;
     const w = this.walk;
-    w.size = this.sc(s.level >= 4 ? 44 : s.level >= 3 ? 40 : 36);
+    w.size = CELL;
     w.unit = w.size / MOTION_SEQ['egg-still'].artSize;
-    // 32칸 그림이 기기 픽셀 정수배로 그려지게 보이는 크기만 맞춘다 (흐림·들쭉날쭉 방지). 움직임은 원래 크기 기준
-    const px = Math.max(1, Math.round((w.size * this.dpr) / 32));
-    w.shown = (px * 32) / this.dpr;
+    w.shown = CELL;
     this.creatureBody.setDisplaySize(w.shown, w.shown);
     this.creatureShadow.setDisplaySize(w.shown, w.shown);
 
-    const setup = walkSetup(this.W, this.H, this.openZones(s));
+    const setup = walkSetup(this.stage);
     const points = setup.points;
     w.setup = setup;
     w.plan = setup.plan;
@@ -1023,7 +971,8 @@ export class IslandScene extends Phaser.Scene {
       this.explore.setVisible(false);
       return;
     }
-    this.explore.setPosition(this.W * 0.06, this.H * 0.42).setVisible(true);
+    const art = stageArt(this.stage);
+    this.explore.setPosition(art.width * 0.06, art.height * 0.42).setScale(1 / this.baseDp()).setVisible(true);
     const parts = this.exploreParts;
     if (parts && parts.f === f && parts.level === level) return;
     this.explore.removeAll(true);

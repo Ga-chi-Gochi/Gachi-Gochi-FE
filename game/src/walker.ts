@@ -4,93 +4,99 @@ import type { IslandZoneId } from '@/constants/island-zones';
 
 import { ON_LAND_RADIUS, planRoute, startRest, startTravel, type Engine, type Planner, type WalkPoint } from './creature';
 import { MOTION_RULES } from './motion';
-import { CELL, isWalkable, volcanoOrigin } from './shape';
+import { CELL, VOLCANO_COLS, VOLCANO_ROWS, blockZoneFrame, isWalkable, volcanoOrigin } from './shape';
+
+type Cell = { col: number; row: number };
 
 export type WalkSetup = {
   points: WalkPoint[];
   plan?: Planner;
   allowed: Set<string>;
-  footOffset: number;
-  egg: boolean;
+  cells: Cell[];
 };
 
 const LINE_STEP = 4;
-const EGG_WALK_TARGETS: readonly [number, number][] = [
-  [1, 4],
-  [2, 4],
-  [-1, 4],
-  [4, 4],
-];
+const VOLCANO_SAMPLES = 20;
 
 const cellKey = (col: number, row: number) => `${col},${row}`;
+const cellCenter = (c: Cell): WalkPoint => ({ x: (c.col + 0.5) * CELL, y: (c.row + 0.5) * CELL });
 
-function eggTargets(width: number, height: number, region: readonly { col: number; row: number }[], footOffset: number) {
-  if (region.length === 0) {
-    return [];
-  }
-  const origin = volcanoOrigin(width, height);
-  const seen = new Set<string>();
-  const points: WalkPoint[] = [];
-  for (const [dc, dr] of EGG_WALK_TARGETS) {
-    const want = { col: origin.x + dc, row: origin.y + dr };
-    const cell = region.reduce((best, c) =>
-      Math.hypot(c.col - want.col, c.row - want.row) < Math.hypot(best.col - want.col, best.row - want.row) ? c : best,
-    );
-    const key = cellKey(cell.col, cell.row);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    points.push({ x: (cell.col + 0.5) * CELL, y: (cell.row + 0.5) * CELL - footOffset });
-  }
-  return points;
-}
-
-function walkRegion(width: number, height: number, zones: readonly IslandZoneId[], home?: WalkPoint) {
-  const cells: { col: number; row: number }[] = [];
+function walkRegion(width: number, height: number, zones: readonly IslandZoneId[]) {
+  const cells: Cell[] = [];
   for (let row = 0; row < Math.ceil(height / CELL); row += 1) {
     for (let col = 0; col < Math.ceil(width / CELL); col += 1) {
       if (isWalkable((col + 0.5) * CELL, (row + 0.5) * CELL, width, height, zones)) cells.push({ col, row });
     }
   }
-  const homeRegion = home ? regionAround(cells, { col: Math.floor(home.x / CELL), row: Math.floor(home.y / CELL) }) : [];
+  const core = blockZoneFrame('core', width, height);
+  const homeRegion = core ? regionAround(cells, { col: Math.floor(core.left / CELL), row: Math.floor(core.top / CELL) }) : [];
   return homeRegion.length > 0 ? homeRegion : largestRegion(cells);
 }
 
-export function walkSetup(
-  width: number,
-  height: number,
-  zones: readonly IslandZoneId[],
-  egg: boolean,
-  footOffset: number,
-  raw: WalkPoint[],
-): WalkSetup {
-  if (width <= 0 || height <= 0) {
-    return { points: raw, allowed: new Set(), footOffset, egg };
-  }
-  const home = raw[0] ? (egg ? { x: raw[0].x, y: raw[0].y + footOffset } : raw[0]) : undefined;
-  const region = walkRegion(width, height, zones, home);
-  const allowed = new Set(region.map((c) => cellKey(c.col, c.row)));
-  if (egg) {
-    const spots = eggTargets(width, height, region, footOffset);
-    return { points: spots.length > 0 ? spots : raw, allowed, footOffset, egg };
-  }
-  const grid: WalkGrid = { cell: CELL, cells: region, canWalk: (x, y) => isWalkable(x, y, width, height, zones) };
-  const plan: Planner = (from, to) => planRoute(grid, footOffset, from, to);
+function nearestCell(cells: readonly Cell[], want: Cell) {
+  return cells.reduce((best, c) =>
+    Math.hypot(c.col - want.col, c.row - want.row) < Math.hypot(best.col - want.col, best.row - want.row) ? c : best,
+  );
+}
+
+function walkTargets(width: number, height: number, region: readonly Cell[]) {
   if (region.length === 0) {
-    return { points: raw, plan, allowed, footOffset, egg };
+    return [];
   }
-  const cellPoints = region.map((c) => ({ x: (c.col + 0.5) * CELL, y: (c.row + 0.5) * CELL - footOffset }));
-  const first = raw[0] ? nearestWalkPoint(cellPoints, raw[0]) : null;
-  const points = first ? [first, ...cellPoints.filter((p) => p !== first)] : cellPoints;
-  return { points, plan, allowed, footOffset, egg };
+  const o = volcanoOrigin(width, height);
+  const wanted: Cell[] = [
+    { col: o.x - 2, row: o.y - 2 },
+    { col: o.x + VOLCANO_COLS + 1, row: o.y - 2 },
+    { col: o.x - 2, row: o.y + VOLCANO_ROWS + 1 },
+    { col: o.x + VOLCANO_COLS + 1, row: o.y + VOLCANO_ROWS + 1 },
+  ];
+  const seen = new Set<string>();
+  const points: WalkPoint[] = [];
+  for (const want of wanted) {
+    const cell = nearestCell(region, want);
+    const key = cellKey(cell.col, cell.row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    points.push(cellCenter(cell));
+  }
+  return points;
+}
+
+function crossesVolcano(width: number, height: number, a: WalkPoint, b: WalkPoint) {
+  const o = volcanoOrigin(width, height);
+  const x0 = o.x * CELL;
+  const y0 = o.y * CELL;
+  const x1 = (o.x + VOLCANO_COLS) * CELL;
+  const y1 = (o.y + VOLCANO_ROWS) * CELL;
+  for (let i = 0; i <= VOLCANO_SAMPLES; i += 1) {
+    const x = a.x + ((b.x - a.x) * i) / VOLCANO_SAMPLES;
+    const y = a.y + ((b.y - a.y) * i) / VOLCANO_SAMPLES;
+    if (x > x0 && x < x1 && y > y0 && y < y1) return true;
+  }
+  return false;
+}
+
+export function walkSetup(width: number, height: number, zones: readonly IslandZoneId[]): WalkSetup {
+  if (width <= 0 || height <= 0) {
+    return { points: [], allowed: new Set(), cells: [] };
+  }
+  const region = walkRegion(width, height, zones);
+  const allowed = new Set(region.map((c) => cellKey(c.col, c.row)));
+  const grid: WalkGrid = { cell: CELL, cells: region, canWalk: (x, y) => isWalkable(x, y, width, height, zones) };
+  const setup: WalkSetup = { points: walkTargets(width, height, region), allowed, cells: region };
+  setup.plan = (from, to) => {
+    if (crossesVolcano(width, height, from, to)) return null;
+    if (lineOnLand(setup, from, to)) return [to];
+    return region.length > 0 ? planRoute(grid, 0, from, to) : null;
+  };
+  return setup;
 }
 
 export function onAllowed(setup: WalkSetup, p: WalkPoint) {
   if (setup.allowed.size === 0) {
     return true;
   }
-  return setup.allowed.has(cellKey(Math.floor(p.x / CELL), Math.floor((p.y + setup.footOffset) / CELL)));
+  return setup.allowed.has(cellKey(Math.floor(p.x / CELL), Math.floor(p.y / CELL)));
 }
 
 function lineOnLand(setup: WalkSetup, from: WalkPoint, to: WalkPoint) {
@@ -112,7 +118,7 @@ function routeTo(setup: WalkSetup, from: WalkPoint, goal: WalkPoint) {
 }
 
 export function snapToLand(engine: Engine, setup: WalkSetup) {
-  const nearest = nearestWalkPoint(setup.points, engine);
+  const nearest = nearestWalkPoint(setup.cells.map(cellCenter), engine) ?? nearestWalkPoint(setup.points, engine);
   if (!nearest) {
     return;
   }

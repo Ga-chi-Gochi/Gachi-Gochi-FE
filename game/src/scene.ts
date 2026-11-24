@@ -45,7 +45,6 @@ import {
   TILE_BLEED,
   VOLCANO_COLS,
   VOLCANO_ROWS,
-  blockWalkPoints,
   blockZoneFrame,
   buildBlockIsland,
   buildIslandCells,
@@ -56,8 +55,6 @@ import {
   shoreHeight,
   splitReveal,
   magmaColor,
-  sandStandX,
-  sandStandY,
   spills,
   surgeFill,
   volcanoOrigin,
@@ -103,6 +100,8 @@ const SEA_CHUNK_COLS = 64;
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 const tileUrls = import.meta.glob('../assets/tiles-v2/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+
+const animUrls = import.meta.glob('../assets/anims/*/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 // ------------------------------------------------------------------ 카메라 (island-camera.tsx)
 const MIN_ZOOM = 0.62;
@@ -264,6 +263,10 @@ export class IslandScene extends Phaser.Scene {
     for (const [path, url] of Object.entries(motionUrls)) {
       const name = /([\w-]+)\.png$/.exec(path)?.[1];
       if (name) this.load.spritesheet(name, url, { frameWidth: 32, frameHeight: 32 });
+    }
+    for (const [path, url] of Object.entries(animUrls)) {
+      const m = /anims\/([\w-]+)\/(sheet|shadow)\.png$/.exec(path);
+      if (m) this.load.spritesheet(m[2] === 'sheet' ? m[1] : `${m[1]}-shadow`, url, { frameWidth: 32, frameHeight: 32 });
     }
     for (const [path, url] of Object.entries(tileUrls)) {
       const name = /([\w-]+)\.png$/.exec(path)?.[1];
@@ -1243,25 +1246,6 @@ export class IslandScene extends Phaser.Scene {
   }
 
   // ------------------------------------------------------------------ 귤새 (WanderingCreature + 모션 엔진)
-  /** beach-play pointsOnBeach: 열린 구역마다 네 점. 알은 화산 남쪽 모래 한 점 */
-  private rawWalkPoints() {
-    const { W, H } = this;
-    if (W === 0 || H === 0) return [];
-    if (this.state.level <= 1) return [{ x: sandStandX(W, H), y: sandStandY(W, H) }];
-    const block = blockWalkPoints(this.openZones(this.state), W, H);
-    if (block) return block;
-    const points: { x: number; y: number }[] = [];
-    for (const id of this.openZones(this.state)) {
-      const frame = this.frameBox(id);
-      for (const across of [0.28, 0.72]) {
-        for (const down of [0.32, 0.68]) {
-          points.push({ x: frame.left + frame.width * across, y: frame.top + frame.height * down });
-        }
-      }
-    }
-    return points;
-  }
-
   private updateWalkers() {
     const s = this.state;
     const w = this.walk;
@@ -1273,9 +1257,7 @@ export class IslandScene extends Phaser.Scene {
     this.creatureBody.setDisplaySize(w.shown, w.shown);
     this.creatureShadow.setDisplaySize(w.shown, w.shown);
 
-    const footOffset = w.size / 2;
-    const raw = this.rawWalkPoints();
-    const setup = walkSetup(this.W, this.H, this.openZones(s), s.level <= 1, footOffset, raw);
+    const setup = walkSetup(this.W, this.H, this.openZones(s));
     const points = setup.points;
     w.setup = setup;
     w.plan = setup.plan;

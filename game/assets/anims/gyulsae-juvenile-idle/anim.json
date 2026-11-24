@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-juvenile-idle",
+  "label": "어린 귤새 — 가만히 (숨쉬기·깜빡임)",
+  "playback": "loop",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 17,
+  "totalMs": 3480,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [450, 120, 420, 120, 450, 120, 260, 50, 90, 70, 120, 120, 400, 120, 300, 150, 120],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}

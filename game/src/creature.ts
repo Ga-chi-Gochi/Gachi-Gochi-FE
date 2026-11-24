@@ -71,19 +71,24 @@ function pickTarget(points: WalkPoint[], from: WalkPoint, plan?: Planner): WalkP
   if (points.length === 1) {
     return routeTo(points[0]);
   }
-  const away = points.filter((p) => Math.hypot(p.x - from.x, p.y - from.y) > PICK_MIN_GAP);
-  const pool = away.length > 0 ? away : points;
-  const fallback = pool[Math.floor(Math.random() * pool.length)];
+  const gap = (p: WalkPoint) => Math.hypot(p.x - from.x, p.y - from.y);
+  const open = points.filter((p) => routeTo(p) != null);
+  const pool = open.length > 0 ? open : points;
+  let next = pool[Math.floor(Math.random() * pool.length)];
   for (let i = 0; i < PICK_RETRIES; i += 1) {
-    const candidate = points[Math.floor(Math.random() * points.length)];
-    if (Math.hypot(candidate.x - from.x, candidate.y - from.y) > PICK_MIN_GAP) {
-      const route = routeTo(candidate);
-      if (route) {
-        return route;
-      }
+    const candidate = pool[Math.floor(Math.random() * pool.length)];
+    if (gap(candidate) > PICK_MIN_GAP) {
+      next = candidate;
+      break;
     }
   }
-  return routeTo(fallback);
+  if (gap(next) <= PICK_MIN_GAP) {
+    const away = pool.filter((p) => gap(p) > PICK_MIN_GAP);
+    if (away.length > 0) {
+      next = away[Math.floor(Math.random() * away.length)];
+    }
+  }
+  return routeTo(next);
 }
 
 function seqFor(stage: MotionStage, phase: Phase): MotionSeqId {
@@ -200,6 +205,16 @@ export function advance(engine: Engine, dt: number, unit: number, points: WalkPo
       startRest(engine, MOTION_RULES.restMs);
       continue;
     }
+    const flying = MOTION_STAGES[engine.stageId];
+    if (
+      engine.phase === 'fly' &&
+      flying.land &&
+      engine.frame === seq.frameMs.length - 1 &&
+      remaining(engine) <= sumMotion(flying.land) * unit + 0.5
+    ) {
+      enterPhase(engine, 'land');
+      continue;
+    }
     if (engine.elapsed < frameMs) {
       continue;
     }
@@ -208,15 +223,10 @@ export function advance(engine: Engine, dt: number, unit: number, points: WalkPo
       engine.frame += 1;
       continue;
     }
-    const stage = MOTION_STAGES[engine.stageId];
     if (engine.phase === 'takeoff') {
       enterPhase(engine, 'fly');
     } else if (engine.phase === 'fly') {
-      if (stage.land && remaining(engine) <= sumMotion(stage.land) * unit + 0.5) {
-        enterPhase(engine, 'land');
-      } else {
-        engine.frame = 0;
-      }
+      engine.frame = 0;
     } else if (engine.phase === 'land') {
       startRest(engine, MOTION_RULES.restMs);
     } else {
@@ -231,10 +241,10 @@ export function currentLift(engine: Engine, unit: number) {
   let to: number;
   if (engine.frame + 1 < seq.lift.length) {
     to = seq.lift[engine.frame + 1];
+  } else if (engine.phase === 'takeoff' || engine.phase === 'land') {
+    to = from;
   } else {
-    const stage = MOTION_STAGES[engine.stageId];
-    const nextPhase: Phase = engine.phase === 'takeoff' || engine.phase === 'fly' ? 'fly' : engine.phase === 'land' ? 'rest' : engine.phase;
-    to = MOTION_SEQ[seqFor(stage, nextPhase)].lift[0];
+    to = seq.lift[0];
   }
   const t = Math.min(1, engine.elapsed / seq.frameMs[engine.frame]);
   return (from + (to - from) * t) * unit;

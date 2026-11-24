@@ -1,7 +1,26 @@
 // constants/island-motion.ts 를 그대로 옮겼다. 그림은 require 대신 게임 텍스처 이름(game/assets/motion/*.png, 1/8 크기)이다.
 type ImageSource = string;
 
-export type MotionSeqId = 'sea-shore' | 'sea-shallow' | 'sea-deep' | 'egg-still' | 'egg-idle-a' | 'egg-hop' | 'juvenile-idle' | 'juvenile-fly-struggle' | 'juvenile-takeoff' | 'juvenile-land' | 'adult-idle' | 'adult-waddle';
+export type MotionSeqId =
+  | 'sea-shore'
+  | 'sea-shallow'
+  | 'sea-deep'
+  | 'egg-still'
+  | 'egg-hop'
+  | 'juvenile-idle'
+  | 'juvenile-fly-struggle'
+  | 'juvenile-takeoff'
+  | 'juvenile-land'
+  | 'adult-idle'
+  | 'adult-waddle'
+  | 'gyulsae-egg-idle-a'
+  | 'gyulsae-egg-waddle'
+  | 'gyulsae-juvenile-idle'
+  | 'gyulsae-juvenile-takeoff'
+  | 'gyulsae-juvenile-fly'
+  | 'gyulsae-juvenile-land'
+  | 'gyulsae-adult-idle'
+  | 'gyulsae-adult-waddle';
 
 export type MotionSheet = {
   frameCount: number;
@@ -81,19 +100,6 @@ export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
       rows: 1,
       body: 'egg-still',
       shadow: 'egg-still-shadow',
-    },
-  },
-  'egg-idle-a': {
-    frameMs: [1500, 70, 50, 70, 1100, 70, 700],
-    motion: [0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 7,
-      cols: 7,
-      rows: 1,
-      body: 'egg-idle-a',
-      shadow: 'egg-idle-a-shadow',
     },
   },
   'egg-hop': {
@@ -187,12 +193,123 @@ export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
       shadow: 'adult-waddle-shadow',
     },
   },
+  'gyulsae-egg-idle-a': {
+    frameMs: [1500, 70, 50, 70, 1100, 70, 700],
+    motion: [0, 0, 0, 0, 0, 0, 0],
+    lift: [0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 7,
+      cols: 7,
+      rows: 1,
+      body: 'gyulsae-egg-idle-a',
+      shadow: 'gyulsae-egg-idle-a-shadow',
+    },
+  },
+  'gyulsae-egg-waddle': {
+    frameMs: [100, 60, 120, 60, 90, 60, 120, 60],
+    motion: [1, 2, 0, 3, 1, 2, 0, 3],
+    lift: [0, 0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 8,
+      cols: 8,
+      rows: 1,
+      body: 'gyulsae-egg-waddle',
+      shadow: 'gyulsae-egg-waddle-shadow',
+    },
+  },
+  'gyulsae-juvenile-idle': {
+    frameMs: [450, 120, 420, 120, 450, 120, 260, 50, 90, 70, 120, 120, 400, 120, 300, 150, 120],
+    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 17,
+      cols: 17,
+      rows: 1,
+      body: 'gyulsae-juvenile-idle',
+      shadow: 'gyulsae-juvenile-idle-shadow',
+    },
+  },
+  'gyulsae-juvenile-takeoff': {
+    frameMs: [140, 160, 60, 90, 100],
+    motion: [0, 0, 1, 2, 3],
+    lift: [0, 0, -1, -3, -4],
+    artSize: 32,
+    sheet: {
+      frameCount: 5,
+      cols: 5,
+      rows: 1,
+      body: 'gyulsae-juvenile-takeoff',
+      shadow: 'gyulsae-juvenile-takeoff-shadow',
+    },
+  },
+  'gyulsae-juvenile-fly': {
+    frameMs: [120, 70, 110, 100, 120, 100, 100],
+    motion: [4, 2, 4, 3, 4, 3, 3],
+    lift: [-4, -5, -6, -7, -7, -6, -5],
+    artSize: 32,
+    sheet: {
+      frameCount: 7,
+      cols: 7,
+      rows: 1,
+      body: 'gyulsae-juvenile-fly',
+      shadow: 'gyulsae-juvenile-fly-shadow',
+    },
+  },
+  'gyulsae-juvenile-land': {
+    frameMs: [100, 60, 100, 110, 100, 160],
+    motion: [3, 2, 2, 1, 0, 0],
+    lift: [-4, -3, -2, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 6,
+      cols: 6,
+      rows: 1,
+      body: 'gyulsae-juvenile-land',
+      shadow: 'gyulsae-juvenile-land-shadow',
+    },
+  },
+  'gyulsae-adult-idle': {
+    frameMs: [480, 130, 450, 130, 480, 130, 280, 50, 100, 70, 120, 130, 430, 130, 320, 160, 130],
+    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 17,
+      cols: 17,
+      rows: 1,
+      body: 'gyulsae-adult-idle',
+      shadow: 'gyulsae-adult-idle-shadow',
+    },
+  },
+  'gyulsae-adult-waddle': {
+    frameMs: [110, 110, 110, 110, 110, 110, 110, 110],
+    motion: [1, 1, 1, 1, 1, 1, 1, 1],
+    lift: [0, 0, 0, 0, 0, 0, 0, 0],
+    artSize: 32,
+    sheet: {
+      frameCount: 8,
+      cols: 8,
+      rows: 1,
+      body: 'gyulsae-adult-waddle',
+      shadow: 'gyulsae-adult-waddle-shadow',
+    },
+  },
 };
 
 export const MOTION_STAGES: Record<MotionStageId, MotionStage> = {
-  egg: { rest: 'egg-idle-a', move: 'egg-hop', kind: 'move', size: 52 },
-  juvenile: { rest: 'juvenile-idle', move: 'juvenile-fly-struggle', takeoff: 'juvenile-takeoff', land: 'juvenile-land', kind: 'flight', size: 64 },
-  adult: { rest: 'adult-idle', move: 'adult-waddle', kind: 'move', size: 84 },
+  egg: { rest: 'gyulsae-egg-idle-a', move: 'gyulsae-egg-waddle', kind: 'move', size: 52 },
+  juvenile: {
+    rest: 'gyulsae-juvenile-idle',
+    move: 'gyulsae-juvenile-fly',
+    takeoff: 'gyulsae-juvenile-takeoff',
+    land: 'gyulsae-juvenile-land',
+    kind: 'flight',
+    size: 64,
+  },
+  adult: { rest: 'gyulsae-adult-idle', move: 'gyulsae-adult-waddle', kind: 'move', size: 84 },
 };
 
 export const MOTION_RULES = {

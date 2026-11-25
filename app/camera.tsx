@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
 import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiIconButton } from '@/components/gachi-ui/gachi-button';
 import { type SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
 import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
@@ -17,23 +18,35 @@ import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { gachiUi } from '@/constants/gachi-ui';
 import { palette } from '@/constants/palette';
+import { ISLAND_HOME } from '@/constants/routes';
 import { uiButtons, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
-import { BONGGING_DAILY_LIMIT, isBonggingDailyLimitReached, readBonggingDailyCount } from '@/lib/bongging-daily';
+import { isBonggingDailyLimitReached } from '@/lib/bongging-daily';
 import { confirmOfflineCertification } from '@/lib/confirm-offline-certification';
-import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
+import { resolveBonggingLocation } from '@/lib/resolve-bongging-location';
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
 
 type ViewNode = ComponentRef<typeof View>;
 
+function leaveCamera() {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace(ISLAND_HOME);
+}
+
+/**
+ * 봉그깅 카메라 — 와프 1·2
+ * 헤더(뒤로·봉그깅·도움) / 가이드 버블 / 파인더 / 크림 하단바
+ */
 export default function CameraScreen() {
   const { scale, width, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { stageBonggingCertification } = usePlayState();
   const tutorial = useTutorial();
   const { leaveScreen } = tutorial;
-  // 튜토리얼 중에는 권한 요청과 실제 카메라를 켜지 않고, 설명만 보여 준다
   const guided = tutorial.step === 'bongging-screen';
   const [leavingTutorial, setLeavingTutorial] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -43,15 +56,14 @@ export default function CameraScreen() {
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
   const askedForPermission = useRef(false);
-  const askedForLocation = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [readyFacing, setReadyFacing] = useState<CameraType | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [stageHeight, setStageHeight] = useState(0);
-  const [dailyCount, setDailyCount] = useState(0);
-  const [limitReached, setLimitReached] = useState(false);
+  /** 0: 가운데 담기 / 1: 종류 보이게 — 와프 두 가이드 */
+  const [guideIndex, setGuideIndex] = useState(0);
 
   const granted = permission?.granted === true;
   const previewFacing = isFocused && granted && !holdCamera ? facing : null;
@@ -68,42 +80,37 @@ export default function CameraScreen() {
     void requestPermission();
   }, [holdCamera, isFocused, permission, requestPermission]);
 
-  useEffect(() => {
-    if (holdCamera || !isFocused || askedForLocation.current) {
-      return;
-    }
-    askedForLocation.current = true;
-    void requestLocationPermissionIfNeeded();
-  }, [holdCamera, isFocused]);
-
-  // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
   useFocusEffect(
     useCallback(() => {
-      void (async () => {
-        const count = await readBonggingDailyCount();
-        setDailyCount(count);
-        setLimitReached(count >= BONGGING_DAILY_LIMIT);
-      })();
       return () => leaveScreen('bongging');
     }, [leaveScreen]),
   );
 
-  /** 닫기 버튼을 실제로 재서, 어림잡은 좌표가 아니라 버튼 정중앙에 구멍을 맞춘다 */
+  useEffect(() => {
+    if (guided || holdCamera) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setGuideIndex((current) => (current + 1) % 2);
+    }, 3200);
+    return () => clearInterval(timer);
+  }, [guided, holdCamera]);
+
   const measureClose = useCallback(() => {
     const node = closeRef.current;
     if (!node) {
       return;
     }
-    node.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
+    node.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+      if (measuredWidth <= 0 || measuredHeight <= 0) {
         setCloseHole(null);
         return;
       }
       const pad = scale(12);
-      const radius = Math.max(width, height) / 2 + pad;
+      const radius = Math.max(measuredWidth, measuredHeight) / 2 + pad;
       const next: SpotlightHole = {
-        centerX: x + width / 2,
-        centerY: y + height / 2,
+        centerX: x + measuredWidth / 2,
+        centerY: y + measuredHeight / 2,
         radius,
       };
       setCloseHole((current) =>
@@ -192,7 +199,6 @@ export default function CameraScreen() {
 
   async function certifyPhoto(photo: { uri: string; exif?: unknown; fileName?: string | null }) {
     if (await isBonggingDailyLimitReached()) {
-      setLimitReached(true);
       stageBonggingCertification({
         imageUri: photo.uri,
         fileName: photo.fileName,
@@ -204,17 +210,14 @@ export default function CameraScreen() {
       return;
     }
 
-    setNotice('위치를 확인하고 있어요');
     try {
       const location = await resolveBonggingLocation(photo.exif);
       if (location.status === 'cancelled') {
-        setNotice(null);
         return;
       }
 
       const proceedOffline = await confirmOfflineCertification();
       if (!proceedOffline) {
-        setNotice(null);
         return;
       }
 
@@ -239,12 +242,12 @@ export default function CameraScreen() {
   }
 
   const shutterDisabled = granted && (!ready || busy);
-  // 와프(393×852) 기준: 뷰파인더 ≈ 280, 버블 ≈ 340, 하단 바 ≈ 112 + safe
   const sidePad = scale(16);
   const bubbleWidth = Math.min(scale(340), width - sidePad * 2);
-  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(320));
+  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(300));
   const finder = Math.min(scale(280), Math.max(scale(200), Math.min(width - sidePad * 2, stageBudget - scale(8))));
   const bottomBarPad = Math.max(insets.bottom, scale(10));
+  const guideSource = guideIndex === 0 ? uiCamera.bubbleGuide : uiCamera.bubbleFound;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#2C2926' }}>
@@ -262,41 +265,46 @@ export default function CameraScreen() {
           }}
         />
       ) : null}
-      {/* 상단만 살짝 어둡게 — 하단은 크림 컨트롤 바가 받친다 */}
       <LinearGradient
         colors={['rgba(44,41,38,0.72)', 'rgba(44,41,38,0)']}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + scale(120), pointerEvents: 'none' }}
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        {/* 헤더: ✕ | 봉그깅 태그 | 설정 */}
+        {/* 헤더: ← | 봉그깅 | 도움 */}
         <View style={{ marginTop: scale(6), height: scale(40), justifyContent: 'center' }}>
           <View
             ref={closeRef}
             collapsable={false}
             onLayout={guided ? measureClose : undefined}
-            style={{ position: 'absolute', left: Math.max(insets.left, sidePad), top: '50%', marginTop: -scale(18) }}>
-            <AssetImageButton
-              source={uiCamera.close}
-              label="닫기"
-              width={36}
-              height={40}
-              onPress={() => router.replace('/(tabs)')}
-            />
+            style={{ position: 'absolute', left: Math.max(insets.left, sidePad), top: '50%', marginTop: -scale(16) }}>
+            <GachiIconButton kind="squareBack" label="뒤로" size={32} onPress={leaveCamera} />
           </View>
-          <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <Image source={uiCamera.tagPickup} style={{ width: scale(132), height: scale(24), ...pixelImageStyle }} contentFit="contain" />
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <GalmuriText size={14} bold color={gachiUi.white} center>
+              봉그깅
+            </GalmuriText>
           </View>
           {guided ? null : (
-            <View style={{ position: 'absolute', right: Math.max(insets.right, sidePad), top: '50%', marginTop: -scale(18) }}>
-              <AssetImageButton source={uiCamera.settings} label="도움말" width={36} height={40} onPress={() => setHelpOpen(true)} />
+            <View style={{ position: 'absolute', right: Math.max(insets.right, sidePad), top: '50%', marginTop: -scale(16) }}>
+              <GachiIconButton kind="squareSettings" label="도움말" size={32} onPress={() => setHelpOpen(true)} />
             </View>
           )}
         </View>
 
-        {/* 가이드 말풍선 */}
+        {/* 가이드 말풍선 — 와프 두 문구 에셋 교대 */}
         <View style={{ marginTop: scale(10), alignItems: 'center', paddingHorizontal: sidePad }}>
           <Image
-            source={uiCamera.bubbleGuide}
+            source={guideSource}
             style={{ width: bubbleWidth, height: bubbleWidth * (52 / 380), ...pixelImageStyle }}
             contentFit="contain"
           />
@@ -322,13 +330,20 @@ export default function CameraScreen() {
               />
             </View>
           ) : (
-            <View style={{ alignSelf: 'stretch', backgroundColor: palette.white, borderRadius: scale(12), padding: scale(20), gap: scale(12) }}>
-              <Text style={{ color: palette.ink, fontSize: scale(18), fontWeight: '800' }}>
+            <View
+              style={{
+                alignSelf: 'stretch',
+                backgroundColor: palette.white,
+                borderRadius: scale(12),
+                padding: scale(20),
+                gap: scale(12),
+              }}>
+              <GalmuriText size={14} bold>
                 {permission ? '카메라 권한이 필요해요' : '카메라를 준비하고 있어요'}
-              </Text>
-              <Text style={{ color: palette.body, fontSize: scale(14), lineHeight: scale(20) }}>
+              </GalmuriText>
+              <GalmuriText size={9} color={gachiUi.inkSoft}>
                 쓰레기 사진을 찍거나, 갤러리에서 고를 수 있어요.
-              </Text>
+              </GalmuriText>
               {permission ? (
                 <AssetImageButton
                   source={uiButtons.greenAllow}
@@ -344,36 +359,18 @@ export default function CameraScreen() {
           )}
         </View>
 
-        {/* 위치 → 오늘 한도 (와프: 파인더 아래) */}
-        <View style={{ alignItems: 'center', gap: scale(8), paddingVertical: scale(10) }}>
-          <Image
-            source={notice ? uiCamera.locationWait : uiCamera.location}
+        {notice ? (
+          <Text
             style={{
-              width: notice ? scale(198) : scale(170),
-              height: scale(32),
-              ...pixelImageStyle,
-            }}
-            contentFit="contain"
-          />
-          {notice ? (
-            <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(12) }}>{notice}</Text>
-          ) : null}
-          {!guided ? (
-            <View
-              style={{
-                paddingHorizontal: scale(14),
-                paddingVertical: scale(5),
-                borderRadius: scale(10),
-                backgroundColor: gachiUi.cream,
-                borderWidth: scale(2),
-                borderColor: gachiUi.ink,
-              }}>
-              <GalmuriText size={8} bold color={limitReached ? gachiUi.greenDeep : gachiUi.ink} center>
-                {`오늘 봉그깅 ${Math.min(dailyCount, BONGGING_DAILY_LIMIT)}/${BONGGING_DAILY_LIMIT}`}
-              </GalmuriText>
-            </View>
-          ) : null}
-        </View>
+              textAlign: 'center',
+              color: palette.white,
+              fontSize: scale(12),
+              paddingHorizontal: sidePad,
+              paddingBottom: scale(8),
+            }}>
+            {notice}
+          </Text>
+        ) : null}
 
         {/* 하단 크림 컨트롤 바: 갤러리 | 셔터 | 전환 */}
         <View
@@ -429,14 +426,14 @@ export default function CameraScreen() {
           total={tutorial.scope === 'full' ? undefined : 1}
           title="봉그깅은 이렇게 해요"
           body="쓰레기를 사진으로 찍어 인증하면 경험치를 얻어요. 경험치가 쌓이면 고치가 자라요."
-          hint="왼쪽 위 ✕ 버튼을 눌러 돌아가요"
+          hint="왼쪽 위 뒤로 버튼을 눌러 돌아가요"
           hole={focusHole ? () => focusHole : undefined}
           placement="below"
           align="start"
           onSkip={() => {
             setLeavingTutorial(true);
             tutorial.skip();
-            router.back();
+            leaveCamera();
           }}
           interceptBack={false}
           zIndex={100}

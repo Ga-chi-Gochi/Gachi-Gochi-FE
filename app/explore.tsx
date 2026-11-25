@@ -74,6 +74,8 @@ export default function ExploreScreen() {
   const [selectedCharacterId, setSelectedCharacterId] = useState<ExploreCharacterId | null>(null);
   const [sending, setSending] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  /** 파견 성공 직후 isExploring 으로 상태 화면이 한 프레임 뜨는 것 방지 */
+  const [suppressStatus, setSuppressStatus] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -158,6 +160,7 @@ export default function ExploreScreen() {
         durationMs: selectedCourse.durationMs,
       });
       if (ok) {
+        setSuppressStatus(true);
         leaveExplore();
       }
     } finally {
@@ -198,7 +201,7 @@ export default function ExploreScreen() {
         <GachiCoinBadge value={coins} />
       </View>
 
-      {isExploring || hasExploreReward ? (
+      {(isExploring || hasExploreReward) && !suppressStatus ? (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{

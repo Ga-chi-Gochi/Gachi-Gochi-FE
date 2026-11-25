@@ -10,12 +10,13 @@ import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner, PlaceSuccessToast, PlaceZoneTarget } from '@/components/island/place-mode';
 import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
 import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
-
+import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
 /** 해변 화면 비율 (game/src/scene.ts 와 같다) */
 const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
   core: { x: 0.24, y: 0.28, w: 0.52, h: 0.44 },
@@ -57,6 +58,8 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     exploreDailyLimit,
     petCreature,
   } = usePlayState();
+  const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } =
+    useTutorial();
   const [toastName, setToastName] = useState<string | null>(null);
 
   const placing = Boolean(pendingPlaceItemId);
@@ -145,7 +148,27 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'}
-          onPress={() => router.push(EXPLORE_ROUTE)}
+          onPress={() => {
+            if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
+              goTutorial('explore-course');
+            } else if (tutorialScope === 'explore' && tutorialStep === 'explore-progress') {
+              void saveExploreIntroSeen();
+              if (hasExploreReward) {
+                goTutorial('explore-reward');
+              } else {
+                skipTutorial();
+              }
+            } else if (
+              tutorialScope === 'explore' &&
+              (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
+            ) {
+              // 보상 화면으로 보내 받도록 두고, 받기가 끝나면 explore 쪽에서 가이드를 닫는다
+              if (tutorialStep === 'explore-reward') {
+                goTutorial('explore-reward-button');
+              }
+            }
+            router.push(EXPLORE_ROUTE);
+          }}
           style={{
             position: 'absolute',
             left: scale(12),

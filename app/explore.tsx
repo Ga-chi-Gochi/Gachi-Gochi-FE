@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,9 +8,13 @@ import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
 import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
 import { GachiButton, GachiIconButton } from '@/components/gachi-ui/gachi-button';
 import { GachiCoinBadge } from '@/components/gachi-ui/gachi-hud';
+import type { SpotlightHole } from '@/components/guide/guide-spotlight';
 import { ExploreEggReward } from '@/components/island/explore-egg-reward';
 import { ExploreWaitingAnim } from '@/components/island/explore-waiting-anim';
 import { usePlayState } from '@/components/play-state';
+import { EXPLORE_TOUR_TOTAL } from '@/components/tutorial/explore-unlock-tour';
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import {
   canSendExploreCharacter,
   EXPLORE_CHARACTERS,
@@ -26,6 +30,31 @@ import { gachiUi } from '@/constants/gachi-ui';
 import { ISLAND_HOME } from '@/constants/routes';
 import { uiButtons } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
+import { saveExploreIntroSeen, saveExploreRewardIntroSeen } from '@/lib/explore-intro-state';
+
+type ViewNode = ComponentRef<typeof View>;
+
+function measureHole(node: ViewNode | null, pad: number): Promise<SpotlightHole | null> {
+  return new Promise((resolve) => {
+    if (!node) {
+      resolve(null);
+      return;
+    }
+    node.measureInWindow((x, y, width, height) => {
+      if (width <= 0 || height <= 0) {
+        resolve(null);
+        return;
+      }
+      resolve({
+        left: x - pad,
+        top: y - pad,
+        width: width + pad * 2,
+        height: height + pad * 2,
+        radius: pad,
+      });
+    });
+  });
+}
 
 function leaveExplore() {
   if (router.canGoBack()) {
@@ -76,12 +105,77 @@ export default function ExploreScreen() {
   const [claiming, setClaiming] = useState(false);
   /** 파견 성공 직후 isExploring 으로 상태 화면이 한 프레임 뜨는 것 방지 */
   const [suppressStatus, setSuppressStatus] = useState(false);
+  const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } = useTutorial();
+  const courseListRef = useRef<ViewNode>(null);
+  const characterRowRef = useRef<ViewNode>(null);
+  const sendRef = useRef<ViewNode>(null);
+  const claimRef = useRef<ViewNode>(null);
+  const [courseHole, setCourseHole] = useState<SpotlightHole | null>(null);
+  const [characterHole, setCharacterHole] = useState<SpotlightHole | null>(null);
+  const [sendHole, setSendHole] = useState<SpotlightHole | null>(null);
+  const [claimHole, setClaimHole] = useState<SpotlightHole | null>(null);
+  const exploreTour =
+    tutorialScope === 'explore' &&
+    (tutorialStep === 'explore-course' ||
+      tutorialStep === 'explore-character' ||
+      tutorialStep === 'explore-send');
+  const exploreRewardTour =
+    tutorialScope === 'explore' &&
+    (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button');
+  const tourLeaveRef = useRef({
+    scope: tutorialScope,
+    step: tutorialStep,
+    skip: skipTutorial,
+  });
+
+  useEffect(() => {
+    tourLeaveRef.current = { scope: tutorialScope, step: tutorialStep, skip: skipTutorial };
+  }, [skipTutorial, tutorialScope, tutorialStep]);
+
+  const finishExploreTour = useCallback(() => {
+    void saveExploreIntroSeen();
+    skipTutorial();
+  }, [skipTutorial]);
 
   useFocusEffect(
     useCallback(() => {
       void syncExplore();
+      return () => {
+        // 탐험 화면을 나가면(뒤로가기) 화면 안 튜토리얼도 종료
+        const { scope, step, skip } = tourLeaveRef.current;
+        if (
+          scope === 'explore' &&
+          (step === 'explore-course' || step === 'explore-character' || step === 'explore-send')
+        ) {
+          void saveExploreIntroSeen();
+          skip();
+        }
+      };
     }, [syncExplore]),
   );
+
+  useEffect(() => {
+    if (!exploreTour && !exploreRewardTour) {
+      return;
+    }
+    const pad = scale(6);
+    const id = requestAnimationFrame(() => {
+      if (tutorialStep === 'explore-course') {
+        void measureHole(courseListRef.current, pad).then(setCourseHole);
+      }
+      if (tutorialStep === 'explore-character') {
+        void measureHole(characterRowRef.current, pad).then(setCharacterHole);
+      }
+      if (tutorialStep === 'explore-send') {
+        // 버튼 실측 크기에 맞게 패딩을 얇게
+        void measureHole(sendRef.current, scale(2)).then(setSendHole);
+      }
+      if (tutorialStep === 'explore-reward-button') {
+        void measureHole(claimRef.current, scale(2)).then(setClaimHole);
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [exploreRewardTour, exploreTour, scale, tutorialStep, step, hasExploreReward]);
 
   const selectedCourse = useMemo(
     () => getExploreCourse(selectedCourseId),
@@ -133,11 +227,20 @@ export default function ExploreScreen() {
     setSelectedCourseId(courseId);
     pickDefaultCharacter(courseId);
     setStep('character');
+    if (tutorialScope === 'explore' && tutorialStep === 'explore-course') {
+      goTutorial('explore-character');
+    }
   };
 
   const onBack = () => {
     if (step === 'character' && !isExploring && !hasExploreReward) {
       setStep('course');
+      if (
+        tutorialScope === 'explore' &&
+        (tutorialStep === 'explore-character' || tutorialStep === 'explore-send')
+      ) {
+        goTutorial('explore-course');
+      }
       return;
     }
     leaveExplore();
@@ -160,6 +263,15 @@ export default function ExploreScreen() {
         durationMs: selectedCourse.durationMs,
       });
       if (ok) {
+        if (tutorialScope === 'explore') {
+          // 홈에서 진행 중 안내로 이어간다 (blur 정리에서 끊기지 않게 ref 먼저 맞춤)
+          tourLeaveRef.current = {
+            scope: 'explore',
+            step: 'explore-progress',
+            skip: skipTutorial,
+          };
+          goTutorial('explore-progress');
+        }
         setSuppressStatus(true);
         leaveExplore();
       }
@@ -175,6 +287,13 @@ export default function ExploreScreen() {
     setClaiming(true);
     try {
       await claimExploreEgg();
+      if (
+        tutorialScope === 'explore' &&
+        (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
+      ) {
+        void saveExploreRewardIntroSeen();
+        skipTutorial();
+      }
     } finally {
       setClaiming(false);
     }
@@ -225,7 +344,7 @@ export default function ExploreScreen() {
             }}>
             <GalmuriText size={12} bold center>
               {hasExploreReward
-                ? '모험 완료! 보상을 받아 주세요'
+                ? '고치가 무언가를 찾아왔수다!'
                 : `${activeName}가 모험 중이에요`}
             </GalmuriText>
             {isExploring ? (
@@ -254,20 +373,29 @@ export default function ExploreScreen() {
               </>
             ) : (
               <GalmuriText size={9} color={gachiUi.inkSoft} center>
-                {activeName}가 고치 알을 들고 돌아왔어요
+                {activeName}가 숲에서 무언가를 들고 돌아왔어요
               </GalmuriText>
             )}
           </View>
           {hasExploreReward ? (
-            <GachiButton
-              label={claiming ? '받는 중…' : '보상 받기'}
-              tone="green"
-              width="wide"
-              disabled={claiming}
-              onPress={() => {
-                void onClaim();
-              }}
-            />
+            <View
+              ref={claimRef}
+              collapsable={false}
+              onLayout={() => {
+                if (tutorialStep === 'explore-reward-button') {
+                  void measureHole(claimRef.current, scale(2)).then(setClaimHole);
+                }
+              }}>
+              <GachiButton
+                label={claiming ? '받는 중…' : '받아 봅서'}
+                tone="green"
+                width="wide"
+                disabled={claiming}
+                onPress={() => {
+                  void onClaim();
+                }}
+              />
+            </View>
           ) : null}
         </ScrollView>
       ) : (
@@ -303,59 +431,69 @@ export default function ExploreScreen() {
                 </View>
               ) : null}
 
-              {EXPLORE_COURSES.map((course) => {
-                const disabled = !exploreForestUnlocked || exploreRemaining <= 0;
-                return (
-                  <View
-                    key={course.id}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: scale(12),
-                      padding: scale(12),
-                      borderWidth: border,
-                      borderColor: gachiUi.ink,
-                      backgroundColor: gachiUi.panel,
-                      borderRadius: scale(10),
-                      opacity: disabled ? 0.55 : 1,
-                    }}>
+              <View
+                ref={courseListRef}
+                collapsable={false}
+                onLayout={() => {
+                  if (tutorialStep === 'explore-course') {
+                    void measureHole(courseListRef.current, scale(6)).then(setCourseHole);
+                  }
+                }}
+                style={{ gap: scale(12) }}>
+                {EXPLORE_COURSES.map((course) => {
+                  const disabled = !exploreForestUnlocked || exploreRemaining <= 0;
+                  return (
                     <View
+                      key={course.id}
                       style={{
-                        width: scale(56),
-                        height: scale(56),
-                        borderRadius: scale(8),
-                        backgroundColor: ICON_GREEN,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: scale(12),
+                        padding: scale(12),
                         borderWidth: border,
                         borderColor: gachiUi.ink,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        backgroundColor: gachiUi.panel,
+                        borderRadius: scale(10),
+                        opacity: disabled ? 0.55 : 1,
                       }}>
-                      <Image
-                        source={course.icon}
-                        style={{ width: scale(44), height: scale(44), ...pixelImageStyle }}
-                        contentFit="contain"
-                      />
-                    </View>
-                    <View style={{ flex: 1, gap: scale(4) }}>
-                      <GalmuriText size={12} bold>
-                        {course.name}
-                      </GalmuriText>
-                      <GalmuriText size={9} color={gachiUi.inkSoft}>
-                        {course.hours}시간 · 알 {course.eggChance}% / {course.itemLabel}{' '}
-                        {course.itemChance}%
-                      </GalmuriText>
-                      <View style={{ alignItems: 'flex-end', marginTop: scale(4) }}>
-                        <GachiButton
-                          label="선택"
-                          tone="beige"
-                          disabled={disabled}
-                          onPress={() => onSelectCourse(course.id)}
+                      <View
+                        style={{
+                          width: scale(56),
+                          height: scale(56),
+                          borderRadius: scale(8),
+                          backgroundColor: ICON_GREEN,
+                          borderWidth: border,
+                          borderColor: gachiUi.ink,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                        <Image
+                          source={course.icon}
+                          style={{ width: scale(44), height: scale(44), ...pixelImageStyle }}
+                          contentFit="contain"
                         />
                       </View>
+                      <View style={{ flex: 1, gap: scale(4) }}>
+                        <GalmuriText size={12} bold>
+                          {course.name}
+                        </GalmuriText>
+                        <GalmuriText size={9} color={gachiUi.inkSoft}>
+                          {course.hours}시간 · 알 {course.eggChance}% / {course.itemLabel}{' '}
+                          {course.itemChance}%
+                        </GalmuriText>
+                        <View style={{ alignItems: 'flex-end', marginTop: scale(4) }}>
+                          <GachiButton
+                            label="선택"
+                            tone="beige"
+                            disabled={disabled}
+                            onPress={() => onSelectCourse(course.id)}
+                          />
+                        </View>
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
 
               <View
                 style={{
@@ -382,7 +520,15 @@ export default function ExploreScreen() {
                 </GalmuriText>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: scale(8) }}>
+              <View
+                ref={characterRowRef}
+                collapsable={false}
+                onLayout={() => {
+                  if (tutorialStep === 'explore-character') {
+                    void measureHole(characterRowRef.current, scale(6)).then(setCharacterHole);
+                  }
+                }}
+                style={{ flexDirection: 'row', gap: scale(8) }}>
                 {EXPLORE_CHARACTERS.filter((character) => character.id !== 'egg').map((character) => {
                   const unlocked = selectedCourse
                     ? canSendExploreCharacter(character, growthStage.level, selectedCourse.hours)
@@ -394,7 +540,12 @@ export default function ExploreScreen() {
                       accessibilityRole="button"
                       accessibilityState={{ selected, disabled: !unlocked }}
                       disabled={!unlocked}
-                      onPress={() => setSelectedCharacterId(character.id)}
+                      onPress={() => {
+                        setSelectedCharacterId(character.id);
+                        if (tutorialScope === 'explore' && tutorialStep === 'explore-character') {
+                          goTutorial('explore-send');
+                        }
+                      }}
                       style={{
                         flex: 1,
                         alignItems: 'center',
@@ -467,16 +618,25 @@ export default function ExploreScreen() {
               ) : null}
 
               <View style={{ alignItems: 'center', marginTop: scale(8) }}>
-                <AssetImageButton
-                  source={uiButtons.greenAdventure}
-                  label={sending ? '보내는 중…' : '모험 보내기'}
-                  width={170}
-                  height={40}
-                  disabled={!canDispatch || sending}
-                  onPress={() => {
-                    void onDispatch();
-                  }}
-                />
+                <View
+                  ref={sendRef}
+                  collapsable={false}
+                  onLayout={() => {
+                    if (tutorialStep === 'explore-send') {
+                      void measureHole(sendRef.current, scale(2)).then(setSendHole);
+                    }
+                  }}>
+                  <AssetImageButton
+                    source={uiButtons.greenAdventure}
+                    label={sending ? '보내는 중…' : '모험 보내기'}
+                    width={170}
+                    height={40}
+                    disabled={!canDispatch || sending}
+                    onPress={() => {
+                      void onDispatch();
+                    }}
+                  />
+                </View>
                 {!canDispatch && exploreForestUnlocked ? (
                   <GalmuriText size={8} color={gachiUi.inkSoft} center style={{ marginTop: scale(8) }}>
                     {exploreRemaining <= 0
@@ -491,6 +651,128 @@ export default function ExploreScreen() {
           )}
         </ScrollView>
       )}
+
+      {tutorialStep === 'explore-course' && tutorialScope === 'explore' ? (
+        <TutorialOverlay
+          step={3}
+          total={EXPLORE_TOUR_TOTAL}
+          title="어디로 보낼까요?"
+          body="시간이 길수록 알을 가져올 확률이 높아져요. 원하는 코스의 선택을 눌러 보세요."
+          hint="코스를 골라 보세요"
+          placement="below"
+          align="center"
+          hole={courseHole ? () => courseHole : undefined}
+          onSkip={finishExploreTour}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+
+      {tutorialStep === 'explore-character' && tutorialScope === 'explore' ? (
+        <TutorialOverlay
+          step={4}
+          total={EXPLORE_TOUR_TOTAL}
+          title="누구를 보낼까요?"
+          body="성장한 캐릭터일수록 더 긴 코스에 갈 수 있어요. 보낼 캐릭터를 눌러 보세요."
+          hint="캐릭터를 골라 보세요"
+          placement="below"
+          align="center"
+          hole={characterHole ? () => characterHole : undefined}
+          onSkip={finishExploreTour}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+
+      {tutorialStep === 'explore-send' && tutorialScope === 'explore' ? (
+        <TutorialOverlay
+          step={5}
+          total={EXPLORE_TOUR_TOTAL}
+          title="모험을 보내 봅서"
+          body="모험 보내기를 누르면 고치가 떠나요. 시간이 지나면 섬으로 돌아와 알을 줄 수 있어요."
+          hint="모험 보내기를 눌러 보세요"
+          placement="above"
+          align="center"
+          hole={sendHole ? () => sendHole : undefined}
+          onSkip={finishExploreTour}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+
+      {tutorialStep === 'explore-progress' &&
+      tutorialScope === 'explore' &&
+      (isExploring || hasExploreReward) &&
+      !suppressStatus ? (
+        <TutorialOverlay
+          step={6}
+          total={EXPLORE_TOUR_TOTAL}
+          title="모험이 진행 중이에요"
+          body="남은 시간이 끝나면 고치가 알을 들고 돌아와요. 섬으로 돌아가면 탐험중 버튼에서도 확인할 수 있어요."
+          placement="center"
+          primary={{
+            label: '섬으로',
+            onPress: () => {
+              void saveExploreIntroSeen();
+              if (hasExploreReward) {
+                goTutorial('explore-reward');
+                leaveExplore();
+                return;
+              }
+              skipTutorial();
+              leaveExplore();
+            },
+          }}
+          onSkip={() => {
+            finishExploreTour();
+            leaveExplore();
+          }}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+
+      {hasExploreReward && !suppressStatus && tutorialStep === 'explore-reward' && tutorialScope === 'explore' ? (
+        <TutorialOverlay
+          step={7}
+          total={EXPLORE_TOUR_TOTAL}
+          title="고치가 돌아왔수다!"
+          body="고치가 숲에서 무언가를 찾아왔어요. 다음을 눌러 받아 봅서를 확인해 보세요."
+          placement="center"
+          primary={{
+            label: '다음',
+            onPress: () => goTutorial('explore-reward-button'),
+          }}
+          onSkip={() => {
+            void saveExploreRewardIntroSeen();
+            skipTutorial();
+          }}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+
+      {hasExploreReward &&
+      !suppressStatus &&
+      tutorialStep === 'explore-reward-button' &&
+      tutorialScope === 'explore' ? (
+        <TutorialOverlay
+          step={8}
+          total={EXPLORE_TOUR_TOTAL}
+          title="받아 봅서!"
+          body="받아 봅서를 누르면 고치가 가져온 걸 확인할 수 있어요."
+          hint="받아 봅서를 눌러 보세요"
+          placement="above"
+          align="center"
+          hole={claimHole ? () => claimHole : undefined}
+          onSkip={() => {
+            void saveExploreRewardIntroSeen();
+            skipTutorial();
+          }}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
 
       {exploreEggReveal ? (
         <ExploreEggReward

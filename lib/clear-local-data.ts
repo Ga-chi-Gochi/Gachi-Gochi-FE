@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { resetExploreIntroSession } from '@/lib/explore-intro-state';
 import { resetTutorialSession } from '@/lib/tutorial-state';
 
 /** 앱이 쓰는 로컬 저장 키 — 초기화 시 전부 삭제 */
@@ -8,6 +9,8 @@ const LOCAL_STORAGE_KEYS = [
   'island/state',
   'island/look',
   'explore/state',
+  'explore/intro-seen',
+  'explore/reward-intro-seen',
   'walking/reward',
   'walking/intro-seen',
   'walking/privacy-consent',
@@ -22,4 +25,5 @@ const LOCAL_STORAGE_KEYS = [
 export async function clearLocalGameData(): Promise<void> {
   await AsyncStorage.multiRemove([...LOCAL_STORAGE_KEYS]);
   resetTutorialSession();
+  resetExploreIntroSession();
 }

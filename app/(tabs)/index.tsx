@@ -1,6 +1,8 @@
 import { router, useFocusEffect, type Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import { ScrollView, View } from 'react-native';
+
+import type { SpotlightHole } from '@/components/guide/guide-spotlight';
 
 import { VISIBLE_ISLAND_LOOKS } from '@/components/island/beach-home';
 import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
@@ -16,12 +18,18 @@ import { ValuePracticePopup } from '@/components/gachi-ui';
 import { OnboardingFlow } from '@/components/onboarding/onboarding-flow';
 import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
+import { ExploreUnlockTour } from '@/components/tutorial/explore-unlock-tour';
 import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialHomeCards } from '@/components/tutorial/tutorial-home-cards';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { pixel } from '@/constants/pixel-theme';
 import { useIslandLook } from '@/hooks/use-island-look';
 import { useResponsive } from '@/hooks/use-responsive';
+import {
+  readExploreIntroSeen,
+  readExploreRewardIntroSeen,
+  saveExploreRewardIntroSeen,
+} from '@/lib/explore-intro-state';
 import { hasSeenOnboarding, readCreatureName } from '@/lib/onboarding-state';
 
 /** 프로필에 보여줄 목 닉네임 */
@@ -41,6 +49,8 @@ export default function IslandHomeScreen() {
     exploreEggReveal,
     claimExploreEgg,
     acknowledgeExploreEggReveal,
+    exploreForestUnlocked,
+    islandExpandBusy,
     setHomeActive,
   } = usePlayState();
 
@@ -54,18 +64,23 @@ export default function IslandHomeScreen() {
   const {
     start: startTutorial,
     startHelp,
+    startExploreRewardGuide,
     step: tutorialStep,
     scope: tutorialScope,
     enterScreen,
     skip: skipTutorial,
   } = useTutorial();
   const [claiming, setClaiming] = useState(false);
+  const rewardPopupRef = useRef<ComponentRef<typeof View>>(null);
+  const [rewardPopupHole, setRewardPopupHole] = useState<SpotlightHole | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
   const { look: islandVersion, setLook: setIslandVersion } = useIslandLook();
   const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
+  // 섬 확장 화산재·구름이 걷힌 뒤에만 탐험 해금 안내를 연다
+  const ashClear = !ash.block && ash.top <= 0.02 && ash.mid <= 0.02 && ash.bottom <= 0.02;
   const [nickname, setNickname] = useState(PROFILE_NAME);
   const [creatureName, setCreatureName] = useState('');
   const [showGuide, setShowGuide] = useState(false);
@@ -126,6 +141,90 @@ export default function IslandHomeScreen() {
       alive = false;
     };
   }, []);
+
+  // 서쪽 숲 해금 후 — 섬 확장 모션·구름이 모두 걷힌 다음에 탐험 안내 1회
+  useEffect(() => {
+    if (
+      !exploreForestUnlocked ||
+      islandExpandBusy ||
+      !ashClear ||
+      zoneUnlockReveal ||
+      growthReveal ||
+      pendingPlaceItemId ||
+      exploreEggReveal ||
+      showGuide ||
+      tutorialStep != null
+    ) {
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (await readExploreIntroSeen()) {
+          return;
+        }
+        if (!alive) {
+          return;
+        }
+        startHelp('explore');
+      })();
+    }, 700);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [
+    ashClear,
+    exploreEggReveal,
+    exploreForestUnlocked,
+    growthReveal,
+    islandExpandBusy,
+    pendingPlaceItemId,
+    showGuide,
+    startHelp,
+    tutorialStep,
+    zoneUnlockReveal,
+  ]);
+
+  // 탐험이 끝나면 보상 받기 안내 1회
+  useEffect(() => {
+    if (
+      !hasExploreReward ||
+      exploreEggReveal ||
+      zoneUnlockReveal ||
+      growthReveal ||
+      pendingPlaceItemId ||
+      showGuide ||
+      tutorialStep != null
+    ) {
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(() => {
+      void (async () => {
+        if (await readExploreRewardIntroSeen()) {
+          return;
+        }
+        if (!alive) {
+          return;
+        }
+        startExploreRewardGuide();
+      })();
+    }, 500);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [
+    exploreEggReveal,
+    growthReveal,
+    hasExploreReward,
+    pendingPlaceItemId,
+    showGuide,
+    startExploreRewardGuide,
+    tutorialStep,
+    zoneUnlockReveal,
+  ]);
 
   const openPet = () => {
     if (zoneUnlockReveal || pendingPlaceItemId) {
@@ -192,27 +291,59 @@ export default function IslandHomeScreen() {
 
         {hasExploreReward && !exploreEggReveal ? (
           <View
+            pointerEvents="box-none"
             style={{
               position: 'absolute',
-              left: scale(12),
-              right: scale(12),
+              left: 0,
+              right: 0,
               top: scale(108),
               zIndex: 25,
+              alignItems: 'center',
+              paddingHorizontal: scale(12),
             }}>
-            <PixelPanel style={{ gap: scale(8), alignItems: 'center' }}>
-              <PixelText size={13} center>
-                탐험 완료! 고치 알 보상이 있어요
-              </PixelText>
-              <PixelButton
-                label={claiming ? '받는 중…' : '탐험 완료! 보상 받기'}
-                tone="orange"
-                disabled={claiming}
-                onPress={() => {
-                  setClaiming(true);
-                  void claimExploreEgg().finally(() => setClaiming(false));
-                }}
-              />
-            </PixelPanel>
+            <View
+              ref={rewardPopupRef}
+              collapsable={false}
+              onLayout={() => {
+                rewardPopupRef.current?.measureInWindow((x, y, width, height) => {
+                  if (width <= 0 || height <= 0) {
+                    return;
+                  }
+                  const pad = scale(4);
+                  setRewardPopupHole({
+                    left: x - pad,
+                    top: y - pad,
+                    width: width + pad * 2,
+                    height: height + pad * 2,
+                    radius: scale(10),
+                  });
+                });
+              }}>
+              <PixelPanel style={{ gap: scale(8), alignItems: 'center' }}>
+                <PixelText size={13} center>
+                  고치가 무언가를 찾아왔수다!
+                </PixelText>
+                <PixelButton
+                  label={claiming ? '받는 중…' : '받아 봅서'}
+                  tone="orange"
+                  disabled={claiming}
+                  onPress={() => {
+                    setClaiming(true);
+                    void claimExploreEgg()
+                      .then(() => {
+                        if (
+                          tutorialScope === 'explore' &&
+                          (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
+                        ) {
+                          void saveExploreRewardIntroSeen();
+                          skipTutorial();
+                        }
+                      })
+                      .finally(() => setClaiming(false));
+                  }}
+                />
+              </PixelPanel>
+            </View>
           </View>
         ) : null}
 
@@ -268,6 +399,13 @@ export default function IslandHomeScreen() {
                 label="걷기 도움말"
                 onPress={() => runTutorial(() => startHelp('walking'))}
               />
+              {exploreForestUnlocked ? (
+                <PixelButton
+                  tone="ghost"
+                  label="탐험 도움말"
+                  onPress={() => runTutorial(() => startHelp('explore'))}
+                />
+              ) : null}
             </ScrollView>
           ) : sheet?.kind === 'settings' ? (
             <View style={{ gap: scale(10) }}>
@@ -320,6 +458,10 @@ export default function IslandHomeScreen() {
         />
       ) : null}
       <TutorialHomeCards enabled={!showGuide} />
+      <ExploreUnlockTour
+        enabled={!showGuide}
+        rewardPopupHole={hasExploreReward && !exploreEggReveal ? rewardPopupHole : null}
+      />
       {helpOpen && !showGuide ? (
         <FeatureHelpOverlay topic="home" onClose={() => setHelpOpen(false)} zIndex={90} />
       ) : null}

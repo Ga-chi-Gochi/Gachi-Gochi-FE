@@ -20,12 +20,29 @@ import {
  * 나침반 → 가치 실천 팝업(봉그깅) → 봉그깅 화면 안내 → 팝업(걷기) → 걷기 화면 안내 → 알 부화 선물 → 마무리(귤코인 보상)
  * '-screen' 은 카메라·걷기 화면 안에서 안내를 보는 동안이다.
  */
-export type TutorialStep = 'compass' | 'bongging' | 'bongging-screen' | 'walking' | 'walking-screen' | 'gift' | 'finish';
+export type TutorialStep =
+  | 'compass'
+  | 'bongging'
+  | 'bongging-screen'
+  | 'walking'
+  | 'walking-screen'
+  | 'gift'
+  | 'finish'
+  | 'explore'
+  | 'explore-button'
+  | 'explore-course'
+  | 'explore-character'
+  | 'explore-send'
+  | 'explore-progress'
+  | 'explore-reward'
+  | 'explore-reward-button';
 
-/** full 은 전체 흐름, bongging·walking 은 메뉴에서 고른 기능별 도움말 */
-export type TutorialScope = 'full' | 'bongging' | 'walking';
+/** full 은 전체 흐름, bongging·walking·explore 는 메뉴에서 고른 기능별 도움말 */
+export type TutorialScope = 'full' | 'bongging' | 'walking' | 'explore';
 
 type TutorialScreen = 'bongging' | 'walking';
+
+export type TutorialHelpTopic = 'bongging' | 'walking' | 'explore';
 
 type TutorialContextValue = {
   /** null 이면 튜토리얼이 진행 중이 아니다 */
@@ -37,8 +54,10 @@ type TutorialContextValue = {
   rewardClaimed: boolean;
   /** 처음(나침반)부터 시작한다. replay true 면 다시 보기 */
   start: (options?: { replay?: boolean }) => void;
-  /** 봉그깅·걷기만 짧게 다시 본다. 보상은 주지 않는다 */
-  startHelp: (topic: 'bongging' | 'walking') => void;
+  /** 봉그깅·걷기·탐험만 짧게 다시 본다. 보상은 주지 않는다 */
+  startHelp: (topic: TutorialHelpTopic) => void;
+  /** 탐험이 끝난 뒤 보상 받기 안내만 연다 */
+  startExploreRewardGuide: () => void;
   goTo: (step: TutorialStep) => void;
   /** 카메라·걷기 화면 안내를 시작한다 */
   enterScreen: (screen: TutorialScreen) => void;
@@ -58,6 +77,19 @@ const TutorialContext = createContext<TutorialContextValue | null>(null);
 function restStep(step: TutorialStep): TutorialRestStep {
   if (step === 'bongging-screen') return 'bongging';
   if (step === 'walking-screen') return 'walking';
+  // 탐험 기능 튜토리얼은 이어하기에 넣지 않는다
+  if (
+    step === 'explore' ||
+    step === 'explore-button' ||
+    step === 'explore-course' ||
+    step === 'explore-character' ||
+    step === 'explore-send' ||
+    step === 'explore-progress' ||
+    step === 'explore-reward' ||
+    step === 'explore-reward-button'
+  ) {
+    return 'compass';
+  }
   return step;
 }
 
@@ -143,10 +175,15 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     [begin],
   );
 
-  const startHelp = useCallback(
-    (topic: 'bongging' | 'walking') => begin(topic, topic, true),
-    [begin],
-  );
+  const startHelp = useCallback((topic: TutorialHelpTopic) => {
+    if (topic === 'explore') {
+      begin('explore', 'explore', true);
+      return;
+    }
+    begin(topic, topic, true);
+  }, [begin]);
+
+  const startExploreRewardGuide = useCallback(() => begin('explore-reward', 'explore', true), [begin]);
 
   const goTo = useCallback((next: TutorialStep) => move(next), [move]);
   const enterScreen = useCallback((screen: TutorialScreen) => move(`${screen}-screen`), [move]);
@@ -217,6 +254,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       rewardClaimed,
       start,
       startHelp,
+      startExploreRewardGuide,
       goTo,
       enterScreen,
       leaveScreen,
@@ -224,7 +262,21 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       finish,
       skip,
     }),
-    [step, replay, scope, rewardClaimed, start, startHelp, goTo, enterScreen, leaveScreen, giftXp, finish, skip],
+    [
+      step,
+      replay,
+      scope,
+      rewardClaimed,
+      start,
+      startHelp,
+      startExploreRewardGuide,
+      goTo,
+      enterScreen,
+      leaveScreen,
+      giftXp,
+      finish,
+      skip,
+    ],
   );
 
   return <TutorialContext.Provider value={value}>{children}</TutorialContext.Provider>;

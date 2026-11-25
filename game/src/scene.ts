@@ -1317,12 +1317,15 @@ export class IslandScene extends Phaser.Scene {
       this.explore.setVisible(false);
       return;
     }
-    this.explore.setPosition(this.W * 0.06, this.H * 0.42).setVisible(true);
+    // 서쪽 섬 육지 중앙 (RN EXPLORE_WEST_FRAME 과 맞춤). 예전 0.06/0.42 는 바다 쪽이었다.
+    const boxW = 72 * f;
+    const boxH = 64 * f;
+    this.explore
+      .setPosition(this.W * 0.215 - boxW / 2, this.H * 0.47 - boxH / 2)
+      .setVisible(true);
     const parts = this.exploreParts;
     if (parts && parts.f === f && parts.level === level) return;
     this.explore.removeAll(true);
-    const boxW = 72 * f;
-    const boxH = 64 * f;
     const tree = (size: number) => {
       const spr = this.dotSprite('tree', size);
       const c = this.add.container(0, 0);

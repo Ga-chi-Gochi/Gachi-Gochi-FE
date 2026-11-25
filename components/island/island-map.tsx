@@ -18,6 +18,7 @@ import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
+import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_FOREST_ZONE } from '@/constants/explore';
 import { zoneHitRect, walkPointsFromLand, ISLAND_GRID_W, ISLAND_GRID_H } from '@/constants/island-terrain';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
@@ -76,8 +77,6 @@ export function IslandMap({
     isExploring,
     hasExploreReward,
     exploreRemainLabel,
-    exploreRemaining,
-    exploreDailyLimit,
     exploringGochiId,
   } = usePlayState();
 
@@ -310,14 +309,14 @@ export function IslandMap({
               />
             ) : null}
 
-            {/* 탐험 중: 서쪽 풀숲 수색 미니 연출 */}
+            {/* 탐험 중: 서쪽 섬 육지 위 수색 미니 연출 */}
             {exploreForestUnlocked && isExploring && !placing && !expanding && !showFocusUI ? (
               <View
                 pointerEvents="none"
                 style={{
                   position: 'absolute',
-                  left: westHit.left + westHit.width * 0.12,
-                  top: westHit.top + westHit.height * 0.18,
+                  left: mapW * (EXPLORE_WEST_FRAME.x + EXPLORE_WEST_FRAME.w * 0.5) - rs(36),
+                  top: mapH * (EXPLORE_WEST_FRAME.y + EXPLORE_WEST_FRAME.h * 0.5) - rs(32),
                 }}>
                 <ExploreWaitingAnim gochiId={exploringGochiId} variant="map" />
               </View>
@@ -395,41 +394,44 @@ export function IslandMap({
           </View>
         ) : null}
 
-        {/* 탐험 버튼 — 맵 오른쪽 아래 구석만 */}
+        {/* 서쪽 숲 탭 — 모험 보내기 / 진행 중 남은 시간 (육지 쪽으로 안쪽) */}
         {exploreForestUnlocked && !placing && !expanding && !showFocusUI ? (
-          <View style={{ position: 'absolute', right: rs(8), bottom: rs(8) }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'
-              }
-              onPress={() => router.push(EXPLORE_ROUTE)}
-              style={{
-                minWidth: rs(72),
-                paddingHorizontal: rs(10),
-                paddingVertical: rs(8),
-                borderWidth: rs(2),
-                borderColor: pixel.ink,
-                backgroundColor: hasExploreReward
-                  ? pixel.lava
-                  : isExploring
-                    ? pixel.sand
-                    : pixel.tangerine,
-                alignItems: 'center',
-                gap: rs(2),
-              }}>
-              <PixelText size={11} color={hasExploreReward ? pixel.white : pixel.ink}>
-                {hasExploreReward ? '보상!' : isExploring ? '탐험중' : '🌲 탐험'}
-              </PixelText>
-              <PixelText size={9} color={hasExploreReward ? pixel.white : pixel.ink}>
-                {hasExploreReward
-                  ? '받기'
-                  : isExploring
-                    ? exploreRemainLabel
-                    : `${exploreRemaining}/${exploreDailyLimit}`}
-              </PixelText>
-            </Pressable>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
+            }
+            onPress={() => router.push(EXPLORE_ROUTE)}
+            style={{
+              position: 'absolute',
+              left: westHit.left + westHit.width * 0.28,
+              top: westHit.top + westHit.height * 0.08,
+              width: westHit.width * 0.72,
+              height: westHit.height * 0.84,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            {isExploring ? (
+              <View
+                pointerEvents="none"
+                style={{
+                  paddingHorizontal: rs(8),
+                  paddingVertical: rs(6),
+                  borderWidth: rs(2),
+                  borderColor: pixel.ink,
+                  backgroundColor: 'rgba(255,248,230,0.92)',
+                  alignItems: 'center',
+                  gap: rs(2),
+                }}>
+                <PixelText size={10} color={pixel.ink} center>
+                  탐험중
+                </PixelText>
+                <PixelText size={12} color={pixel.ink} center>
+                  {exploreRemainLabel}
+                </PixelText>
+              </View>
+            ) : null}
+          </Pressable>
         ) : null}
 
         {!showFocusUI && !placing && !expanding && !compact && hint ? (

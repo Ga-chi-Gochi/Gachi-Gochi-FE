@@ -708,7 +708,7 @@ export default function ExploreScreen() {
           step={6}
           total={EXPLORE_TOUR_TOTAL}
           title="모험이 진행 중이에요"
-          body="남은 시간이 끝나면 고치가 알을 들고 돌아와요. 섬으로 돌아가면 탐험중 버튼에서도 확인할 수 있어요."
+          body="남은 시간이 끝나면 고치가 돌아와요. 섬의 서쪽 숲 위에서도 남은 시간을 볼 수 있어요."
           placement="center"
           primary={{
             label: '섬으로',

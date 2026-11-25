@@ -1,22 +1,32 @@
 import type { SpotlightHole } from '@/components/guide/guide-spotlight';
 
 /**
- * 섬 오버레이 탐험 버튼과 같은 자리 (left: 12, top: 58%).
- * 스포트라이트 구멍용 — scale 은 useResponsive().scale.
+ * 탐험 터치·가이드용 서쪽 숲 영역.
+ * 바다·파도를 빼고, 밝은 서쪽 섬 육지(해안사~본섬 이음)만 잡는다.
  */
-export function exploreButtonHole(
-  scale: (value: number) => number,
-  windowHeight: number,
-): SpotlightHole {
-  const width = scale(76);
-  const height = scale(48);
+export const EXPLORE_WEST_FRAME = { x: 0.14, y: 0.33, w: 0.15, h: 0.28 } as const;
+
+/**
+ * 홈 섬 서쪽 숲 구역 스포트라이트.
+ * 카메라 확대·이동이 없을 때(기본 홈) 화면 비율로 맞춘다.
+ */
+export function exploreWestZoneHole(windowWidth: number, windowHeight: number): SpotlightHole {
   return {
-    left: scale(12),
-    top: windowHeight * 0.58,
-    width,
-    height,
-    radius: scale(8),
+    left: EXPLORE_WEST_FRAME.x * windowWidth,
+    top: EXPLORE_WEST_FRAME.y * windowHeight,
+    width: EXPLORE_WEST_FRAME.w * windowWidth,
+    height: EXPLORE_WEST_FRAME.h * windowHeight,
+    radius: Math.min(14, windowWidth * 0.028),
   };
+}
+
+/** @deprecated 서쪽 숲 진입으로 바뀜. exploreWestZoneHole 사용 */
+export function exploreButtonHole(
+  _scale: (value: number) => number,
+  windowHeight: number,
+  windowWidth = 390,
+): SpotlightHole {
+  return exploreWestZoneHole(windowWidth, windowHeight);
 }
 
 /**

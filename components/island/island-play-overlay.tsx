@@ -14,6 +14,7 @@ import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
 import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
@@ -54,8 +55,6 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     isExploring,
     hasExploreReward,
     exploreRemainLabel,
-    exploreRemaining,
-    exploreDailyLimit,
     petCreature,
   } = usePlayState();
   const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } =
@@ -110,6 +109,19 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     };
   };
 
+  /** 탐험 터치·타이머는 바다보다 섬 육지 쪽으로 당긴 프레임을 쓴다 */
+  const westFrame = (() => {
+    const f = EXPLORE_WEST_FRAME;
+    const left = f.x * width;
+    const top = f.y * height;
+    return {
+      left: width / 2 + (left - width / 2) * camera.zoom + camera.x,
+      top: height / 2 + (top - height / 2) * camera.zoom + camera.y,
+      width: f.w * width * camera.zoom,
+      height: f.h * height * camera.zoom,
+    };
+  })();
+
   return (
     <View
       pointerEvents="box-none"
@@ -147,7 +159,9 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
       {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'}
+          accessibilityLabel={
+            hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
+          }
           onPress={() => {
             if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
               goTutorial('explore-course');
@@ -162,7 +176,6 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
               tutorialScope === 'explore' &&
               (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
             ) {
-              // 보상 화면으로 보내 받도록 두고, 받기가 끝나면 explore 쪽에서 가이드를 닫는다
               if (tutorialStep === 'explore-reward') {
                 goTutorial('explore-reward-button');
               }
@@ -171,23 +184,34 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
           }}
           style={{
             position: 'absolute',
-            left: scale(12),
-            top: '58%',
-            minWidth: scale(72),
-            paddingHorizontal: scale(10),
-            paddingVertical: scale(8),
-            borderWidth: scale(2),
-            borderColor: pixel.ink,
-            backgroundColor: hasExploreReward ? pixel.lava : isExploring ? pixel.sand : pixel.tangerine,
+            left: westFrame.left,
+            top: westFrame.top,
+            width: westFrame.width,
+            height: westFrame.height,
             alignItems: 'center',
+            justifyContent: 'center',
             opacity: 1 - Math.max(ash.mid, ash.bottom),
           }}>
-          <PixelText size={11} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '보상!' : isExploring ? '탐험중' : '🌲 탐험'}
-          </PixelText>
-          <PixelText size={9} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '받기' : isExploring ? exploreRemainLabel : `${exploreRemaining}/${exploreDailyLimit}`}
-          </PixelText>
+          {isExploring ? (
+            <View
+              pointerEvents="none"
+              style={{
+                paddingHorizontal: scale(8),
+                paddingVertical: scale(6),
+                borderWidth: scale(2),
+                borderColor: pixel.ink,
+                backgroundColor: 'rgba(255,248,230,0.92)',
+                alignItems: 'center',
+                gap: scale(2),
+              }}>
+              <PixelText size={10} color={pixel.ink} center>
+                탐험중
+              </PixelText>
+              <PixelText size={12} color={pixel.ink} center>
+                {exploreRemainLabel}
+              </PixelText>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
 

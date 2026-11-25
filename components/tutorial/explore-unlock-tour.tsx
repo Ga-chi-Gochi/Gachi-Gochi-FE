@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import {
-  exploreButtonHole,
   exploreRewardPopupHole,
+  exploreWestZoneHole,
 } from '@/components/island/explore-button-target';
 import type { SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
@@ -23,7 +23,7 @@ const HOME_STEPS = new Set([
 ]);
 
 /**
- * 홈: 해금 팝업 → 탐험 버튼 → (모험 보낸 뒤) 진행 중 → 보상 팝업·버튼.
+ * 홈: 해금 팝업 → 서쪽 숲 탭 → (모험 보낸 뒤) 진행 중 → 보상 팝업.
  * 코스·캐릭터·보내기 단계는 /explore 화면에서 이어진다.
  */
 export function ExploreUnlockTour({
@@ -90,7 +90,7 @@ export function ExploreUnlockTour({
     );
   }
 
-  const hole = exploreButtonHole(scale, height);
+  const westHole = exploreWestZoneHole(width, height);
 
   if (step === 'explore-button') {
     return (
@@ -98,12 +98,12 @@ export function ExploreUnlockTour({
         key="explore-button"
         step={2}
         total={EXPLORE_TOUR_TOTAL}
-        title="이 버튼으로 모험을 보내 봅서"
-        body="탐험을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
-        hint="탐험을 눌러 보세요"
+        title="서쪽 숲을 눌러 봅서"
+        body="섬 왼쪽 서쪽 숲을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
+        hint="서쪽 숲을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => hole}
+        hole={() => westHole}
         onSkip={dismissIntro}
         zIndex={92}
       />
@@ -117,11 +117,11 @@ export function ExploreUnlockTour({
         step={6}
         total={EXPLORE_TOUR_TOTAL}
         title="모험이 진행 중이에요"
-        body="이 버튼이 탐험중으로 바뀌면 고치가 숲에 나가 있는 거예요. 남은 시간도 여기서 볼 수 있어요."
-        hint="버튼을 누르거나 다음을 눌러 보세요"
+        body="서쪽 숲 위에 남은 시간이 보여요. 시간이 끝나면 고치가 돌아와요."
+        hint="숲을 누르거나 다음을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => hole}
+        hole={() => westHole}
         primary={{
           label: '다음',
           onPress: finishProgress,

@@ -21,6 +21,7 @@ import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
 
@@ -56,8 +57,6 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
     isExploring,
     hasExploreReward,
     exploreRemainLabel,
-    exploreRemaining,
-    exploreDailyLimit,
     exploringGochiId,
   } = usePlayState();
   const [box, setBox] = useState<Box>({ width: 0, height: 0 });
@@ -202,36 +201,55 @@ export function BeachPlay({ petOpen, onPet }: BeachPlayProps) {
         <WanderingCreature growthStage={growthStage} walkPoints={walkPoints} walkGrid={walkGrid} onPress={onPet} />
       ) : null}
 
-      {exploreForestUnlocked && isExploring && !placing && !petOpen ? (
-        <View pointerEvents="none" style={{ position: 'absolute', left: box.width * 0.06, top: box.height * 0.42 }}>
+      {exploreForestUnlocked && isExploring && !placing && !petOpen && box.width > 0 ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: (EXPLORE_WEST_FRAME.x + EXPLORE_WEST_FRAME.w * 0.5) * box.width - scale(36),
+            top: (EXPLORE_WEST_FRAME.y + EXPLORE_WEST_FRAME.h * 0.5) * box.height - scale(32),
+          }}>
           <ExploreWaitingAnim gochiId={exploringGochiId} variant="map" />
         </View>
       ) : null}
       </Reanimated.View>
 
-      {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal ? (
+      {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal && box.width > 0 ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'}
+          accessibilityLabel={
+            hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
+          }
           onPress={() => router.push(EXPLORE_ROUTE)}
           style={{
             position: 'absolute',
-            left: scale(12),
-            top: '58%',
-            minWidth: scale(72),
-            paddingHorizontal: scale(10),
-            paddingVertical: scale(8),
-            borderWidth: scale(2),
-            borderColor: pixel.ink,
-            backgroundColor: hasExploreReward ? pixel.lava : isExploring ? pixel.sand : pixel.tangerine,
+            left: EXPLORE_WEST_FRAME.x * box.width,
+            top: EXPLORE_WEST_FRAME.y * box.height,
+            width: EXPLORE_WEST_FRAME.w * box.width,
+            height: EXPLORE_WEST_FRAME.h * box.height,
             alignItems: 'center',
+            justifyContent: 'center',
           }}>
-          <PixelText size={11} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '보상!' : isExploring ? '탐험중' : '🌲 탐험'}
-          </PixelText>
-          <PixelText size={9} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '받기' : isExploring ? exploreRemainLabel : `${exploreRemaining}/${exploreDailyLimit}`}
-          </PixelText>
+          {isExploring ? (
+            <View
+              pointerEvents="none"
+              style={{
+                paddingHorizontal: scale(8),
+                paddingVertical: scale(6),
+                borderWidth: scale(2),
+                borderColor: pixel.ink,
+                backgroundColor: 'rgba(255,248,230,0.92)',
+                alignItems: 'center',
+                gap: scale(2),
+              }}>
+              <PixelText size={10} color={pixel.ink} center>
+                탐험중
+              </PixelText>
+              <PixelText size={12} color={pixel.ink} center>
+                {exploreRemainLabel}
+              </PixelText>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
 

@@ -1,0 +1,15 @@
+{
+  "id": "fx-panic-bang",
+  "label": "이펙트 — 혼비백산 \"!\" 말풍선 (1회, 고치 머리 위)",
+  "playback": "once",
+  "frameWidth": 16,
+  "frameHeight": 16,
+  "frameCount": 13,
+  "totalMs": 830,
+  "sheet": "sheet.png",
+  "shadow": null,
+  "pivot": [8, 16],
+  "durationsMs": [40, 50, 50, 50, 60, 50, 50, 50, 250, 50, 50, 40, 40],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}

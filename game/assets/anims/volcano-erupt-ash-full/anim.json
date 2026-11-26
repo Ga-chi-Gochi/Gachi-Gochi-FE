@@ -1,0 +1,14 @@
+{
+  "id": "volcano-erupt-ash-full",
+  "label": "화산 — 섬 넓히기용 화산재 분출 (1회)",
+  "playback": "once",
+  "frameWidth": 96,
+  "frameHeight": 128,
+  "frameCount": 18,
+  "totalMs": 3240,
+  "sheet": "sheet.png",
+  "shadow": null,
+  "durationsMs": [60, 70, 70, 60, 60, 50, 50, 50, 50, 60, 40, 40, 30, 100, 100, 100, 2150, 100],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}

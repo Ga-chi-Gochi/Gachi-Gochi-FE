@@ -47,7 +47,7 @@ function walkTargets(stage: IslandStageId, region: readonly Cell[]) {
   return points;
 }
 
-function crossesVolcano(stage: IslandStageId, a: WalkPoint, b: WalkPoint) {
+export function crossesVolcano(stage: IslandStageId, a: WalkPoint, b: WalkPoint) {
   const v = volcanoCells(stage);
   const x0 = v.col0 * CELL;
   const y0 = v.row0 * CELL;

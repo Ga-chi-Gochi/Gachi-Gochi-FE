@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-adult-startle",
+  "label": "성체 귤새 — 혼비백산 시작 깜짝 (1회)",
+  "playback": "once",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 6,
+  "totalMs": 380,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [60, 70, 50, 90, 50, 60],
+  "motionPx": [0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, -5, -2, 0]
+}

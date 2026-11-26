@@ -8,39 +8,31 @@ import { ISLAND_ZONES, getIslandStage } from '@/constants/island-zones';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
-import { embedded, listen, send, type GameState, type ToGame, type ZoneBoxes } from './bridge';
 import {
-  CLEAR_MS,
-  CLOUD,
-  HOLD_MS,
-  LAVA_BOIL_MS,
-  LAVA_FILL_MS,
-  LAVA_SPILL_MS,
-  cellFade,
-  cloudMotion,
-  coverRank,
-  paintCloud,
-  scallopRank,
-  type DrawContext,
-} from './gas';
+  ANIM_URLS,
+  ANIMS,
+  ASH,
+  VOLCANO_ERUPT,
+  VOLCANO_REST,
+  anim,
+  panicAttach,
+  panicRun,
+  panicStartle,
+  type PanicFx,
+  type PanicStage,
+} from './anims';
+import { embedded, listen, send, type GameState, type ToGame, type ZoneBoxes } from './bridge';
 import {
   CELL,
   SEA_PLAIN_COLOR,
   SHORE_FOAM,
   SHORE_TUCK,
   SOFT_SHORE_SHEET,
-  CRATER_MID,
-  CRATER_PIXELS,
-  CRATER_SPANS,
-  VOLCANO_COLS,
-  VOLCANO_ROWS,
-  craterCloudPoint,
-  magmaColor,
+  VOLCANO_SLOT_H,
+  VOLCANO_SLOT_W,
   shoreCells,
-  spills,
   stageArt,
-  surgeFill,
-  volcanoFrame,
+  volcanoSlot,
   zoneFrame,
 } from './shape';
 import {
@@ -54,8 +46,9 @@ import {
   type Planner,
 } from './creature';
 import { MOTION_RULES, MOTION_SEQ } from './motion';
+import { Player } from './player';
 import { SeaClock, waveLag } from './seaClock';
-import { keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
+import { crossesVolcano, keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
 
 import eggUrl from '../assets/island-v3/gyulsae-egg.png';
 import youngUrl from '../assets/island-v3/gyulsae-young.png';
@@ -66,17 +59,10 @@ import stage2Url from '../assets/island-v3/stage2.png';
 import stage3Url from '../assets/island-v3/stage3.png';
 import seaShoreSoftUrl from '../assets/tiles-v2/sea-shore-soft.png';
 
-const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: true, import: 'default' }) as Record<
-  string,
-  string
->;
-
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 const stageUrls: Record<IslandStageId, string> = { 1: stage1Url, 2: stage2Url, 3: stage3Url };
-
-const animUrls = import.meta.glob('../assets/anims/*/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 const shopUrls = import.meta.glob('../assets/shop/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
@@ -126,9 +112,106 @@ const hex = (color: string) => {
   }
   return v;
 };
-/** RN Animated.timing 기본 이징 (Easing.inOut(Easing.ease)) */
-const easeInOut = (t: number) => Phaser.Math.Easing.Cubic.InOut(t);
-/** Reanimated withTiming 기본 이징 (Easing.inOut(Easing.quad)) */
+const SWAP_WAIT_MS = 1500;
+const PANIC_RADIUS = 2.2 * CELL;
+
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
+
+type AshSpan = { a: number; b: number; lo: boolean; hi: boolean; c: number; full: boolean };
+type AshRun = [number, number, number, number];
+
+const ASH_FULL = new Set([0, 32]);
+
+const ashRuns = (spans: AshSpan[], edge: number, inner: (cs: number[]) => number) => {
+  const out: AshRun[] = [];
+  const sorted = [...spans].sort((p, q) => p.a - q.a);
+  let cur: { b: number; ia: number; ib: number; cs: number[]; n: number; full: number } | null = null;
+  const push = (r: NonNullable<typeof cur>) => {
+    if (r.full > 0) out.push([r.ia, r.ib, r.full === r.n ? inner(r.cs) : edge, r.full / r.n]);
+  };
+  for (const sp of sorted) {
+    const inset = (sp.b - sp.a) * 0.2;
+    const ia = sp.lo ? -Infinity : sp.a + inset;
+    const ib = sp.hi ? Infinity : sp.b - inset;
+    if (cur && sp.a <= cur.b) {
+      if (sp.b > cur.b) {
+        cur.b = sp.b;
+        cur.ib = ib;
+      } else if (ib === Infinity) cur.ib = ib;
+      if (ia === -Infinity) cur.ia = ia;
+      if (sp.full) cur.cs.push(sp.c);
+      cur.n += 1;
+      cur.full += sp.full ? 1 : 0;
+    } else {
+      if (cur) push(cur);
+      cur = { b: sp.b, ia, ib, cs: sp.full ? [sp.c] : [], n: 1, full: sp.full ? 1 : 0 };
+    }
+  }
+  if (cur) push(cur);
+  return out;
+};
+
+const ASH_RUNS = ASH.frames.map((items) => {
+  const [bx0, by0, bx1, by1] = ASH.box;
+  const top: AshSpan[] = [];
+  const bottom: AshSpan[] = [];
+  const left: AshSpan[] = [];
+  const right: AshSpan[] = [];
+  for (const [name, f, x, y] of items) {
+    const full = ASH_FULL.has(f);
+    const a = anim(name);
+    const x1 = x + a.frameWidth;
+    const y1 = y + a.frameHeight;
+    const mx = x + a.frameWidth / 2;
+    const my = y + a.frameHeight / 2;
+    const l = x <= bx0;
+    const r = x1 >= bx1;
+    const t = y <= by0;
+    const b = y1 >= by1;
+    if (t) top.push({ a: x, b: x1, lo: l, hi: r, c: my, full });
+    if (b) bottom.push({ a: x, b: x1, lo: l, hi: r, c: my, full });
+    if (l) left.push({ a: y, b: y1, lo: t, hi: b, c: mx, full });
+    if (r) right.push({ a: y, b: y1, lo: t, hi: b, c: mx, full });
+  }
+  return {
+    top: ashRuns(top, by0, (cs) => Math.max(by0, Math.min(...cs))),
+    bottom: ashRuns(bottom, by1, (cs) => Math.min(by1, Math.max(...cs))),
+    left: ashRuns(left, bx0, (cs) => Math.max(bx0, Math.min(...cs))),
+    right: ashRuns(right, bx1, (cs) => Math.min(bx1, Math.max(...cs))),
+  };
+});
+
+type Point = { x: number; y: number };
+
+type PanicActor = {
+  stage: PanicStage;
+  x: number;
+  y: number;
+  home: Point;
+  facing: number;
+  wantFacing: number;
+  target: Point | null;
+  retarget: number;
+  sweatIn: number;
+  bangIn: number;
+  delay: number;
+  mode: 'startle' | 'run';
+  src: string;
+  player: Player;
+  fx: { k: PanicFx; pl: Player }[];
+};
+
+type Expand = {
+  t: number;
+  volcano: boolean;
+  calm: boolean;
+  fog: boolean;
+  reveal: boolean;
+  pending: boolean;
+  held: number;
+  swapped: boolean;
+};
+
 const quadInOut = (t: number) => Phaser.Math.Easing.Quadratic.InOut(t);
 
 export class IslandScene extends Phaser.Scene {
@@ -152,8 +235,9 @@ export class IslandScene extends Phaser.Scene {
   private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
   private quake!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
-  private volcano!: Phaser.GameObjects.Container;
-  private lava!: Phaser.GameObjects.Graphics;
+  private volcano!: Phaser.GameObjects.Sprite;
+  private volcKey = VOLCANO_REST;
+  private volcP = new Player(anim(VOLCANO_REST));
   private decor!: Phaser.GameObjects.Container;
   private creature!: Phaser.GameObjects.Container;
   private creatureBody!: Phaser.GameObjects.Image;
@@ -163,7 +247,11 @@ export class IslandScene extends Phaser.Scene {
   private noticeBang!: Phaser.GameObjects.Image;
   private noticeSparks: Phaser.GameObjects.Image[] = [];
   private explore!: Phaser.GameObjects.Container;
-  private gas!: Phaser.GameObjects.Graphics;
+  private panicFx!: Phaser.GameObjects.Container;
+  private ashLayer!: Phaser.GameObjects.Container;
+  private ashSolid!: Phaser.GameObjects.Rectangle;
+  private ashEdge!: Phaser.GameObjects.Graphics;
+  private ashPool: Phaser.GameObjects.Sprite[] = [];
 
   private cam = { z: 1, x: 0, y: 0 };
   private camSentAt = 0;
@@ -172,20 +260,8 @@ export class IslandScene extends Phaser.Scene {
   private terrainKey = '';
   private decorKey = '';
 
-  // 분화
-  private eruptAt = -1;
-  private calmed = false;
-  private spilled = false;
-  private gasState: null | {
-    started: number;
-    originX: number;
-    originY: number;
-    maxRank: number;
-    distance: number;
-    revealed: boolean;
-    holdUntil: number;
-    clearStarted: number;
-  } = null;
+  private ex: Expand | null = null;
+  private panic: PanicActor | null = null;
 
   // 귤새 (모션 엔진: creature.ts)
   private walk = {
@@ -224,9 +300,14 @@ export class IslandScene extends Phaser.Scene {
       const name = /([\w-]+)\.png$/.exec(path)?.[1];
       if (name) this.load.spritesheet(name, url, { frameWidth: 32, frameHeight: 32 });
     }
-    for (const [path, url] of Object.entries(animUrls)) {
+    for (const [path, url] of Object.entries(ANIM_URLS)) {
       const m = /anims\/([\w-]+)\/(sheet|shadow)\.png$/.exec(path);
-      if (m) this.load.spritesheet(m[2] === 'sheet' ? m[1] : `${m[1]}-shadow`, url, { frameWidth: 32, frameHeight: 32 });
+      const a = m ? ANIMS[m[1]] : undefined;
+      if (!m || !a) continue;
+      this.load.spritesheet(m[2] === 'sheet' ? a.id : `${a.id}-shadow`, url, {
+        frameWidth: a.frameWidth,
+        frameHeight: a.frameHeight,
+      });
     }
     this.load.spritesheet('tile-sea-shore-soft', seaShoreSoftUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.image('v3-sea-plain', seaPlainUrl);
@@ -234,10 +315,6 @@ export class IslandScene extends Phaser.Scene {
     this.load.image('gyulsae-egg', eggUrl);
     this.load.image('gyulsae-young', youngUrl);
     this.load.image('gyulsae-adult', adultUrl);
-    for (const [path, url] of Object.entries(volcanoUrls)) {
-      const m = /volcano-cell-(\d)-(\d)\.png$/.exec(path);
-      if (m) this.load.image(`volcano-${m[1]}-${m[2]}`, url);
-    }
     for (const [path, url] of Object.entries(shopUrls)) {
       const m = /shop\/([\w-]+)\.png$/.exec(path);
       if (m) this.load.image(`shop-${m[1]}`, url);
@@ -249,12 +326,6 @@ export class IslandScene extends Phaser.Scene {
     this.W = this.scale.width / this.dpr;
     this.H = this.scale.height / this.dpr;
 
-    // 화산 칸은 103px 그림을 32dp에 줄여 쓰던 것이라 RN처럼 부드럽게 줄인다. 나머지는 도트 그대로.
-    for (let r = 0; r < VOLCANO_ROWS; r += 1) {
-      for (let c = 0; c < VOLCANO_COLS; c += 1) {
-        this.textures.get(`volcano-${r}-${c}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
-      }
-    }
     this.makeDotTextures();
 
     // 층: 섬 세계(바다 포함, 확대·이동) → 화산재(화면 고정)
@@ -269,9 +340,8 @@ export class IslandScene extends Phaser.Scene {
     // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
     this.water = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
-    this.volcano = this.add.container(0, 0);
-    this.lava = this.add.graphics();
-    this.quake.add([this.terrain, this.water, this.volcano, this.lava]);
+    this.volcano = this.add.sprite(0, 0, VOLCANO_REST, 0).setOrigin(0, 1);
+    this.quake.add([this.terrain, this.water, this.volcano]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
@@ -281,11 +351,12 @@ export class IslandScene extends Phaser.Scene {
     this.creature.setVisible(false);
     this.buildNoticeMarks();
     this.explore = this.add.container(0, 0).setVisible(false);
+    this.panicFx = this.add.container(0, 0);
+    this.ashSolid = this.add.rectangle(0, 0, 1, 1, hex(ASH.solid.color)).setOrigin(0).setVisible(false);
+    this.ashEdge = this.add.graphics().setVisible(false);
+    this.ashLayer = this.add.container(0, 0, [this.ashSolid, this.ashEdge]);
     // 깊은 바다는 흔들림(quake) 밖에 둔다. 원래도 깊은 바다는 안 흔들렸다.
-    this.world.add([this.sea, this.quake, this.decor, this.creature, this.notice, this.explore]);
-
-    this.gas = this.add.graphics();
-    this.overlay.add(this.gas);
+    this.world.add([this.sea, this.quake, this.decor, this.creature, this.panicFx, this.notice, this.explore, this.ashLayer]);
 
     // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
     const main = this.cameras.main;
@@ -371,6 +442,11 @@ export class IslandScene extends Phaser.Scene {
     return Math.max(1, Math.round(this.dpr * this.baseDp() * this.cam.z * CELL)) / CELL;
   }
 
+  private ashOffset() {
+    const slot = volcanoSlot(this.stage);
+    return { x: slot.x - ASH.origin[0] * CELL, y: slot.y - ASH.origin[1] * CELL };
+  }
+
   private shownZoom() {
     return this.viewZoom() / this.dpr;
   }
@@ -384,12 +460,6 @@ export class IslandScene extends Phaser.Scene {
       cx: art.width / 2 + (this.W / 2 - sx0 - this.cam.x) / zd,
       cy: art.height / 2 + (this.H / 2 - sy0 - this.cam.y) / zd,
     };
-  }
-
-  private toScreen(wx: number, wy: number) {
-    const zd = this.shownZoom();
-    const { cx, cy } = this.viewCenter();
-    return { x: this.W / 2 + (wx - cx) * zd, y: this.H / 2 + (wy - cy) * zd };
   }
 
   private snap(v: number) {
@@ -452,7 +522,7 @@ export class IslandScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ 입력 (핀치·이동·탭)
   private inputBlocked() {
-    return Boolean(this.gasState && this.gasState.distance > 8);
+    return Boolean(this.ex);
   }
 
   private setupInput() {
@@ -527,8 +597,19 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private onTap(p: Phaser.Input.Pointer) {
-    if (!this.creature.visible) return;
     const w = this.worldCam.getWorldPoint(p.x, p.y);
+    const slot = volcanoSlot(this.stage);
+    if (
+      !this.state.locked &&
+      w.x >= slot.x &&
+      w.x < slot.x + VOLCANO_SLOT_W &&
+      w.y >= slot.y &&
+      w.y < slot.y + VOLCANO_SLOT_H
+    ) {
+      this.eruptVolcano();
+      return;
+    }
+    if (!this.creature.visible) return;
     const half = this.walk.size / 2;
     const cx = this.walk.engine?.x ?? this.creature.x;
     const cy = this.walk.engine?.y ?? this.creature.y;
@@ -552,7 +633,7 @@ export class IslandScene extends Phaser.Scene {
         this.world.setVisible(true);
       }
     } else if (msg.type === 'erupt') {
-      this.startErupt();
+      this.startExpand();
     } else if (msg.type === 'camera-reset') {
       this.cam = { z: 1, x: 0, y: 0 };
       this.applyCamera(true);
@@ -567,13 +648,15 @@ export class IslandScene extends Phaser.Scene {
 
   private applyState(next: GameState, force = false) {
     this.state = next;
+    const hold = Boolean(this.ex && !this.ex.swapped);
     const tKey = JSON.stringify([this.W, this.H, next.zones, next.growing]);
-    if (force || tKey !== this.terrainKey) {
+    if (hold && this.ex && tKey !== this.terrainKey) this.ex.pending = true;
+    if (!hold && (force || tKey !== this.terrainKey)) {
       this.terrainKey = tKey;
       this.buildTerrain();
     }
     const dKey = JSON.stringify([this.W, this.H, next.placed, next.lastPlaced, next.zones, next.growing, next.factor]);
-    if (force || dKey !== this.decorKey) {
+    if (!hold && (force || dKey !== this.decorKey)) {
       this.decorKey = dKey;
       this.buildDecor();
     }
@@ -599,15 +682,8 @@ export class IslandScene extends Phaser.Scene {
   }
 
   private placeVolcano() {
-    const f = volcanoFrame(this.stage);
-    this.volcano.removeAll(true);
-    this.volcano.setPosition(f.x, f.y).setScale(f.scale);
-    for (let r = 0; r < VOLCANO_ROWS; r += 1) {
-      for (let c = 0; c < VOLCANO_COLS; c += 1) {
-        this.volcano.add(this.add.image(c * CELL, r * CELL, `volcano-${r}-${c}`).setOrigin(0).setDisplaySize(CELL, CELL));
-      }
-    }
-    this.lava.setPosition(f.x, f.y).setScale(f.scale);
+    const slot = volcanoSlot(this.stage);
+    this.volcano.setPosition(slot.x, slot.y + VOLCANO_SLOT_H);
   }
 
   private buildShore() {
@@ -625,164 +701,282 @@ export class IslandScene extends Phaser.Scene {
     this.stepWater();
   }
 
-  // ------------------------------------------------------------------ 분화: 흔들림·용암·화산재
-  private startErupt() {
-    if (this.eruptAt >= 0) return;
-    this.eruptAt = this.time.now;
-    this.calmed = false;
-    this.spilled = false;
-    // AshCloud 는 분화가 시작될 때 자리를 잡는다 (그때 카메라 기준 화구 위치)
-    const mouth = craterCloudPoint(this.stage);
-    const { x: originX, y: originY } = this.toScreen(mouth.x, mouth.y);
-    this.gasState = {
-      started: this.time.now,
-      originX,
-      originY,
-      maxRank: coverRank(this.W, this.H, originX, originY),
-      distance: 0,
-      revealed: false,
-      holdUntil: -1,
-      clearStarted: -1,
-    };
+  private setVolcano(key: string, loop: boolean) {
+    this.volcKey = key;
+    this.volcP = new Player(anim(key), loop);
+    this.volcano.setTexture(key, 0);
   }
 
-  private updateErupt(now: number) {
-    if (this.eruptAt < 0) {
-      this.quake.x = 0;
-      return;
+  private eruptVolcano() {
+    if (this.ex || this.volcKey !== VOLCANO_REST) return;
+    this.setVolcano(VOLCANO_ERUPT, false);
+  }
+
+  private stepVolcano(dt: number) {
+    this.volcP.step(dt);
+    if (this.volcP.done && !this.ex) this.setVolcano(VOLCANO_REST, true);
+    this.volcano.setFrame(this.volcP.f);
+  }
+
+  private startExpand() {
+    if (this.ex) return;
+    this.ex = { t: 0, volcano: false, calm: false, fog: false, reveal: false, pending: false, held: 0, swapped: false };
+    this.startPanic();
+    this.stepExpand(0);
+  }
+
+  private stepExpand(dt: number) {
+    const ex = this.ex;
+    if (!ex) return;
+    const P = ASH.phases;
+    ex.t += dt;
+    if (!ex.volcano && ex.t >= ASH.volcano_start_ms) {
+      ex.volcano = true;
+      this.setVolcano(ASH.volcano, false);
     }
-    const elapsed = now - this.eruptAt;
-    const burstAt = LAVA_FILL_MS + LAVA_BOIL_MS;
-    // Quake: 50ms씩 0→4→-4→0, 20번 (구름이 터지면 멈춘다)
-    if (!this.calmed && elapsed < 3000) {
-      const t = elapsed % 150;
-      this.quake.x =
-        t < 50 ? easeInOut(t / 50) * 4 : t < 100 ? 4 - easeInOut((t - 50) / 50) * 8 : -4 + easeInOut((t - 100) / 50) * 4;
-    } else {
-      this.quake.x = 0;
-    }
-    if (!this.calmed && elapsed >= burstAt) {
-      this.calmed = true;
+    if (!ex.calm && ex.t >= P.erupt) {
+      ex.calm = true;
       send({ type: 'calm' });
     }
-    if (!this.spilled && elapsed >= burstAt + LAVA_SPILL_MS) {
-      this.spilled = true;
-      this.lava.clear();
+    if (!ex.fog && ex.t >= P.cover) {
+      ex.fog = true;
       send({ type: 'fog' });
     }
-    if (!this.spilled) this.drawLava(elapsed);
+    if (!ex.reveal && ex.t >= P.covered) {
+      ex.reveal = true;
+      send({ type: 'reveal' });
+    }
+    if (!ex.swapped && ex.t >= ASH.swap_ms) {
+      if (!ex.pending && ex.held < SWAP_WAIT_MS) {
+        ex.held += dt;
+        ex.t = ASH.swap_ms;
+      } else {
+        ex.swapped = true;
+        this.stopPanic();
+        this.applyState(this.state);
+        this.applyCamera(true);
+      }
+    }
+    if (ex.t >= P.done) {
+      this.ex = null;
+      for (const s of this.ashPool) s.setVisible(false);
+      this.ashSolid.setVisible(false);
+      this.ashEdge.clear().setVisible(false);
+      this.sendAsh(this.time.now, 0, true);
+      this.applyCamera(true);
+      send({ type: 'done' });
+      return;
+    }
+    this.drawAsh(ex.t);
+    this.sendAsh(this.time.now, this.ashLevel(ex.t));
   }
 
-  private drawLava(elapsed: number) {
-    const g = this.lava;
-    g.clear();
-    const fill = surgeFill(elapsed / LAVA_FILL_MS);
-    const boiling = elapsed >= LAVA_FILL_MS && elapsed < LAVA_FILL_MS + LAVA_BOIL_MS;
-    const spill = Math.max(0, Math.min(1, (elapsed - LAVA_FILL_MS - LAVA_BOIL_MS) / LAVA_SPILL_MS));
-    const rowProgress = fill * CRATER_SPANS.length;
-    const fullRows = Math.floor(rowProgress);
-    const partial = rowProgress - fullRows;
-    const surfaceRow = Math.min(CRATER_SPANS.length - 1, fullRows);
-    for (const p of CRATER_PIXELS) {
-      const shown = p.row < fullRows || (p.row === fullRows && p.fromCenter <= partial);
-      if (!shown) continue;
-      const onSurface = p.row >= surfaceRow - 2 || (boiling && p.y <= 6);
-      const wave = Math.sin(elapsed / 60 + p.x * 0.65 + p.y * 0.35);
-      const bubble = onSurface && wave > 0.2;
-      const pop = onSurface && Math.sin(elapsed / 130 + p.x * 1.4) > 0.55;
-      const bob = pop ? 4 : bubble ? 2 : 0;
-      const overflow = spill > 0 && spills(p);
-      const lift = 5 + (1 - Math.min(1, Math.abs(p.x - CRATER_MID) / 18)) * 9;
-      const fade = overflow && spill > 0.72 ? 1 - (spill - 0.72) / 0.28 : 1;
-      g.fillStyle(hex(magmaColor(p, onSurface, elapsed)), fade);
-      g.fillRect(
-        p.x + (overflow ? Math.sign(p.x - CRATER_MID) * 3 * spill : 0),
-        p.y - bob - (overflow ? lift * spill : 0),
-        2,
-        2,
-      );
+  private drawAsh(t: number) {
+    let acc = 0;
+    let i = ASH.ms.length - 1;
+    for (let k = 0; k < ASH.ms.length; k += 1) {
+      acc += ASH.ms[k];
+      if (t < acc) {
+        i = k;
+        break;
+      }
     }
+    const o = this.ashOffset();
+    const items = ASH.frames[i] ?? [];
+    while (this.ashPool.length < items.length) {
+      const s = this.add.sprite(0, 0, items[0][0]).setOrigin(0).setVisible(false);
+      this.ashPool.push(s);
+      this.ashLayer.add(s);
+    }
+    items.forEach(([name, f, x, y], k) => {
+      const s = this.ashPool[k];
+      if (s.texture.key !== name) s.setTexture(name);
+      s.setFrame(f).setPosition(this.snap(o.x + x), this.snap(o.y + y)).setVisible(true);
+    });
+    for (let k = items.length; k < this.ashPool.length; k += 1) this.ashPool[k].setVisible(false);
+    const z = this.worldCam.zoom;
+    const vw = this.scale.width / z;
+    const vh = this.scale.height / z;
+    const { cx, cy } = this.viewCenter();
+    const vx0 = cx - vw / 2 - CELL;
+    const vy0 = cy - vh / 2 - CELL;
+    const vx1 = cx + vw / 2 + CELL;
+    const vy1 = cy + vh / 2 + CELL;
+    const solid = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
+    this.ashSolid.setVisible(solid);
+    if (solid) this.ashSolid.setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
+    const g = this.ashEdge.clear().setVisible(!solid);
+    if (!solid) {
+      const color = hex(ASH.solid.color);
+      const runs = ASH_RUNS[i];
+      const cx = (v: number) => Math.min(vx1, Math.max(vx0, o.x + v));
+      const cy = (v: number) => Math.min(vy1, Math.max(vy0, o.y + v));
+      for (const [a, b, d, k] of runs.top) {
+        if (b > a) g.fillStyle(color, k).fillRect(cx(a), vy0, cx(b) - cx(a), o.y + d - vy0);
+      }
+      for (const [a, b, d, k] of runs.bottom) {
+        if (b > a) g.fillStyle(color, k).fillRect(cx(a), o.y + d, cx(b) - cx(a), vy1 - o.y - d);
+      }
+      for (const [a, b, d, k] of runs.left) {
+        if (b > a) g.fillStyle(color, k).fillRect(vx0, cy(a), o.x + d - vx0, cy(b) - cy(a));
+      }
+      for (const [a, b, d, k] of runs.right) {
+        if (b > a) g.fillStyle(color, k).fillRect(o.x + d, cy(a), vx1 - o.x - d, cy(b) - cy(a));
+      }
+    }
+  }
+
+  private ashLevel(t: number) {
+    const P = ASH.phases;
+    if (t < P.cover) return 0;
+    if (t < P.covered) return (t - P.cover) / (P.covered - P.cover);
+    if (t < P.clear) return 1;
+    return Math.max(0, 1 - (t - P.clear) / (P.done - P.clear));
   }
 
   private ashSentAt = 0;
 
   /** 화면 몇 곳의 화산재 진하기(0~1). RN 버튼·상단 바가 구름에 덮이는 것처럼 흐려지게 쓴다 */
-  private sendAsh(now: number, spread: number, hole: number, force = false) {
-    const st = this.gasState;
+  private sendAsh(now: number, level: number, force = false) {
     if (!force && now - this.ashSentAt < 50) return;
     this.ashSentAt = now;
-    if (!st) {
-      send({ type: 'ash', top: 0, mid: 0, bottom: 0, block: false });
-      return;
-    }
-    const at = (px: number, py: number) => {
-      const dx = px - st.originX;
-      const dy = py - st.originY;
-      return Math.round(cellFade(scallopRank(Math.hypot(dx, dy), Math.atan2(dy, dx)), spread, hole) * 20) / 20;
-    };
-    send({
-      type: 'ash',
-      top: at(this.W / 2, 56),
-      mid: at(this.W / 2, this.H * 0.25),
-      bottom: at(this.sc(68), this.H - 90),
-      block: st.distance > 8,
-    });
+    const v = Math.round(level * 20) / 20;
+    const block = this.ex ? this.ex.t >= ASH.phases.cover : false;
+    send({ type: 'ash', top: v, mid: v, bottom: v, block });
   }
 
-  private updateGas(now: number) {
-    const st = this.gasState;
-    if (!st) return;
-    const g = this.gas;
-    const cloud = hex(CLOUD);
-    let alpha = 1;
-    const ctx: DrawContext = {
-      clearRect: () => g.clear(),
-      fillRect: (x, y, w, h) => {
-        g.fillStyle(cloud, alpha);
-        g.fillRect(x, y, w, h);
-      },
-      setTransform: () => undefined,
-      fillStyle: CLOUD,
-      get globalAlpha() {
-        return alpha;
-      },
-      set globalAlpha(v: number) {
-        alpha = v;
-      },
+  private startPanic() {
+    const engine = this.walk.engine;
+    this.panic = null;
+    if (!engine || !this.creature.visible) return;
+    const stage = engine.stageId as PanicStage;
+    this.panic = {
+      stage,
+      x: engine.x,
+      y: engine.y,
+      home: { x: engine.x, y: engine.y },
+      facing: Math.random() < 0.5 ? -1 : 1,
+      wantFacing: 0,
+      target: null,
+      retarget: 0,
+      sweatIn: rand(350, 700),
+      bangIn: 130,
+      delay: rand(0, 160),
+      mode: 'startle',
+      src: panicStartle(stage),
+      player: new Player(anim(panicStartle(stage)), false),
+      fx: [],
     };
+  }
 
-    if (st.clearStarted < 0 && st.holdUntil < 0) {
-      // 퍼지기: 화면을 다 덮을 때까지 (VolcanoGas grow)
-      const motion = cloudMotion(now - st.started, st.maxRank);
-      if (motion.target <= 0 && st.distance <= 0) return;
-      st.distance = Math.min(motion.target, st.distance + motion.step);
-      paintCloud(ctx, this.W, this.H, st.originX, st.originY, st.distance, 0);
-      this.sendAsh(now, st.distance, 0);
-      if (st.distance >= st.maxRank - 0.5) {
-        if (!st.revealed) {
-          st.revealed = true;
-          send({ type: 'reveal' });
-        }
-        st.holdUntil = now + HOLD_MS;
+  private stopPanic() {
+    if (!this.panic) return;
+    this.panic = null;
+    for (const s of this.panicFx.list) (s as Phaser.GameObjects.Sprite).setVisible(false);
+    this.walk.engine = null;
+    this.walk.pointsKey = '';
+  }
+
+  private panicTarget(p: PanicActor): Point {
+    const cells = this.walk.setup?.cells ?? [];
+    const near = cells
+      .map((c) => ({ x: (c.col + 0.5) * CELL, y: (c.row + 0.5) * CELL }))
+      .filter((q) => Math.hypot(q.x - p.home.x, q.y - p.home.y) <= PANIC_RADIUS);
+    for (let k = 0; k < 12; k += 1) {
+      if (near.length === 0) break;
+      const q = near[Math.floor(Math.random() * near.length)];
+      const x = q.x + rand(-0.3, 0.3) * CELL;
+      const y = q.y + rand(-0.3, 0.3) * CELL;
+      if (crossesVolcano(this.stage, p, { x, y })) continue;
+      if (Math.hypot(x - p.x, y - p.y) > CELL * 0.6) return { x, y };
+    }
+    return { ...p.home };
+  }
+
+  private stepPanic(dt: number) {
+    const p = this.panic;
+    if (!p) return;
+    for (const f of p.fx) f.pl.step(dt);
+    p.fx = p.fx.filter((f) => !f.pl.done);
+    if (p.delay > 0) {
+      p.delay -= dt;
+      return;
+    }
+    p.bangIn -= dt;
+    if (p.bangIn <= 0 && !p.fx.some((f) => f.k === 'fx-panic-bang')) {
+      p.fx.push({ k: 'fx-panic-bang', pl: new Player(anim('fx-panic-bang'), false) });
+      p.bangIn = rand(1600, 3200);
+    }
+    if (p.mode === 'startle') {
+      p.player.step(dt);
+      if (p.player.done) {
+        p.mode = 'run';
+        p.src = panicRun(p.stage);
+        p.player = new Player(anim(p.src));
       }
       return;
     }
-    if (st.clearStarted < 0) {
-      if (now < st.holdUntil) return;
-      st.clearStarted = now;
-      this.sendAsh(now, st.maxRank, 0, true);
+    if (!p.target || p.retarget <= 0) {
+      p.target = this.panicTarget(p);
+      p.retarget = rand(350, 900);
+      const nf = p.target.x >= p.x ? 1 : -1;
+      if (nf !== p.facing) p.wantFacing = nf;
     }
-    const u = Math.min(1, (now - st.clearStarted) / CLEAR_MS);
-    const curved = u < 0.5 ? 4 * u * u * u : 1 - (-2 * u + 2) ** 3 / 2;
-    paintCloud(ctx, this.W, this.H, st.originX, st.originY, st.maxRank, curved * st.maxRank);
-    this.sendAsh(now, st.maxRank, curved * st.maxRank);
-    if (u >= 1) {
-      g.clear();
-      this.gasState = null;
-      this.eruptAt = -1;
-      this.sendAsh(now, 0, 0, true);
-      send({ type: 'done' });
+    p.retarget -= dt;
+    const f0 = p.player.f;
+    let d = p.player.step(dt);
+    if (p.wantFacing && p.player.f !== f0) {
+      p.facing = p.wantFacing;
+      p.wantFacing = 0;
     }
+    if (!(d > 0)) d = (dt / 1000) * 2.4 * CELL;
+    const dx = p.target.x - p.x;
+    const dy = p.target.y - p.y;
+    const L = Math.hypot(dx, dy);
+    if (L <= d) {
+      p.x = p.target.x;
+      p.y = p.target.y;
+      p.retarget = 0;
+    } else {
+      p.x += (dx / L) * d;
+      p.y += (dy / L) * d;
+    }
+    p.sweatIn -= dt;
+    if (p.sweatIn <= 0) {
+      p.sweatIn = rand(450, 900);
+      p.fx.push({ k: 'fx-panic-sweat', pl: new Player(anim('fx-panic-sweat'), false) });
+    }
+  }
+
+  private drawPanic() {
+    const p = this.panic;
+    if (!p) return;
+    const half = this.walk.shown / 2;
+    const flip = p.facing < 0;
+    this.setCreatureFrame(p.src, p.player.f, flip);
+    const lift = p.player.lift();
+    this.creature.setPosition(this.snap(p.x - half) + half, this.snap(p.y - half) + half);
+    this.creatureBody.y = this.snap(lift);
+    this.creatureShadow.y = 0;
+    const gx = this.snap(p.x - half);
+    const gy = this.snap(p.y - half + lift);
+    while (this.panicFx.length < p.fx.length) this.panicFx.add(this.add.sprite(0, 0, 'fx-panic-bang').setOrigin(0));
+    const sprites = this.panicFx.list as Phaser.GameObjects.Sprite[];
+    p.fx.forEach((f, k) => {
+      const a = f.pl.a;
+      const at = panicAttach(p.stage, f.k);
+      const pv = a.pivot ?? [a.frameWidth / 2, a.frameHeight / 2];
+      const fxFlip = flip && f.k !== 'fx-panic-bang';
+      const ax = flip ? 32 - at[0] : at[0];
+      const px = fxFlip ? a.frameWidth - pv[0] : pv[0];
+      const s = sprites[k];
+      if (s.texture.key !== f.k) s.setTexture(f.k);
+      s.setFrame(f.pl.f)
+        .setFlipX(fxFlip)
+        .setPosition(gx + ax - px, gy + at[1] - pv[1])
+        .setVisible(true);
+    });
+    for (let k = p.fx.length; k < sprites.length; k += 1) sprites[k].setVisible(false);
   }
 
   // ------------------------------------------------------------------ 장식 (BeachPlay decor + PlacedDecorDrop)
@@ -934,11 +1128,24 @@ export class IslandScene extends Phaser.Scene {
     settleOnLand(w.engine, setup);
   }
 
+  private setCreatureFrame(body: string, frame: number, flip: boolean, shadow: string | undefined = `${body}-shadow`) {
+    const size = this.walk.shown;
+    if (this.creatureBody.texture.key !== body) this.creatureBody.setTexture(body);
+    this.creatureBody.setFrame(frame).setDisplaySize(size, size).setFlipX(flip);
+    if (shadow && this.textures.exists(shadow)) {
+      if (this.creatureShadow.texture.key !== shadow) this.creatureShadow.setTexture(shadow);
+      this.creatureShadow.setFrame(frame).setDisplaySize(size, size).setFlipX(flip).setVisible(true);
+    } else {
+      this.creatureShadow.setVisible(false);
+    }
+  }
+
   private drawCreature(delta: number) {
     const w = this.walk;
     const engine = w.engine;
     if (!engine || !this.creature.visible) {
       this.notice.setVisible(false);
+      for (const s of this.panicFx.list) (s as Phaser.GameObjects.Sprite).setVisible(false);
       return;
     }
     const stageId = stageIdFor(this.state.level);
@@ -946,22 +1153,15 @@ export class IslandScene extends Phaser.Scene {
       engine.stageId = stageId;
       startRest(engine, MOTION_RULES.firstRestMs);
     }
+    if (this.panic) {
+      this.drawPanic();
+      this.drawNotice(this.time.now);
+      return;
+    }
     advance(engine, Math.min(MAX_TICK_MS, Math.max(0, delta)), w.unit, w.points, false, w.plan);
     if (w.setup) keepOnLand(engine, w.setup);
     const sheet = MOTION_SEQ[engine.seqId].sheet;
-    const body = sheet.body as unknown as string;
-    if (this.creatureBody.texture.key !== body) this.creatureBody.setTexture(body);
-    this.creatureBody.setFrame(engine.frame).setDisplaySize(w.shown, w.shown);
-    const shadow = sheet.shadow as unknown as string | undefined;
-    if (shadow) {
-      if (this.creatureShadow.texture.key !== shadow) this.creatureShadow.setTexture(shadow);
-      this.creatureShadow.setFrame(engine.frame).setDisplaySize(w.shown, w.shown).setVisible(true);
-    } else {
-      this.creatureShadow.setVisible(false);
-    }
-    const flip = engine.facing === -1;
-    this.creatureBody.setFlipX(flip);
-    this.creatureShadow.setFlipX(flip);
+    this.setCreatureFrame(sheet.body as unknown as string, engine.frame, engine.facing === -1, sheet.shadow as unknown as string | undefined);
     // 몸만 위로 뜨고(lift) 그림자는 땅에 그대로
     const half = w.shown / 2;
     this.creature.setPosition(this.snap(engine.x - half) + half, this.snap(engine.y - half) + half);
@@ -1130,8 +1330,10 @@ export class IslandScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ 프레임
   update(now: number, delta: number) {
-    this.updateErupt(now);
-    this.updateGas(now);
+    const dt = Math.min(MAX_TICK_MS, Math.max(0, delta));
+    this.stepVolcano(dt);
+    this.stepExpand(dt);
+    this.stepPanic(dt);
     this.drawCreature(delta);
     if (this.seaClock.tick(delta)) {
       this.stepWater();

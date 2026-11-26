@@ -82,7 +82,7 @@ function writeRecord(record: WalkingRewardRecord): Promise<void> {
 export function claimWalkingRewards(steps: number): Promise<WalkingRewardClaim> {
   return enqueue(async () => {
     const record = await readRecord();
-    const earned = WALKING_REWARD_TIERS.filter((tier) => steps >= tier.steps && !record.claimedSteps.includes(tier.steps));
+    const earned = pendingWalkingTiers(steps, record.claimedSteps);
     if (earned.length === 0) {
       return { claimedSteps: record.claimedSteps, reward: null };
     }
@@ -95,6 +95,14 @@ export function claimWalkingRewards(steps: number): Promise<WalkingRewardClaim> 
     await writeRecord(next);
     return { claimedSteps: next.claimedSteps, reward };
   });
+}
+
+export function readWalkingClaims(): Promise<WalkingRewardSnapshot> {
+  return enqueue(async () => ({ claimedSteps: (await readRecord()).claimedSteps }));
+}
+
+export function pendingWalkingTiers(steps: number, claimedSteps: number[]): WalkingRewardTier[] {
+  return WALKING_REWARD_TIERS.filter((tier) => steps >= tier.steps && !claimedSteps.includes(tier.steps));
 }
 
 // 개발용: 오늘 받은 단계 기록만 지운다.
@@ -126,7 +134,12 @@ export function nextWalkingTier(steps: number): WalkingRewardTier | null {
 
 function sumReward(tiers: WalkingRewardTier[]): WalkingRewardGain {
   return tiers.reduce<WalkingRewardGain>(
-    (sum, tier) => ({ coins: sum.coins + tier.coins, xp: sum.xp + tier.xp, reachedGoal: sum.reachedGoal || tier.steps >= WALKING_GOAL }),
-    { coins: 0, xp: 0, reachedGoal: false },
+    (sum, tier) => ({
+      coins: sum.coins + tier.coins,
+      xp: sum.xp + tier.xp,
+      reachedGoal: sum.reachedGoal || tier.steps >= WALKING_GOAL,
+      topSteps: Math.max(sum.topSteps, tier.steps),
+    }),
+    { coins: 0, xp: 0, reachedGoal: false, topSteps: 0 },
   );
 }

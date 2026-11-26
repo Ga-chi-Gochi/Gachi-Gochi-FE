@@ -11,13 +11,15 @@ import {
   PixelPopupOverlay,
   PixelPopupTitle,
 } from '@/components/pixel-popup';
+import { WalkPopupFrame } from '@/components/walking/walk-popup-frame';
+import { WalkText } from '@/components/walking/walk-text';
 import { POPUP_COLORS } from '@/constants/pixel-popup';
-import { WALKING_REWARD_COINS, WALKING_REWARD_TIERS, WALKING_REWARD_XP, type WalkingReward } from '@/constants/walking-reward';
+import { WALKING_GOAL, WALKING_REWARD_COINS, WALKING_REWARD_XP, WALKING_STEP_INTERVAL, type WalkingReward } from '@/constants/walking-reward';
 import { useResponsive } from '@/hooks/use-responsive';
 
 // 처음 들어온 사용자에게 순서대로 보여 주는 설명 팝업 문구.
 export const WALKING_INTRO_MESSAGES = [
-  `걷기를 진행하면 귤과 XP가 생겨요! 하루에 ${WALKING_REWARD_TIERS.map((tier) => tier.steps.toLocaleString('ko-KR')).join(' · ')}걸음을 넘길 때마다 귤 ${WALKING_REWARD_COINS}개와 XP ${WALKING_REWARD_XP}를 받아요.`,
+  `걸으면 귤과 XP가 생겨요! 하루에 ${WALKING_STEP_INTERVAL.toLocaleString('ko-KR')}걸음마다 '보상 받게'를 누르면 귤 ${WALKING_REWARD_COINS}개와 XP ${WALKING_REWARD_XP}를 받을 수 있어요. ${WALKING_GOAL.toLocaleString('ko-KR')}걸음을 다 채우면 깜짝 선물도 있수다!`,
   '귤은 가치고치 세계의 화폐라 상점에서 쓸 수 있고, XP가 쌓이면 귤새가 자라요. 보상은 날마다 새로 받을 수 있어요!',
 ];
 
@@ -30,9 +32,15 @@ export function WalkingIntroPopup({ step, onNext }: WalkingIntroPopupProps) {
   const last = step >= WALKING_INTRO_MESSAGES.length - 1;
 
   return (
-    <PopupShell title={`걷기 안내 ${step + 1}/${WALKING_INTRO_MESSAGES.length}`} message={WALKING_INTRO_MESSAGES[step]}>
+    <WalkPopupFrame>
+      <WalkText size={16} center>
+        {`걷기 안내 ${step + 1}/${WALKING_INTRO_MESSAGES.length}`}
+      </WalkText>
+      <WalkText size={13} regular center style={{ lineHeight: 20 }}>
+        {WALKING_INTRO_MESSAGES[step]}
+      </WalkText>
       <PixelImageButton kind={last ? 'confirm' : 'next'} onPress={onNext} accessibilityHint={last ? '안내를 닫아요' : '다음 안내로 넘어가요'} />
-    </PopupShell>
+    </WalkPopupFrame>
   );
 }
 

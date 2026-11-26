@@ -4,7 +4,7 @@
  */
 
 /** 도움말이 있는 기능 ID. 화면·오버레이에서 이 값만 넘긴다. */
-export type FeatureHelpTopic = 'home' | 'bongging' | 'walking';
+export type FeatureHelpTopic = 'home' | 'bongging' | 'walking' | 'explore';
 
 /** 한 기능의 도움말 본문. 텍스트만 둔다 (이미지·단계형은 나중에 확장). */
 export type FeatureHelpContent = {
@@ -39,6 +39,17 @@ export const FEATURE_HELP_LIST: readonly FeatureHelpContent[] = [
     id: 'walking',
     title: '걷기는 이렇게 해요',
     lines: ['걸을수록 단계마다 귤과 경험치를 받아요', '받은 단계는 다음 날 다시 받을 수 있어요', '경험치가 쌓이면 고치가 자라요'],
+  },
+  {
+    id: 'explore',
+    title: '탐험은 이렇게 해요',
+    lines: [
+      '서쪽 숲이 열리면 숲을 눌러 고치를 모험 보낼 수 있어요',
+      '코스와 캐릭터를 고르면 시간이 지나 돌아와요',
+      '보내는 동안 서쪽 숲 위에서 남은 시간을 봐요',
+      '돌아오면 위쪽 안내에서 고치가 찾아온 걸 받아요',
+      '하루 모험 횟수는 제한되고 매일 0시에 충전돼요',
+    ],
   },
 ] as const;
 

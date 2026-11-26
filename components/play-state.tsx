@@ -94,6 +94,8 @@ type PlayState = {
   canExpand: boolean;
   /** 성장 연출·섬 확장 연출 중이면 키우기 등 입력을 잠근다 */
   growLocked: boolean;
+  /** 화산·구름 섬 확장 연출이 끝날 때까지 true (done 에서 해제) */
+  islandExpandBusy: boolean;
   growthReveal: GrowthRevealState | null;
   zoneUnlockReveal: ZoneUnlockReveal | null;
   /** 다른 화면에서 성장/섬 임계에 닿았을 때 홈으로 유도 */
@@ -693,6 +695,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       islandStageMax: ISLAND_STAGE_MAX,
       canExpand,
       growLocked,
+      islandExpandBusy,
       growthReveal,
       zoneUnlockReveal,
       homeInvite,
@@ -826,6 +829,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       islandStage,
       canExpand,
       growLocked,
+      islandExpandBusy,
       growthReveal,
       zoneUnlockReveal,
       homeInvite,

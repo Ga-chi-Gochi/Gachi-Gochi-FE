@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 
+/** 하단 탭은 나중에. 지금은 나침반 FAB 중심 (와이어프레임 5C) */
 export default function TabsLayout() {
   return (
     <Tabs

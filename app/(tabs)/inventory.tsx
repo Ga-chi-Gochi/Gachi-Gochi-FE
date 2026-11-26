@@ -7,7 +7,8 @@ import { GochiEggSection } from '@/components/inventory/gochi-egg-section';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelButton, PixelChip, PixelPanel, PixelScreen, PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
-import { shopItems } from '@/constants/content';
+import { ShopItemSprite } from '@/components/store-product-image';
+import { getOwnedIslandItems } from '@/constants/content';
 import { ISLAND_ZONES } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
 import { ISLAND_HOME } from '@/constants/routes';
@@ -25,7 +26,7 @@ export default function InventoryScreen() {
     newGochiEggIds,
     markGochiEggDetailSeen,
   } = usePlayState();
-  const items = shopItems.filter((item) => owned.includes(item.id));
+  const items = getOwnedIslandItems(owned);
   const [selectedEggId, setSelectedEggId] = useState<string | null>(null);
 
   return (
@@ -112,7 +113,7 @@ export default function InventoryScreen() {
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}>
-                      <PixelSprite id={item.sprite} size={scale(36)} />
+                      <ShopItemSprite id={item.sprite} size={scale(36)} />
                     </View>
                     <View style={{ flex: 1, gap: scale(4) }}>
                       <PixelText size={16}>{item.name}</PixelText>

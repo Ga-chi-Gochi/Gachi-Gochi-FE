@@ -1,7 +1,6 @@
 export const art = {
   wave: require('@/assets/figma/img-wave.png'),
   idle: require('@/assets/figma/img-idle.png'),
-  island: require('@/assets/figma/img-island.png'),
   egg: require('@/assets/figma/img-egg.png'),
   /** 탐험 보상 고치 알 */
   gochiEgg: require('@/assets/figma/egg.png'),

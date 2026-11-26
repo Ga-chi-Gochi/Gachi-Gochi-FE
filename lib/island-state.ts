@@ -16,6 +16,11 @@ export type IslandStateRecord = {
   unlockedZones: IslandZoneId[];
   /** 화산/확장 연출을 이미 본 구역 */
   seenZoneUnlocks: IslandZoneId[];
+  /**
+   * XP는 찼지만 홈에서 확장 연출을 아직 안 본 구역.
+   * 닫아도 홈에 오면 자동으로 재생한다.
+   */
+  pendingExpandZoneId: IslandZoneId | null;
 };
 
 const DEFAULT_RECORD: IslandStateRecord = {
@@ -24,6 +29,7 @@ const DEFAULT_RECORD: IslandStateRecord = {
   placed: [],
   unlockedZones: ['core'],
   seenZoneUnlocks: ['core'],
+  pendingExpandZoneId: null,
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -45,6 +51,7 @@ function normalize(saved: Partial<IslandStateRecord> | null | undefined): Island
   const unlocked = unlockedRaw.map(asZoneId).filter((id): id is IslandZoneId => id != null);
   const seenRaw = Array.isArray(saved?.seenZoneUnlocks) ? saved.seenZoneUnlocks : ['core'];
   const seen = seenRaw.map(asZoneId).filter((id): id is IslandZoneId => id != null);
+  const pendingExpandZoneId = asZoneId(saved?.pendingExpandZoneId);
   return {
     coins: Math.max(0, Number(saved?.coins) || DEFAULT_RECORD.coins),
     owned: Array.isArray(saved?.owned) ? saved.owned.filter((id): id is string => typeof id === 'string') : [],
@@ -61,6 +68,7 @@ function normalize(saved: Partial<IslandStateRecord> | null | undefined): Island
       : [],
     unlockedZones: unlocked.includes('core') ? unlocked : (['core', ...unlocked] as IslandZoneId[]),
     seenZoneUnlocks: seen.includes('core') ? seen : (['core', ...seen] as IslandZoneId[]),
+    pendingExpandZoneId,
   };
 }
 

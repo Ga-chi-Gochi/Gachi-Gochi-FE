@@ -4,6 +4,7 @@ import { Animated, Easing, Pressable, View } from 'react-native';
 
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
+import { ShopItemSprite } from '@/components/store-product-image';
 import { getShopItem } from '@/constants/content';
 import type { IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
@@ -58,7 +59,7 @@ export function PlaceGuideBanner({
             },
           ],
         }}>
-        <PixelSprite id={item.sprite} size={scale(28)} />
+        <ShopItemSprite id={item.sprite} size={scale(28)} />
       </Animated.View>
       <View style={{ flex: 1, gap: scale(2) }}>
         <PixelText size={13}>{item.name} 배치하기</PixelText>

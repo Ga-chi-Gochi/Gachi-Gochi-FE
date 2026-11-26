@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-egg-waddle",
+  "label": "알 — 뒤뚱 걷기",
+  "playback": "loop",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 8,
+  "totalMs": 670,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [100, 60, 120, 60, 90, 60, 120, 60],
+  "motionPx": [1, 2, 0, 3, 1, 2, 0, 3],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0]
+}

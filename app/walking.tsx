@@ -1,7 +1,8 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FigButton } from '@/components/fig-button';
 import { FigScreen } from '@/components/fig-screen';
@@ -11,6 +12,9 @@ import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { RewardFanfare } from '@/components/reward-fanfare';
 import { TopBar } from '@/components/top-bar';
+import { FeatureHelpButton, FeatureHelpOverlay } from '@/components/tutorial/feature-help';
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { WalkingConsentFlow } from '@/components/walking-consent-flow';
 import { WalkingGyulsae } from '@/components/walking-gyulsae';
 import { WALKING_INTRO_MESSAGES, WalkingIntroPopup, WalkingRewardPopup } from '@/components/walking-popup';
@@ -19,9 +23,10 @@ import { palette } from '@/constants/palette';
 import { pixel } from '@/constants/pixel-theme';
 import { WALKING_REWARD_TIERS } from '@/constants/walking-reward';
 import { useHealthAccess } from '@/hooks/use-health-access';
-import { usePedometerSteps } from '@/hooks/use-pedometer-steps';
+import { useHealthSteps } from '@/hooks/use-health-steps';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useWalkingReward } from '@/hooks/use-walking-reward';
+import { openHealthStepsSettings } from '@/lib/health-steps';
 import type { WalkingDataSource } from '@/lib/walking-api';
 import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward';
 
@@ -29,16 +34,30 @@ import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward'
 // 허용했거나 개인정보 수집에 동의한 경우에만 걸음을 불러온다. 거부했으면 동의 흐름을 보여 준다.
 export default function WalkingScreen() {
   const { scale } = useResponsive();
-  const { status, permission, consented, agree, setMockPermission, resetConsent } = useHealthAccess();
+  const insets = useSafeAreaInsets();
+  const tutorial = useTutorial();
+  const { leaveScreen } = tutorial;
+  // 튜토리얼 중에는 동의·권한·걸음 수 확인 없이 설명용 화면만 보여 준다
+  const guided = tutorial.step === 'walking-screen';
+  const [helpOpen, setHelpOpen] = useState(false);
+  const { status, permission, consented, agree, resetConsent, refreshPermission } = useHealthAccess();
+
+  // 이 화면을 떠나면(뒤로가기·스와이프 모두) 튜토리얼이 다음 단계로 넘어간다
+  useFocusEffect(
+    useCallback(() => () => leaveScreen('walking'), [leaveScreen]),
+  );
+
+  const permissionLabel =
+    permission === 'granted' ? '허용' : permission === 'unavailable' ? '이 기기 불가' : permission === 'denied' ? '거부' : '확인 중';
 
   const devTools = __DEV__ ? (
     <View style={{ gap: scale(8) }}>
       <Text style={{ color: palette.muted, fontSize: scale(12), fontWeight: '700' }}>
-        개발용 · 권한: {permission === 'granted' ? '허용' : '거부'} · 동의: {consented ? '저장됨' : '없음'}
+        개발용 · 건강 권한: {permissionLabel} · 동의: {consented ? '저장됨' : '없음'}
       </Text>
       <View style={{ flexDirection: 'row', gap: scale(10) }}>
-        <FigButton label="권한 허용으로 테스트" tone="white" onPress={() => setMockPermission('granted')} />
-        <FigButton label="권한 거부로 테스트" tone="white" onPress={() => setMockPermission('denied')} />
+        <FigButton label="건강 권한 다시 확인" tone="white" onPress={() => void refreshPermission()} />
+        <FigButton label="건강 설정 열기" tone="white" onPress={() => openHealthStepsSettings()} />
       </View>
       <View style={{ flexDirection: 'row' }}>
         <FigButton label="동의 기록 초기화" tone="white" onPress={() => void resetConsent().catch(() => undefined)} />
@@ -47,36 +66,102 @@ export default function WalkingScreen() {
   ) : null;
 
   return (
-    <FigScreen colors={[palette.cream, palette.cream]}>
-      {status === 'checking' ? (
-        <TopBar title="걷기" />
-      ) : status === 'ready' ? (
-        <WalkingContent devTools={devTools} />
-      ) : (
-        <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
-      )}
-    </FigScreen>
+    <View style={{ flex: 1 }}>
+      <FigScreen colors={[palette.cream, palette.cream]}>
+        {guided ? (
+          <WalkingTutorialView />
+        ) : status === 'checking' ? (
+          <TopBar title="걷기" />
+        ) : status === 'ready' ? (
+          <WalkingContent devTools={devTools} onHelp={() => setHelpOpen(true)} />
+        ) : (
+          <WalkingConsentFlow onAgree={() => void agree().catch(() => undefined)} onLeave={() => router.replace('/(tabs)')} devTools={devTools} />
+        )}
+      </FigScreen>
+      {guided ? (
+        <TutorialOverlay
+          step={tutorial.scope === 'full' ? 3 : 1}
+          total={tutorial.scope === 'full' ? undefined : 1}
+          title="걷기는 이렇게 해요"
+          body="걸은 만큼 귤과 경험치를 받아요. 이 경험치로도 고치가 자라요."
+          hint="아래 '섬으로 돌아가기'를 눌러 돌아가요"
+          hole={(box) => ({
+            left: scale(24) - scale(4),
+            top: box.height - (insets.bottom + scale(8)) - scale(58) - scale(4),
+            width: box.width - scale(48) + scale(8),
+            height: scale(58) + scale(8),
+            radius: scale(24),
+          })}
+          placement="above"
+          onSkip={() => {
+            tutorial.skip();
+            router.replace('/(tabs)');
+          }}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+      {helpOpen && !guided ? <FeatureHelpOverlay topic="walking" onClose={() => setHelpOpen(false)} zIndex={90} /> : null}
+    </View>
+  );
+}
+
+// 튜토리얼 중에 보여 주는 걷기 화면. 실제 화면과 같은 모양이지만 걸음 수를 읽거나 보상을 주지 않는다.
+function WalkingTutorialView() {
+  const { scale } = useResponsive();
+  const { coins } = usePlayState();
+  const { iconsInset, iconsHeight } = useHomeTopLayout();
+
+  return (
+    <>
+      <View
+        style={{
+          paddingLeft: scale(16),
+          paddingRight: scale(16) + iconsInset,
+          paddingTop: scale(8),
+          paddingBottom: scale(10),
+          minHeight: scale(18) + iconsHeight,
+          zIndex: 10,
+        }}>
+        <HomeTopBar />
+        <HomeTopIcons top={scale(8)} side={scale(16)} />
+      </View>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
+        <View style={{ alignItems: 'center', gap: scale(6) }}>
+          <Text accessibilityLabel="오늘 0 걸음" style={{ color: pixel.ink, fontWeight: '800' }}>
+            <Text style={{ fontSize: scale(44) }}>0</Text>
+            <Text style={{ fontSize: scale(18) }}> 걸음</Text>
+          </Text>
+        </View>
+        <WalkingGyulsae size={scale(200)} />
+        <WalkingRewardBoard steps={0} claimedSteps={[]} coins={coins} />
+      </ScrollView>
+      <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+        <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
+      </View>
+    </>
   );
 }
 
 const KCAL_PER_STEP = 0.04;
 const STEP_LENGTH_METERS = 0.7;
 const DEV_STEP_INCREMENT = 100;
-const STEP_SOURCE: WalkingDataSource = 'mock';
-const RETURN_BUTTON_HEIGHT = 58;
-const RETURN_BUTTON_GAP = 8;
-const SCROLL_END_SPACE = 24;
 
-// 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. 이 컴포넌트가 나타날 때 걸음을 불러온다.
-function WalkingContent({ devTools }: { devTools: ReactNode }) {
+// 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. HealthKit / Health Connect 로 오늘 걸음을 불러온다.
+function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () => void }) {
   const { scale } = useResponsive();
-  const { steps: sensorSteps, status: stepStatus, refresh } = usePedometerSteps();
+  const { steps: healthSteps, distanceMeters: healthDistance, status: stepStatus, source, refresh } = useHealthSteps();
   const [devSteps, setDevSteps] = useState(0);
-  const steps = sensorSteps + devSteps;
-  const distanceMeters = Math.round(steps * STEP_LENGTH_METERS);
+  const steps = healthSteps + devSteps;
+  const distanceMeters = healthDistance ?? Math.round(steps * STEP_LENGTH_METERS);
+  const stepSource: WalkingDataSource = source ?? 'mock';
   const isLoaded = stepStatus !== 'loading';
   const unreadable = stepStatus === 'unavailable' && devSteps === 0;
-  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({ steps, distanceMeters, source: STEP_SOURCE });
+  const { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure } = useWalkingReward({
+    steps,
+    distanceMeters,
+    source: stepSource,
+  });
   const { coins, growthStacks } = usePlayState();
   const { iconsInset, iconsHeight } = useHomeTopLayout();
   const { show: showNotice, element: noticeElement } = usePixelNotice();
@@ -130,8 +215,12 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
     deniedNoticeShown.current = true;
     showNotice({
       title: '걸음 수 권한이 필요해요',
-      message: '설정 > 개인정보 보호 및 보안 > 동작 및 피트니스에서 가치고치를 허용해 주세요.',
-      buttons: [{ label: '닫기' }, { label: '다시 확인', onPress: () => void refresh() }],
+      message:
+        '아이폰은 건강 앱, 안드로이드는 Health Connect 에서 가치고치의 걸음 읽기를 허용해 주세요.',
+      buttons: [
+        { label: '설정 열기', onPress: () => openHealthStepsSettings() },
+        { label: '다시 확인', onPress: () => void refresh() },
+      ],
     });
   }, [celebration, introChecked, refresh, showIntro, showNotice, stepStatus]);
 
@@ -149,9 +238,7 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         <HomeTopBar />
         <HomeTopIcons top={scale(8)} side={scale(16)} />
       </View>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(RETURN_BUTTON_HEIGHT + RETURN_BUTTON_GAP + SCROLL_END_SPACE), gap: scale(14) }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
         {stepStatus === 'ready' && steps === 0 ? (
           <NoticeCard
             icon="directions-walk"
@@ -199,7 +286,8 @@ function WalkingContent({ devTools }: { devTools: ReactNode }) {
         ) : null}
         {devTools}
       </ScrollView>
-      <View style={{ position: 'absolute', left: 0, right: 0, bottom: scale(RETURN_BUTTON_GAP), flexDirection: 'row', paddingHorizontal: scale(24) }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(10), paddingHorizontal: scale(24), marginBottom: scale(8) }}>
+        <FeatureHelpButton onPress={onHelp} />
         <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
       </View>
       {showIntro ? <WalkingIntroPopup step={introStep} onNext={nextIntro} /> : null}

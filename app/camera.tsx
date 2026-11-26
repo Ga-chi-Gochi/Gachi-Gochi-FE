@@ -1,58 +1,139 @@
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CameraView, type CameraType, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useIsFocused } from 'expo-router';
+import { router, useFocusEffect, useIsFocused } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Alert, Linking, Platform, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AssetImageButton } from '@/components/gachi-ui/asset-image-button';
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GachiIconButton } from '@/components/gachi-ui/gachi-button';
+import { type SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
-import { art } from '@/constants/art';
+import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
+import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
+import { gachiUi } from '@/constants/gachi-ui';
 import { palette } from '@/constants/palette';
+import { ISLAND_HOME } from '@/constants/routes';
+import { uiButtons, uiCamera } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
+import { isBonggingDailyLimitReached } from '@/lib/bongging-daily';
 import { confirmOfflineCertification } from '@/lib/confirm-offline-certification';
-import { requestLocationPermissionIfNeeded, resolveBonggingLocation } from '@/lib/resolve-bongging-location';
+import { resolveBonggingLocation } from '@/lib/resolve-bongging-location';
 
+const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
+
+type ViewNode = ComponentRef<typeof View>;
+
+function leaveCamera() {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace(ISLAND_HOME);
+}
+
+/**
+ * 봉그깅 카메라 — 와프 1·2
+ * 헤더(뒤로·봉그깅·도움) / 가이드 버블 / 파인더 / 크림 하단바
+ */
 export default function CameraScreen() {
-  const { scale, height } = useResponsive();
+  const { scale, width, height } = useResponsive();
   const insets = useSafeAreaInsets();
   const { stageBonggingCertification } = usePlayState();
+  const tutorial = useTutorial();
+  const { leaveScreen } = tutorial;
+  const guided = tutorial.step === 'bongging-screen';
+  const [leavingTutorial, setLeavingTutorial] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const closeRef = useRef<ViewNode>(null);
+  const [closeHole, setCloseHole] = useState<SpotlightHole | null>(null);
+  const holdCamera = guided || leavingTutorial;
   const isFocused = useIsFocused();
   const cameraRef = useRef<CameraView>(null);
   const askedForPermission = useRef(false);
-  const askedForLocation = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
   const [readyFacing, setReadyFacing] = useState<CameraType | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [stageHeight, setStageHeight] = useState(0);
+  /** 0: 가운데 담기 / 1: 종류 보이게 — 와프 두 가이드 */
+  const [guideIndex, setGuideIndex] = useState(0);
 
   const granted = permission?.granted === true;
-  const previewFacing = isFocused && granted ? facing : null;
+  const previewFacing = isFocused && granted && !holdCamera ? facing : null;
   if (readyFacing && readyFacing !== previewFacing) {
     setReadyFacing(null);
   }
   const ready = previewFacing !== null && readyFacing === previewFacing;
 
   useEffect(() => {
-    if (!isFocused || !permission || permission.granted || !permission.canAskAgain || askedForPermission.current) {
+    if (holdCamera || !isFocused || !permission || permission.granted || !permission.canAskAgain || askedForPermission.current) {
       return;
     }
     askedForPermission.current = true;
     void requestPermission();
-  }, [isFocused, permission, requestPermission]);
+  }, [holdCamera, isFocused, permission, requestPermission]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => leaveScreen('bongging');
+    }, [leaveScreen]),
+  );
 
   useEffect(() => {
-    if (!isFocused || askedForLocation.current) {
+    if (guided || holdCamera) {
       return;
     }
-    askedForLocation.current = true;
-    void requestLocationPermissionIfNeeded();
-  }, [isFocused]);
+    const timer = setInterval(() => {
+      setGuideIndex((current) => (current + 1) % 2);
+    }, 3200);
+    return () => clearInterval(timer);
+  }, [guided, holdCamera]);
+
+  const measureClose = useCallback(() => {
+    const node = closeRef.current;
+    if (!node) {
+      return;
+    }
+    node.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+      if (measuredWidth <= 0 || measuredHeight <= 0) {
+        setCloseHole(null);
+        return;
+      }
+      const pad = scale(12);
+      const radius = Math.max(measuredWidth, measuredHeight) / 2 + pad;
+      const next: SpotlightHole = {
+        centerX: x + measuredWidth / 2,
+        centerY: y + measuredHeight / 2,
+        radius,
+      };
+      setCloseHole((current) =>
+        current &&
+        'centerX' in current &&
+        current.centerX === next.centerX &&
+        current.centerY === next.centerY &&
+        current.radius === next.radius
+          ? current
+          : next,
+      );
+    });
+  }, [scale]);
+
+  useEffect(() => {
+    if (!guided) {
+      return;
+    }
+    const id = requestAnimationFrame(measureClose);
+    return () => cancelAnimationFrame(id);
+  }, [guided, measureClose, insets.top, insets.left]);
+
+  const focusHole = guided ? closeHole : null;
 
   async function allowCamera() {
     if (permission && !permission.canAskAgain) {
@@ -117,17 +198,26 @@ export default function CameraScreen() {
   }
 
   async function certifyPhoto(photo: { uri: string; exif?: unknown; fileName?: string | null }) {
-    setNotice('위치를 확인하고 있어요');
+    if (await isBonggingDailyLimitReached()) {
+      stageBonggingCertification({
+        imageUri: photo.uri,
+        fileName: photo.fileName,
+        latitude: null,
+        longitude: null,
+        locationSource: 'none',
+      });
+      router.push('/recognize');
+      return;
+    }
+
     try {
       const location = await resolveBonggingLocation(photo.exif);
       if (location.status === 'cancelled') {
-        setNotice(null);
         return;
       }
 
       const proceedOffline = await confirmOfflineCertification();
       if (!proceedOffline) {
-        setNotice(null);
         return;
       }
 
@@ -152,13 +242,17 @@ export default function CameraScreen() {
   }
 
   const shutterDisabled = granted && (!ready || busy);
-  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(280));
-  const finder = Math.min(scale(250), Math.max(scale(120), stageBudget - scale(16)));
+  const sidePad = scale(16);
+  const bubbleWidth = Math.min(scale(340), width - sidePad * 2);
+  const stageBudget = stageHeight || Math.max(0, height - insets.top - insets.bottom - scale(300));
+  const finder = Math.min(scale(280), Math.max(scale(200), Math.min(width - sidePad * 2, stageBudget - scale(8))));
+  const bottomBarPad = Math.max(insets.bottom, scale(10));
+  const guideSource = guideIndex === 0 ? uiCamera.bubbleGuide : uiCamera.bubbleFound;
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.ink }}>
+    <View style={{ flex: 1, backgroundColor: '#2C2926' }}>
       {isFocused ? <StatusBar style="light" /> : null}
-      {isFocused && granted ? (
+      {isFocused && granted && !holdCamera ? (
         <CameraView
           ref={cameraRef}
           style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
@@ -172,77 +266,135 @@ export default function CameraScreen() {
         />
       ) : null}
       <LinearGradient
-        colors={['rgba(26,23,31,0.62)', 'rgba(26,23,31,0)']}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + scale(148), pointerEvents: 'none' }}
-      />
-      <LinearGradient
-        colors={['rgba(26,23,31,0)', 'rgba(26,23,31,0.28)', 'rgba(26,23,31,0.82)']}
-        locations={[0, 0.35, 1]}
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: scale(210) + insets.bottom, pointerEvents: 'none' }}
+        colors={['rgba(44,41,38,0.72)', 'rgba(44,41,38,0)']}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top + scale(120), pointerEvents: 'none' }}
       />
       <View style={{ flex: 1, paddingTop: insets.top }}>
-        <View style={{ marginTop: scale(8), minHeight: scale(46), justifyContent: 'center' }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="닫기"
-            onPress={() => router.back()}
-            style={{ position: 'absolute', left: Math.max(insets.left, scale(16)), top: '50%', marginTop: -scale(21), width: scale(42), height: scale(42), borderRadius: scale(21), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialIcons name="close" size={scale(22)} color={palette.ink} />
-          </Pressable>
-          <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8), backgroundColor: palette.white, borderRadius: scale(999), paddingHorizontal: scale(16), paddingVertical: scale(10) }}>
-              <MaterialIcons name="delete-outline" size={scale(20)} color={palette.ink} />
-              <Text style={{ color: palette.ink, fontWeight: '700', fontSize: scale(16) }}>봉그깅</Text>
-            </View>
+        {/* 헤더: ← | 봉그깅 | 도움 */}
+        <View style={{ marginTop: scale(6), height: scale(40), justifyContent: 'center' }}>
+          <View
+            ref={closeRef}
+            collapsable={false}
+            onLayout={guided ? measureClose : undefined}
+            style={{ position: 'absolute', left: Math.max(insets.left, sidePad), top: '50%', marginTop: -scale(16) }}>
+            <GachiIconButton kind="squareBack" label="뒤로" size={32} onPress={leaveCamera} />
           </View>
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <GalmuriText size={14} bold color={gachiUi.white} center>
+              봉그깅
+            </GalmuriText>
+          </View>
+          {guided ? null : (
+            <View style={{ position: 'absolute', right: Math.max(insets.right, sidePad), top: '50%', marginTop: -scale(16) }}>
+              <GachiIconButton kind="squareSettings" label="도움말" size={32} onPress={() => setHelpOpen(true)} />
+            </View>
+          )}
         </View>
-        <View style={{ marginTop: scale(16), marginHorizontal: scale(48), backgroundColor: palette.white, borderRadius: scale(18), padding: scale(8), flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-          <Image source={art.egg} style={{ width: scale(28), height: scale(32) }} contentFit="contain" />
-          <Text style={{ flex: 1, color: palette.ink, fontWeight: '700', fontSize: scale(14) }}>카메라를 켜고 쓰레기를 봉가줍서!</Text>
+
+        {/* 가이드 말풍선 — 와프 두 문구 에셋 교대 */}
+        <View style={{ marginTop: scale(10), alignItems: 'center', paddingHorizontal: sidePad }}>
+          <Image
+            source={guideSource}
+            style={{ width: bubbleWidth, height: bubbleWidth * (52 / 380), ...pixelImageStyle }}
+            contentFit="contain"
+          />
         </View>
+
+        {/* 뷰파인더 */}
         <View
           onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}
-          style={{ flex: 1, alignItems: 'center', justifyContent: granted ? 'center' : 'flex-start', paddingTop: granted ? 0 : scale(16), paddingHorizontal: scale(24), overflow: 'hidden' }}>
-          {granted ? (
-            <View style={{ width: finder, height: finder, borderRadius: scale(24), borderWidth: 3, borderColor: palette.white }} />
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: granted || guided ? 'center' : 'flex-start',
+            paddingTop: granted || guided ? 0 : scale(16),
+            paddingHorizontal: sidePad,
+            overflow: 'hidden',
+          }}>
+          {granted || guided ? (
+            <View style={{ width: finder, height: finder, alignItems: 'center', justifyContent: 'center' }}>
+              <Image
+                source={uiCamera.corners}
+                style={{ position: 'absolute', width: finder, height: finder, ...pixelImageStyle }}
+                contentFit="contain"
+              />
+            </View>
           ) : (
-            <View style={{ alignSelf: 'stretch', backgroundColor: palette.white, borderRadius: scale(20), padding: scale(20), gap: scale(12) }}>
-              <Text style={{ color: palette.ink, fontSize: scale(18), fontWeight: '800' }}>
+            <View
+              style={{
+                alignSelf: 'stretch',
+                backgroundColor: palette.white,
+                borderRadius: scale(12),
+                padding: scale(20),
+                gap: scale(12),
+              }}>
+              <GalmuriText size={14} bold>
                 {permission ? '카메라 권한이 필요해요' : '카메라를 준비하고 있어요'}
-              </Text>
-              <Text style={{ color: palette.body, fontSize: scale(14), lineHeight: scale(20) }}>
+              </GalmuriText>
+              <GalmuriText size={9} color={gachiUi.inkSoft}>
                 쓰레기 사진을 찍거나, 갤러리에서 고를 수 있어요.
-              </Text>
+              </GalmuriText>
               {permission ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={permission.canAskAgain ? '카메라 허용하기' : '설정에서 허용하기'}
+                <AssetImageButton
+                  source={uiButtons.greenAllow}
+                  label={permission.canAskAgain ? '허락허쿠다' : '설정에서 허용하기'}
+                  width={80}
+                  height={20}
                   onPress={() => {
                     void allowCamera();
                   }}
-                  style={{ minHeight: scale(48), borderRadius: scale(16), backgroundColor: palette.tangerine, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: palette.white, fontSize: scale(16), fontWeight: '800' }}>
-                    {permission.canAskAgain ? '카메라 허용하기' : '설정에서 허용하기'}
-                  </Text>
-                </Pressable>
+                />
               ) : null}
             </View>
           )}
         </View>
-        <Text style={{ textAlign: 'center', color: palette.white, fontSize: scale(14), marginBottom: scale(8) }}>
-          {notice ?? '위치를 확인하고 있어요'}
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: Math.max(insets.bottom, scale(12)) }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="갤러리에서 선택"
+
+        {notice ? (
+          <Text
+            style={{
+              textAlign: 'center',
+              color: palette.white,
+              fontSize: scale(12),
+              paddingHorizontal: sidePad,
+              paddingBottom: scale(8),
+            }}>
+            {notice}
+          </Text>
+        ) : null}
+
+        {/* 하단 크림 컨트롤 바: 갤러리 | 셔터 | 전환 */}
+        <View
+          style={{
+            backgroundColor: gachiUi.cream,
+            borderTopWidth: scale(3),
+            borderTopColor: gachiUi.ink,
+            paddingTop: scale(14),
+            paddingBottom: bottomBarPad,
+            paddingHorizontal: scale(28),
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+          <AssetImageButton
+            source={uiCamera.gallery}
+            label="갤러리에서 선택"
+            width={44}
+            height={48}
             disabled={busy}
             onPress={() => {
               void pickFromGallery();
             }}
-            style={{ width: scale(48), height: scale(48), borderRadius: scale(12), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: busy ? 0.5 : 1 }}>
-            <MaterialIcons name="photo-library" size={scale(22)} color={palette.ink} />
-          </Pressable>
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="촬영"
@@ -251,19 +403,43 @@ export default function CameraScreen() {
             onPress={() => {
               void shoot();
             }}
-            style={{ width: scale(80), height: scale(80), borderRadius: scale(40), borderWidth: scale(4), borderColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: shutterDisabled ? 0.5 : 1 }}>
-            <View style={{ width: scale(62), height: scale(62), borderRadius: scale(31), backgroundColor: palette.white }} />
+            style={{ opacity: shutterDisabled ? 0.5 : 1, marginTop: scale(-6) }}>
+            <Image
+              source={uiCamera.shutter}
+              style={{ width: scale(72), height: scale(78), ...pixelImageStyle }}
+              contentFit="contain"
+            />
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="카메라 전환"
+          <AssetImageButton
+            source={uiCamera.flip}
+            label="카메라 전환"
+            width={44}
+            height={48}
             disabled={!granted || busy}
             onPress={flipCamera}
-            style={{ width: scale(48), height: scale(48), borderRadius: scale(24), backgroundColor: palette.white, alignItems: 'center', justifyContent: 'center', opacity: !granted || busy ? 0.5 : 1 }}>
-            <MaterialIcons name="flip-camera-ios" size={scale(22)} color={palette.ink} />
-          </Pressable>
+          />
         </View>
       </View>
+      {guided ? (
+        <TutorialOverlay
+          step={tutorial.scope === 'full' ? 2 : 1}
+          total={tutorial.scope === 'full' ? undefined : 1}
+          title="봉그깅은 이렇게 해요"
+          body="쓰레기를 사진으로 찍어 인증하면 경험치를 얻어요. 경험치가 쌓이면 고치가 자라요."
+          hint="왼쪽 위 뒤로 버튼을 눌러 돌아가요"
+          hole={focusHole ? () => focusHole : undefined}
+          placement="below"
+          align="start"
+          onSkip={() => {
+            setLeavingTutorial(true);
+            tutorial.skip();
+            leaveCamera();
+          }}
+          interceptBack={false}
+          zIndex={100}
+        />
+      ) : null}
+      {helpOpen && !guided ? <FeatureHelpOverlay topic="bongging" onClose={() => setHelpOpen(false)} zIndex={90} /> : null}
     </View>
   );
 }

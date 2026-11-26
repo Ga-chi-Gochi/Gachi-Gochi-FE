@@ -1,8 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, useWindowDimensions, View } from 'react-native';
 
-import { craterCloudPoint } from '@/components/island/beach-home';
-import { useIslandCameraSnapshot } from '@/components/island/island-camera';
+import { craterCloudPoint, useIslandCameraSnapshot } from '@/components/island/volcano-anchor';
 import { LAVA_BOIL_MS, LAVA_FILL_MS, useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { usePlayState } from '@/components/play-state';
 
@@ -60,14 +59,14 @@ export function VolcanoGas() {
 function AshCloud({ playing, onDone }: { playing: boolean; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
   const camera = useIslandCameraSnapshot();
-  const { revealExpandedZone } = usePlayState();
+  const { revealExpandedZone, islandStage } = usePlayState();
   const origin = useMemo(() => {
-    const mouth = craterCloudPoint(width, height);
+    const mouth = craterCloudPoint(islandStage);
     return {
       x: width / 2 + (mouth.x - width / 2) * camera.zoom + camera.x,
       y: height / 2 + (mouth.y - height / 2) * camera.zoom + camera.y,
     };
-  }, [camera.x, camera.y, camera.zoom, height, width]);
+  }, [camera.x, camera.y, camera.zoom, height, islandStage, width]);
 
   if (Platform.OS === 'web') {
     return (

@@ -97,13 +97,12 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
   /** 섬 좌표 → 화면 좌표 (게임 카메라: 화면 가운데 기준 확대 후 이동) */
   const toScreen = (id: IslandZoneId) => {
     const f = ZONE_FRAME[id];
-    const left = f.x * width;
-    const top = f.y * height;
+    const box = camera.zones?.[id] ?? { left: f.x * width, top: f.y * height, width: f.w * width, height: f.h * height };
     return {
-      left: width / 2 + (left - width / 2) * camera.zoom + camera.x,
-      top: height / 2 + (top - height / 2) * camera.zoom + camera.y,
-      width: f.w * width * camera.zoom,
-      height: f.h * height * camera.zoom,
+      left: width / 2 + (box.left - width / 2) * camera.zoom + camera.x,
+      top: height / 2 + (box.top - height / 2) * camera.zoom + camera.y,
+      width: box.width * camera.zoom,
+      height: box.height * camera.zoom,
     };
   };
 

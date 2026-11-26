@@ -14,9 +14,9 @@ const v = viewport();
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  backgroundColor: '#1C8481',
+  backgroundColor: '#2ca6a4',
   pixelArt: true,
-  roundPixels: true,
+  roundPixels: false,
   disableContextMenu: true,
   scale: {
     mode: Phaser.Scale.NONE,

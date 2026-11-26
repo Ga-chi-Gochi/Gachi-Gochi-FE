@@ -6,7 +6,7 @@ import { MOTION_SEQ } from './motion';
 export const WAVE_LAG_PER_COL = 2;
 export const WAVE_COL_GROUP = 1;
 
-const SEA = MOTION_SEQ['sea-deep'];
+const SEA = MOTION_SEQ['sea-shore'];
 export const SEA_FRAMES = SEA.sheet.frameCount;
 
 export const FOAM_OFFSET = [0, 0, -2, -2, -4, -4, -6, -6, -6, -6, -6, -4, -4, -4, -2, -2, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

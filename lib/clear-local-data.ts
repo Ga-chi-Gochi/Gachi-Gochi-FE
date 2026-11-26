@@ -6,7 +6,6 @@ import { resetTutorialSession } from '@/lib/tutorial-state';
 const LOCAL_STORAGE_KEYS = [
   'creature/state',
   'island/state',
-  'island/look',
   'explore/state',
   'walking/reward',
   'walking/intro-seen',

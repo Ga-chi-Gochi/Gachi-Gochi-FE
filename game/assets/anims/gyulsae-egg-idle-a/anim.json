@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-egg-idle-a",
+  "label": "알 — 가만히 A 꿈틀",
+  "playback": "loop",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 7,
+  "totalMs": 3560,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [1500, 70, 50, 70, 1100, 70, 700],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0]
+}

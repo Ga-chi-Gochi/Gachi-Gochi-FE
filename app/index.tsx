@@ -9,7 +9,6 @@ import { IslandGame } from '@/components/island/island-game';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
 import { gachiUi } from '@/constants/gachi-ui';
 import { uiButtons, uiHud } from '@/constants/ui-assets';
-import { useIslandLook } from '@/hooks/use-island-look';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
@@ -18,14 +17,12 @@ const pixelImageStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' }
 export default function WelcomeScreen() {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { look } = useIslandLook();
 
   return (
     <VolcanoEruptionProvider>
       <View style={{ flex: 1, backgroundColor: gachiUi.cream }}>
         <IslandGame
           mode="preview"
-          look={look}
           petOpen={false}
           onTapCreature={() => undefined}
           onCamera={() => undefined}

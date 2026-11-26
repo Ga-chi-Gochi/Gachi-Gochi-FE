@@ -10,12 +10,14 @@ import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner, PlaceSuccessToast, PlaceZoneTarget } from '@/components/island/place-mode';
 import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
+import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
+import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
-
+import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
 /** 해변 화면 비율 (game/src/scene.ts 와 같다) */
 const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
   core: { x: 0.24, y: 0.28, w: 0.52, h: 0.44 },
@@ -53,10 +55,10 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     isExploring,
     hasExploreReward,
     exploreRemainLabel,
-    exploreRemaining,
-    exploreDailyLimit,
     petCreature,
   } = usePlayState();
+  const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } =
+    useTutorial();
   const [toastName, setToastName] = useState<string | null>(null);
 
   const placing = Boolean(pendingPlaceItemId);
@@ -106,6 +108,19 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     };
   };
 
+  /** 탐험 터치·타이머는 바다보다 섬 육지 쪽으로 당긴 프레임을 쓴다 */
+  const westFrame = (() => {
+    const f = EXPLORE_WEST_FRAME;
+    const left = f.x * width;
+    const top = f.y * height;
+    return {
+      left: width / 2 + (left - width / 2) * camera.zoom + camera.x,
+      top: height / 2 + (top - height / 2) * camera.zoom + camera.y,
+      width: f.w * width * camera.zoom,
+      height: f.h * height * camera.zoom,
+    };
+  })();
+
   return (
     <View
       pointerEvents="box-none"
@@ -143,27 +158,59 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
       {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '탐험 보내기'}
-          onPress={() => router.push(EXPLORE_ROUTE)}
+          accessibilityLabel={
+            hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
+          }
+          onPress={() => {
+            if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
+              goTutorial('explore-course');
+            } else if (tutorialScope === 'explore' && tutorialStep === 'explore-progress') {
+              void saveExploreIntroSeen();
+              if (hasExploreReward) {
+                goTutorial('explore-reward');
+              } else {
+                skipTutorial();
+              }
+            } else if (
+              tutorialScope === 'explore' &&
+              (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
+            ) {
+              if (tutorialStep === 'explore-reward') {
+                goTutorial('explore-reward-button');
+              }
+            }
+            router.push(EXPLORE_ROUTE);
+          }}
           style={{
             position: 'absolute',
-            left: scale(12),
-            top: '58%',
-            minWidth: scale(72),
-            paddingHorizontal: scale(10),
-            paddingVertical: scale(8),
-            borderWidth: scale(2),
-            borderColor: pixel.ink,
-            backgroundColor: hasExploreReward ? pixel.lava : isExploring ? pixel.sand : pixel.tangerine,
+            left: westFrame.left,
+            top: westFrame.top,
+            width: westFrame.width,
+            height: westFrame.height,
             alignItems: 'center',
+            justifyContent: 'center',
             opacity: 1 - Math.max(ash.mid, ash.bottom),
           }}>
-          <PixelText size={11} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '보상!' : isExploring ? '탐험중' : '🌲 탐험'}
-          </PixelText>
-          <PixelText size={9} color={hasExploreReward ? pixel.white : pixel.ink}>
-            {hasExploreReward ? '받기' : isExploring ? exploreRemainLabel : `${exploreRemaining}/${exploreDailyLimit}`}
-          </PixelText>
+          {isExploring ? (
+            <View
+              pointerEvents="none"
+              style={{
+                paddingHorizontal: scale(8),
+                paddingVertical: scale(6),
+                borderWidth: scale(2),
+                borderColor: pixel.ink,
+                backgroundColor: 'rgba(255,248,230,0.92)',
+                alignItems: 'center',
+                gap: scale(2),
+              }}>
+              <PixelText size={10} color={pixel.ink} center>
+                탐험중
+              </PixelText>
+              <PixelText size={12} color={pixel.ink} center>
+                {exploreRemainLabel}
+              </PixelText>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
 

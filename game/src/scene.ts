@@ -1271,7 +1271,11 @@ export class IslandScene extends Phaser.Scene {
       return;
     }
     const art = stageArt(this.stage);
-    this.explore.setPosition(art.width * 0.06, art.height * 0.42).setScale(1 / this.baseDp()).setVisible(true);
+    // 서쪽 섬 육지 (RN EXPLORE_WEST_FRAME). develop art 좌표계 + scale 유지, 바다 쪽 0.06 대신 안쪽
+    this.explore
+      .setPosition(art.width * 0.18, art.height * 0.4)
+      .setScale(1 / this.baseDp())
+      .setVisible(true);
     const parts = this.exploreParts;
     if (parts && parts.f === f && parts.level === level) return;
     this.explore.removeAll(true);

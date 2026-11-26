@@ -153,6 +153,8 @@ export function writeExploreState(next: ExploreStateRecord): Promise<ExploreStat
 
 export type StartExploreTripInput = {
   gochiId: string;
+  /** 없으면 기본 EXPLORE_DURATION_MS */
+  durationMs?: number;
 };
 
 export function startExploreTrip(input: StartExploreTripInput): Promise<ExploreStateRecord | null> {
@@ -171,11 +173,15 @@ export function startExploreTrip(input: StartExploreTripInput): Promise<ExploreS
     if (!input.gochiId) {
       return null;
     }
+    const durationMs =
+      typeof input.durationMs === 'number' && input.durationMs > 0
+        ? input.durationMs
+        : EXPLORE_DURATION_MS;
     return writeUnlocked({
       ...current,
       remaining: current.remaining - 1,
       exploringStartedAt: now,
-      exploringUntil: now + EXPLORE_DURATION_MS,
+      exploringUntil: now + durationMs,
       dispatchedGochiId: input.gochiId,
     });
   });

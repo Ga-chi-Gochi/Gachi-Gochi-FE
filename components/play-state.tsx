@@ -9,18 +9,24 @@ import {
   exploreProgress,
   formatExploreRemain,
 } from '@/constants/explore';
-import { getGrowthStage, type GrowthStage } from '@/constants/growth';
+import { getGrowthStage, getGrowthStageByLevel, type GrowthStage } from '@/constants/growth';
 import {
   canExpandIsland,
   getIslandStage,
   getNextExpandZone,
+  getZone,
   ISLAND_STAGE_MAX,
   type IslandZoneId,
 } from '@/constants/island-zones';
 import type { WalkingDrops } from '@/constants/walking-reward';
 import type { BonggingLocationSource } from '@/lib/bongging-certification';
 import { clearLocalGameData } from '@/lib/clear-local-data';
-import { addCreatureXp, markGrowthLevelSeen, readCreatureState } from '@/lib/creature-state';
+import {
+  addCreatureXp,
+  markGrowthLevelSeen,
+  readCreatureState,
+  setPendingGrowthLevel,
+} from '@/lib/creature-state';
 import { dispatchExploreTrip } from '@/lib/explore-api';
 import {
   claimExploreReward,
@@ -59,11 +65,18 @@ export type ZoneUnlockReveal = {
   volcanoBurst: boolean;
 };
 
+/** 홈이 아닐 때 임계값 도달 → 섬으로 가라는 안내 */
+export type HomeInvite = {
+  kind: 'growth' | 'island';
+  title: string;
+  body: string;
+};
+
 const STAGE_BY_LEVEL: Record<number, GrowthStage> = {
-  1: { level: 1, label: '알' },
-  2: { level: 2, label: '새싹' },
-  3: { level: 3, label: '성장' },
-  4: { level: 4, label: '가치고치' },
+  1: getGrowthStageByLevel(1),
+  2: getGrowthStageByLevel(2),
+  3: getGrowthStageByLevel(3),
+  4: getGrowthStageByLevel(4),
 };
 
 /** 키우기 1회 XP (웹의 키우기 버튼에 대응) */
@@ -79,8 +92,19 @@ type PlayState = {
   islandStage: number;
   islandStageMax: number;
   canExpand: boolean;
+  /** 성장 연출·섬 확장 연출 중이면 키우기 등 입력을 잠근다 */
+  growLocked: boolean;
   growthReveal: GrowthRevealState | null;
   zoneUnlockReveal: ZoneUnlockReveal | null;
+  /** 다른 화면에서 성장/섬 임계에 닿았을 때 홈으로 유도 */
+  homeInvite: HomeInvite | null;
+  /**
+   * 홈에서 섬 확장 연출(화산)을 자동으로 켤 때 올라가는 신호.
+   * 값이 바뀌면 Island 쪽에서 예전「섬 넓히기」와 같이 erupt() 만 호출한다.
+   */
+  homeExpandSignal: number;
+  /** erupt 를 시작하지 못했을 때 busy 를 풀어, 다음에 다시 시도할 수 있게 한다 */
+  releaseIslandExpandAttempt: () => void;
   certificationPhotoUri: string | null;
   pendingCertification: PendingBonggingCertification | null;
   owned: string[];
@@ -106,6 +130,9 @@ type PlayState = {
   revealExpandedZone: () => boolean;
   acknowledgeGrowthReveal: () => void;
   acknowledgeZoneUnlock: () => void;
+  /** 홈 탭 focus 여부를 알려, 대기 중인 연출을 재생한다 */
+  setHomeActive: (active: boolean) => void;
+  dismissHomeInvite: () => void;
   stageBonggingCertification: (pending: PendingBonggingCertification) => void;
   finishBonggingCertification: (reward: { xp: number; growthStacks: number }) => void;
   cancelBonggingCertification: () => void;
@@ -132,7 +159,7 @@ type PlayState = {
   exploreEggReveal: ExploreEggReveal | null;
   canStartExplore: boolean;
   exploreRemainLabel: string;
-  startExplore: (input: { gochiId: string }) => Promise<boolean>;
+  startExplore: (input: { gochiId: string; durationMs?: number }) => Promise<boolean>;
   claimExploreEgg: () => Promise<boolean>;
   acknowledgeExploreEggReveal: () => void;
   markGochiEggDetailSeen: (eggId: string) => Promise<void>;
@@ -155,6 +182,11 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const [unlockedZones, setUnlockedZones] = useState<IslandZoneId[]>(['core']);
   const [growthReveal, setGrowthReveal] = useState<GrowthRevealState | null>(null);
   const [zoneUnlockReveal, setZoneUnlockReveal] = useState<ZoneUnlockReveal | null>(null);
+  const [homeInvite, setHomeInvite] = useState<HomeInvite | null>(null);
+  const [homeExpandSignal, setHomeExpandSignal] = useState(0);
+  const [islandExpandBusy, setIslandExpandBusy] = useState(false);
+  const [growInFlight, setGrowInFlight] = useState(false);
+  const growInFlightRef = useRef(false);
   const [pendingPlaceItemId, setPendingPlaceItemId] = useState<string | null>(null);
   const [lastPlaced, setLastPlaced] = useState<{ itemId: string; zoneId: IslandZoneId } | null>(null);
   const [exploreRemaining, setExploreRemaining] = useState(EXPLORE_DAILY_LIMIT);
@@ -172,13 +204,21 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const xpRef = useRef(0);
   const waterRef = useRef(0);
   const unlockedRef = useRef<IslandZoneId[]>(['core']);
+  const homeActiveRef = useRef(false);
+  const pendingGrowthLevelRef = useRef<number | null>(null);
+  const pendingExpandZoneRef = useRef<IslandZoneId | null>(null);
+  const growthRevealRef = useRef<GrowthRevealState | null>(null);
+  const zoneUnlockRevealRef = useRef<ZoneUnlockReveal | null>(null);
+  /** 화산 연출이 돌고 있는 동안 중복 확장을 막는다 (예전 수동 넓히기와 같은 한 길) */
+  const islandExpandBusyRef = useRef(false);
 
-  const growthStage = useMemo(() => getGrowthStage(water, xp), [water, xp]);
+  const growthStage = useMemo(() => getGrowthStage(xp), [xp]);
   const islandStage = useMemo(() => getIslandStage(unlockedZones), [unlockedZones]);
   const canExpand = useMemo(
-    () => canExpandIsland(unlockedZones, xp, growthStage.level) && !zoneUnlockReveal,
-    [unlockedZones, xp, growthStage.level, zoneUnlockReveal],
+    () => canExpandIsland(unlockedZones, xp) && !zoneUnlockReveal && !islandExpandBusy,
+    [unlockedZones, xp, zoneUnlockReveal, islandExpandBusy],
   );
+  const growLocked = Boolean(growthReveal) || islandExpandBusy || growInFlight;
   const exploreForestUnlocked = unlockedZones.includes(EXPLORE_FOREST_ZONE);
   const isExploring = exploreEndsAt != null && exploreEndsAt > nowTick;
   const hasExploreReward = Boolean(pendingExploreGochiId);
@@ -203,18 +243,117 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     unlockedRef.current = unlockedZones;
   }, [unlockedZones]);
 
-  const maybeRevealGrowth = useCallback((from: GrowthStage, to: GrowthStage) => {
-    if (to.level <= from.level || to.level <= lastSeenLevelRef.current) {
-      if (to.level > lastSeenLevelRef.current) {
-        lastSeenLevelRef.current = to.level;
-        void markGrowthLevelSeen(to.level);
-      }
+  useEffect(() => {
+    growthRevealRef.current = growthReveal;
+  }, [growthReveal]);
+
+  useEffect(() => {
+    zoneUnlockRevealRef.current = zoneUnlockReveal;
+  }, [zoneUnlockReveal]);
+
+  const inviteHome = useCallback((kind: HomeInvite['kind'], title: string, body: string) => {
+    setHomeInvite((current) => current ?? { kind, title, body });
+  }, []);
+
+  /**
+   * 홈에서 섬 확장을 시작한다.
+   * 예전 수동「섬 넓히기」와 같이 zoneUnlockReveal 을 먼저 켜지 않고,
+   * pending 만 남긴 뒤 erupt 신호만 올린다. (해금은 화산재 속 revealExpandedZone)
+   */
+  const beginIslandExpand = useCallback((zoneId: IslandZoneId) => {
+    if (islandExpandBusyRef.current) {
+      return false;
+    }
+    const zone = getZone(zoneId);
+    if (!zone || unlockedRef.current.includes(zoneId)) {
+      return false;
+    }
+    pendingExpandZoneRef.current = zoneId;
+    void updateIslandState((record) => ({ ...record, pendingExpandZoneId: zoneId }));
+    islandExpandBusyRef.current = true;
+    setIslandExpandBusy(true);
+    setHomeExpandSignal((current) => current + 1);
+    return true;
+  }, []);
+
+  const releaseIslandExpandAttempt = useCallback(() => {
+    islandExpandBusyRef.current = false;
+    setIslandExpandBusy(false);
+  }, []);
+
+  const showGrowthReveal = useCallback((from: GrowthStage, to: GrowthStage) => {
+    const reveal = { from, to };
+    growthRevealRef.current = reveal;
+    setGrowthReveal(reveal);
+  }, []);
+
+  /**
+   * 홈에 있을 때 대기 중인 성장 → 섬 확장 순으로 연출을 재생한다.
+   * 성장 연출이 열려 있으면 섬은 그 다음(acknowledge 후)에 한다.
+   */
+  const flushHomeReveals = useCallback(() => {
+    if (!homeActiveRef.current) {
       return;
     }
-    lastSeenLevelRef.current = to.level;
-    setGrowthReveal({ from, to });
-    void markGrowthLevelSeen(to.level);
-  }, []);
+    setHomeInvite(null);
+    if (growthRevealRef.current || islandExpandBusyRef.current) {
+      return;
+    }
+    const pendingLevel = pendingGrowthLevelRef.current;
+    if (pendingLevel != null && pendingLevel > lastSeenLevelRef.current) {
+      const from = STAGE_BY_LEVEL[lastSeenLevelRef.current] ?? STAGE_BY_LEVEL[1];
+      const to = STAGE_BY_LEVEL[pendingLevel] ?? getGrowthStage(xpRef.current);
+      showGrowthReveal(from, to);
+      return;
+    }
+    const pendingZone = pendingExpandZoneRef.current;
+    if (pendingZone && !unlockedRef.current.includes(pendingZone)) {
+      beginIslandExpand(pendingZone);
+    }
+  }, [beginIslandExpand, showGrowthReveal]);
+
+  const queueGrowthUp = useCallback(
+    (from: GrowthStage, to: GrowthStage) => {
+      if (to.level <= from.level || to.level <= lastSeenLevelRef.current) {
+        return;
+      }
+      pendingGrowthLevelRef.current = to.level;
+      void setPendingGrowthLevel(to.level);
+      if (homeActiveRef.current) {
+        if (!growthRevealRef.current) {
+          showGrowthReveal(from, to);
+        }
+        return;
+      }
+      inviteHome('growth', '고치가 성장했어요!', '섬으로 돌아가면 성장 연출을 볼 수 있어요.');
+    },
+    [inviteHome, showGrowthReveal],
+  );
+
+  const queueIslandExpand = useCallback(
+    (prevXp: number, nextXp: number) => {
+      const next = getNextExpandZone(unlockedRef.current);
+      if (!next || nextXp < next.unlockXp || prevXp >= next.unlockXp) {
+        return;
+      }
+      if (unlockedRef.current.includes(next.id)) {
+        return;
+      }
+      // 아직 pending 만 있고 연출 전이면, 홈에서는 바로 erupt 경로로 이어서 켠다
+      if (pendingExpandZoneRef.current !== next.id) {
+        pendingExpandZoneRef.current = next.id;
+        void updateIslandState((record) => ({ ...record, pendingExpandZoneId: next.id }));
+      }
+      if (homeActiveRef.current) {
+        if (!growthRevealRef.current) {
+          beginIslandExpand(next.id);
+        }
+        return;
+      }
+      inviteHome('island', '섬이 넓어질 준비가 됐어요!', '섬으로 돌아가면 땅이 이어지는 연출을 볼 수 있어요.');
+    },
+    [beginIslandExpand, inviteHome],
+  );
 
   const applyExploreRecord = useCallback((explore: ExploreStateRecord) => {
     setExploreRemaining(explore.remaining);
@@ -248,24 +387,35 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       }
       setXp(creature.xp);
       setOxygen(drops.oxygen);
-      setWater(drops.water);
+      // 물방울은 성장에 쓰지 않는다. 저장값만 읽어 두고 UI에서는 제외.
+      setWater(0);
       setCoins(island.coins);
       setOwned(island.owned);
       setPlaced(island.placed);
       setUnlockedZones(island.unlockedZones);
       unlockedRef.current = island.unlockedZones;
       xpRef.current = creature.xp;
-      waterRef.current = drops.water;
+      waterRef.current = 0;
       lastSeenLevelRef.current = creature.lastSeenGrowthLevel;
       seenZoneUnlocksRef.current = island.seenZoneUnlocks;
+      pendingGrowthLevelRef.current = creature.pendingGrowthLevel;
+      pendingExpandZoneRef.current = island.pendingExpandZoneId;
       applyExploreRecord(explore);
 
-      const stage = getGrowthStage(drops.water, creature.xp);
-      if (stage.level > creature.lastSeenGrowthLevel) {
-        const from = STAGE_BY_LEVEL[creature.lastSeenGrowthLevel] ?? STAGE_BY_LEVEL[1];
-        lastSeenLevelRef.current = stage.level;
-        setGrowthReveal({ from, to: stage });
-        void markGrowthLevelSeen(stage.level);
+      const stage = getGrowthStage(creature.xp);
+      if (creature.pendingGrowthLevel == null && stage.level > creature.lastSeenGrowthLevel) {
+        pendingGrowthLevelRef.current = stage.level;
+        void setPendingGrowthLevel(stage.level);
+      }
+      if (
+        island.pendingExpandZoneId == null &&
+        canExpandIsland(island.unlockedZones, creature.xp)
+      ) {
+        const next = getNextExpandZone(island.unlockedZones);
+        if (next) {
+          pendingExpandZoneRef.current = next.id;
+          void updateIslandState((record) => ({ ...record, pendingExpandZoneId: next.id }));
+        }
       }
     })();
     return () => {
@@ -310,14 +460,17 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
 
   const applyXpGain = useCallback(
     async (amount: number) => {
-      const from = getGrowthStage(waterRef.current, xpRef.current);
+      const prevXp = xpRef.current;
+      const from = getGrowthStage(prevXp);
       const saved = await addCreatureXp(amount);
       setXp(saved.xp);
       xpRef.current = saved.xp;
-      maybeRevealGrowth(from, getGrowthStage(waterRef.current, saved.xp));
+      const to = getGrowthStage(saved.xp);
+      queueGrowthUp(from, to);
+      queueIslandExpand(prevXp, saved.xp);
       return saved.xp;
     },
-    [maybeRevealGrowth],
+    [queueGrowthUp, queueIslandExpand],
   );
 
   const petCreature = useCallback(async () => {
@@ -325,49 +478,74 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   }, [applyXpGain]);
 
   const growCreature = useCallback(async () => {
-    await applyXpGain(GROW_XP);
-    return true;
+    if (growInFlightRef.current || growthRevealRef.current || islandExpandBusyRef.current) {
+      return false;
+    }
+    growInFlightRef.current = true;
+    setGrowInFlight(true);
+    try {
+      await applyXpGain(GROW_XP);
+      return true;
+    } finally {
+      // 성장/확장 연출이 걸렸으면 그쪽 락이 이어 받고, 아니면 연타 락만 푼다
+      growInFlightRef.current = false;
+      setGrowInFlight(false);
+    }
   }, [applyXpGain]);
 
   const expandIsland = useCallback(() => {
-    if (zoneUnlockReveal) {
-      return false;
-    }
     const next = getNextExpandZone(unlockedRef.current);
     if (!next) {
       return false;
     }
-    const level = getGrowthStage(waterRef.current, xpRef.current).level;
-    if (!canExpandIsland(unlockedRef.current, xpRef.current, level)) {
+    if (!canExpandIsland(unlockedRef.current, xpRef.current) && pendingExpandZoneRef.current !== next.id) {
       return false;
     }
-    // 맵 안 화산 연출 후 acknowledgeZoneUnlock에서 실제 해금
-    setZoneUnlockReveal({
-      zoneId: next.id,
-      zoneName: next.name,
-      volcanoBurst: Boolean(next.volcanoBurst),
-    });
-    return true;
-  }, [zoneUnlockReveal]);
+    return beginIslandExpand(next.id);
+  }, [beginIslandExpand]);
 
   const acknowledgeGrowthReveal = useCallback(() => {
+    const current = growthRevealRef.current;
+    growthRevealRef.current = null;
     setGrowthReveal(null);
-  }, []);
+    if (current) {
+      lastSeenLevelRef.current = Math.max(lastSeenLevelRef.current, current.to.level);
+      pendingGrowthLevelRef.current =
+        pendingGrowthLevelRef.current != null && pendingGrowthLevelRef.current <= current.to.level
+          ? null
+          : pendingGrowthLevelRef.current;
+      void markGrowthLevelSeen(current.to.level);
+    }
+    // 성장 다음으로 대기 중인 섬 확장이 있으면 이어서 재생
+    flushHomeReveals();
+  }, [flushHomeReveals]);
 
   const revealExpandedZone = useCallback(() => {
     const next = getNextExpandZone(unlockedRef.current);
     if (!next) {
       return false;
     }
+    const allowed =
+      canExpandIsland(unlockedRef.current, xpRef.current) || pendingExpandZoneRef.current === next.id;
+    if (!allowed) {
+      return false;
+    }
     const nextIds = Array.from(new Set([...unlockedRef.current, next.id]));
     unlockedRef.current = nextIds;
     const seen = Array.from(new Set([...seenZoneUnlocksRef.current, next.id]));
     seenZoneUnlocksRef.current = seen;
+    if (pendingExpandZoneRef.current === next.id) {
+      pendingExpandZoneRef.current = null;
+    }
+    // busy 는 화산 연출 done(releaseIslandExpandAttempt) 때까지 유지한다.
+    // 예전에 reveal 시점에 풀면, 배포 빌드에서 ash.block 오버레이보다 먼저
+    // 키우기가 다시 열려 연타로 XP·확장이 중복된다.
     setUnlockedZones(nextIds);
     void updateIslandState((record) => ({
       ...record,
       seenZoneUnlocks: seen,
       unlockedZones: nextIds,
+      pendingExpandZoneId: pendingExpandZoneRef.current,
     }));
     return true;
   }, []);
@@ -382,15 +560,34 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       unlockedRef.current = nextIds;
       const seen = Array.from(new Set([...seenZoneUnlocksRef.current, zoneId]));
       seenZoneUnlocksRef.current = seen;
+      if (pendingExpandZoneRef.current === zoneId) {
+        pendingExpandZoneRef.current = null;
+      }
       // 해금을 먼저 반영한 뒤 reveal를 닫아 타일이 깜빡이지 않게 함
       setUnlockedZones(nextIds);
+      zoneUnlockRevealRef.current = null;
       void updateIslandState((record) => ({
         ...record,
         seenZoneUnlocks: seen,
         unlockedZones: nextIds,
+        pendingExpandZoneId: pendingExpandZoneRef.current,
       }));
       return null;
     });
+  }, []);
+
+  const setHomeActive = useCallback(
+    (active: boolean) => {
+      homeActiveRef.current = active;
+      if (active) {
+        flushHomeReveals();
+      }
+    },
+    [flushHomeReveals],
+  );
+
+  const dismissHomeInvite = useCallback(() => {
+    setHomeInvite(null);
   }, []);
 
   const resetLocalData = useCallback(async () => {
@@ -407,6 +604,14 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setUnlockedZones(['core']);
     setGrowthReveal(null);
     setZoneUnlockReveal(null);
+    setHomeInvite(null);
+    growthRevealRef.current = null;
+    zoneUnlockRevealRef.current = null;
+    pendingGrowthLevelRef.current = null;
+    pendingExpandZoneRef.current = null;
+    islandExpandBusyRef.current = false;
+    setIslandExpandBusy(false);
+    lastSeenLevelRef.current = 1;
     setPendingPlaceItemId(null);
     setLastPlaced(null);
     setExploreRemaining(EXPLORE_DAILY_LIMIT);
@@ -425,16 +630,20 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     unlockedRef.current = ['core'];
   }, []);
 
-  const startExplore = useCallback(async (input: { gochiId: string }) => {
+  const startExplore = useCallback(async (input: { gochiId: string; durationMs?: number }) => {
     if (!unlockedRef.current.includes(EXPLORE_FOREST_ZONE)) {
       return false;
     }
+    const durationMs =
+      typeof input.durationMs === 'number' && input.durationMs > 0
+        ? input.durationMs
+        : EXPLORE_DURATION_MS;
     // 서버 주소가 없으면 local — 실패해도 로컬 파견은 진행
     await dispatchExploreTrip({
       gochiId: input.gochiId,
-      durationMs: EXPLORE_DURATION_MS,
+      durationMs,
     });
-    const next = await startExploreTrip(input);
+    const next = await startExploreTrip({ gochiId: input.gochiId, durationMs });
     if (!next) {
       return false;
     }
@@ -483,8 +692,11 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       islandStage,
       islandStageMax: ISLAND_STAGE_MAX,
       canExpand,
+      growLocked,
       growthReveal,
       zoneUnlockReveal,
+      homeInvite,
+      homeExpandSignal,
       certificationPhotoUri,
       pendingCertification,
       owned,
@@ -578,6 +790,9 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       revealExpandedZone,
       acknowledgeGrowthReveal,
       acknowledgeZoneUnlock,
+      setHomeActive,
+      dismissHomeInvite,
+      releaseIslandExpandAttempt,
       stageBonggingCertification: (pending) => {
         setPendingCertification(pending);
       },
@@ -595,11 +810,9 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
         setPendingCertification(null);
       },
       syncWalkingDrops: (drops) => {
-        const from = getGrowthStage(waterRef.current, xpRef.current);
         setOxygen(drops.oxygen);
-        setWater(drops.water);
-        waterRef.current = drops.water;
-        maybeRevealGrowth(from, getGrowthStage(drops.water, xpRef.current));
+        setWater(0);
+        waterRef.current = 0;
       },
       resetLocalData,
     }),
@@ -612,8 +825,11 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       growthStage,
       islandStage,
       canExpand,
+      growLocked,
       growthReveal,
       zoneUnlockReveal,
+      homeInvite,
+      homeExpandSignal,
       certificationPhotoUri,
       pendingCertification,
       owned,
@@ -627,8 +843,10 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       revealExpandedZone,
       acknowledgeGrowthReveal,
       acknowledgeZoneUnlock,
+      setHomeActive,
+      dismissHomeInvite,
+      releaseIslandExpandAttempt,
       applyXpGain,
-      maybeRevealGrowth,
       resetLocalData,
       exploreForestUnlocked,
       exploreRemaining,

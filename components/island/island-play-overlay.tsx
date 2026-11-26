@@ -4,13 +4,11 @@ import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { IslandAsh, IslandCameraState } from '@/components/island/island-game';
 import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner, PlaceSuccessToast, PlaceZoneTarget } from '@/components/island/place-mode';
-import { useVolcanoEruption } from '@/components/island/volcano-eruption';
-import { PixelButton, PixelText } from '@/components/pixel/pixel-ui';
+import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
@@ -37,7 +35,6 @@ type IslandPlayOverlayProps = {
 
 export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPlayOverlayProps) {
   const { scale } = useResponsive();
-  const insets = useSafeAreaInsets();
   const windowSize = useWindowDimensions();
   // 게임이 알려 준 화면 크기를 쓴다 (섬 좌표의 기준이 같아야 배치 구역이 맞는다)
   const width = camera.w || windowSize.width;
@@ -58,10 +55,8 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     exploreRemainLabel,
     exploreRemaining,
     exploreDailyLimit,
-    growCreature,
     petCreature,
   } = usePlayState();
-  const { erupt } = useVolcanoEruption();
   const [toastName, setToastName] = useState<string | null>(null);
 
   const placing = Boolean(pendingPlaceItemId);
@@ -225,20 +220,6 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
           zoneId={lastPlaced.zoneId}
         />
       ) : null}
-
-      <View
-        style={{
-          position: 'absolute',
-          left: scale(12),
-          bottom: insets.bottom + scale(12),
-          width: scale(112),
-          gap: scale(8),
-          zIndex: 6,
-          opacity: 1 - ash.bottom,
-        }}>
-        <PixelButton label="키우기" tone="green" onPress={() => void growCreature()} />
-        <PixelButton label="섬 넓히기" onPress={erupt} />
-      </View>
 
       {petOpen ? (
         <View

@@ -19,6 +19,10 @@ export type GameState = {
   petOpen: boolean;
   /** 확대·이동을 막는다 (배치 중, 구역 열리는 중) */
   locked: boolean;
+  /** 웰컴 등: 섬 위 귤새(알)를 숨긴다 */
+  hideCreature?: boolean;
+  /** 온보딩 스토리: 알 주변에 느낌표 강조 이펙트를 켠다 */
+  noticeEgg?: boolean;
   explore: { level: number } | null;
 };
 

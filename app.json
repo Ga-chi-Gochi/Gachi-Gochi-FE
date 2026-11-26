@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gachigochi.app"
+      "bundleIdentifier": "com.gachigochi.app",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "걸음 수와 이동 거리를 읽어 걷기 보상(귤·XP)을 지급하려면 건강 데이터 접근이 필요해요.",
+        "NSHealthUpdateUsageDescription": "가치고치는 건강 앱에 데이터를 쓰지 않아요."
+      }
     },
     "android": {
       "package": "com.gachigochi.app",
@@ -19,14 +23,25 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_DISTANCE"
+      ]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": "production"
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -67,6 +82,25 @@
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "motionUsagePermission": false
+        }
+      ],
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
+        }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "걸음 수와 이동 거리를 읽어 걷기 보상(귤·XP)을 지급하려면 건강 데이터 접근이 필요해요.",
+          "NSHealthUpdateUsageDescription": "가치고치는 건강 앱에 데이터를 쓰지 않아요.",
+          "background": false
         }
       ]
     ],

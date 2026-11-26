@@ -10,6 +10,9 @@ type ResourceHeaderProps = {
   onToggleSound: () => void;
   onProfile: () => void;
   onSettings: () => void;
+  onReplayGuide: () => void;
+  onReplayTutorial: () => void;
+  onHelp: () => void;
   onShop: () => void;
   onCodex: () => void;
 };
@@ -19,6 +22,9 @@ export function ResourceHeader({
   onToggleSound,
   onProfile,
   onSettings,
+  onReplayGuide,
+  onReplayTutorial,
+  onHelp,
 }: ResourceHeaderProps) {
   const { scale } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -45,8 +51,16 @@ export function ResourceHeader({
         side={scale(22)}
         iconSize={40}
         iconGap={8}
-        menuSource={require('@/assets/pixel/btn-square-menu.png')}
-        menuActions={{ onProfile, onSettings, onToggleSound, soundOn, onReset: resetLocalData }}
+        onHelp={onHelp}
+        menuActions={{
+          onProfile,
+          onSettings,
+          onGuide: onReplayGuide,
+          onTutorial: onReplayTutorial,
+          onToggleSound,
+          soundOn,
+          onReset: resetLocalData,
+        }}
       />
     </View>
   );

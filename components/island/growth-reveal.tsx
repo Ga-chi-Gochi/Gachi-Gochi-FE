@@ -29,6 +29,7 @@ export function GrowthReveal({ from, to, onDone }: GrowthRevealProps) {
 
   return (
     <View
+      pointerEvents="auto"
       style={{
         position: 'absolute',
         top: 0,
@@ -39,7 +40,8 @@ export function GrowthReveal({ from, to, onDone }: GrowthRevealProps) {
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: scale(24),
-        zIndex: 40,
+        // 키우기 버튼(z45)·화산재 가드(z80)보다 위에 올려 연타를 막는다
+        zIndex: 90,
       }}>
       <PixelPanel style={{ width: '100%', maxWidth: scale(320), alignItems: 'center', gap: scale(10) }}>
         <Animated.View style={{ transform: [{ scale: pop }] }}>

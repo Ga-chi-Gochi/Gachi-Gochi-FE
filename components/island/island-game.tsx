@@ -12,15 +12,24 @@ import { useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
 import { exploreGochiLevel } from '@/constants/explore';
+import type { IslandZoneId } from '@/constants/island-zones';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const GAME_HTML = require('@/assets/game/island.html');
 
 /** 바다 기본 색. 게임이 뜨기 전에도 같은 색이 보이게 한다. */
-export const ISLAND_SEA = '#1C8481';
+export const ISLAND_SEA = '#2ca6a4';
 
 /** 게임 카메라와 게임 화면 크기(dp). 섬 좌표 → 화면 좌표 = w/2 + (섬 - w/2) × zoom + x */
-export type IslandCameraState = { zoom: number; x: number; y: number; w: number; h: number };
+export type IslandZoneBox = { left: number; top: number; width: number; height: number };
+export type IslandCameraState = {
+  zoom: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  zones?: Partial<Record<IslandZoneId, IslandZoneBox>>;
+};
 /** 화산재가 상단 바(top) · 토스트(mid) · 왼쪽 아래 버튼(bottom) 자리를 덮은 정도(0~1) */
 export type IslandAsh = { top: number; mid: number; bottom: number; block: boolean };
 export const NO_ASH: IslandAsh = { top: 0, mid: 0, bottom: 0, block: false };
@@ -48,7 +57,7 @@ async function loadGame(): Promise<GameSource> {
 
 type GameMessage =
   | { type: 'ready' }
-  | { type: 'camera'; zoom: number; x: number; y: number; w: number; h: number }
+  | ({ type: 'camera' } & IslandCameraState)
   | ({ type: 'ash' } & IslandAsh)
   | { type: 'tapCreature' }
   | { type: 'calm' }
@@ -58,7 +67,6 @@ type GameMessage =
   | { type: 'fps'; frames: number; dur: number; maxGap: number; long: number };
 
 type IslandGameProps = {
-  look: 1 | 2 | 3;
   /** preview: 웰컴용. 파도만 보이고 탭·핀치·화산 입력은 막는다 */
   mode?: 'play' | 'preview';
   petOpen: boolean;
@@ -70,7 +78,6 @@ type IslandGameProps = {
 };
 
 export function IslandGame({
-  look,
   mode = 'play',
   petOpen,
   noticeEgg = false,
@@ -158,11 +165,9 @@ export function IslandGame({
           !preview && play.exploreForestUnlocked && play.isExploring
             ? { level: exploreGochiLevel(play.exploringGochiId) }
             : null,
-        look,
       }),
     [
       factor,
-      look,
       noticeEgg,
       petOpen,
       placed,
@@ -215,7 +220,7 @@ export function IslandGame({
           }
           break;
         case 'camera':
-          h.onCamera({ zoom: msg.zoom, x: msg.x, y: msg.y, w: msg.w, h: msg.h });
+          h.onCamera({ zoom: msg.zoom, x: msg.x, y: msg.y, w: msg.w, h: msg.h, zones: msg.zones });
           break;
         case 'ash':
           h.onAsh({ top: msg.top, mid: msg.mid, bottom: msg.bottom, block: msg.block });

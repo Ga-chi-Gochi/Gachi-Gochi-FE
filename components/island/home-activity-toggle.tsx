@@ -28,7 +28,8 @@ const fabOpen = require('@/assets/pixel/fab-open.png') as ImageSource;
 
 const AREA = 212;
 const FAB_SIZE = 100;
-const LIFT = 20;
+const SIDE = 22;
+const BOTTOM_MIN = 24;
 const FAB_CENTER = AREA - FAB_SIZE / 2;
 const OPEN_MS = 280;
 const CLOSE_MS = 200;
@@ -68,13 +69,13 @@ export function activityTarget(
   scale: (value: number) => number,
   insetBottom: number,
 ): TourTarget {
-  const bottomOffset = Math.max(insetBottom, scale(12)) + scale(LIFT);
+  const bottomOffset = Math.max(insetBottom, scale(BOTTOM_MIN));
   if (name === 'compass') {
-    return { fromRight: scale(12) + scale(FAB_SIZE) / 2, fromBottom: bottomOffset + scale(FAB_SIZE) / 2, size: scale(FAB_SIZE) };
+    return { fromRight: scale(SIDE) + scale(FAB_SIZE) / 2, fromBottom: bottomOffset + scale(FAB_SIZE) / 2, size: scale(FAB_SIZE) };
   }
   const action = ACTIONS.find((entry) => entry.label === name) ?? ACTIONS[0];
   return {
-    fromRight: scale(12) + scale(AREA) - scale(action.left + action.size / 2),
+    fromRight: scale(SIDE) + scale(AREA) - scale(action.left + action.size / 2),
     fromBottom: bottomOffset + scale(AREA) - scale(action.top + action.size / 2),
     size: scale(action.size),
   };
@@ -132,7 +133,7 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
     transform: [{ scale: compassScale.value }],
   }));
 
-  const bottomOffset = Math.max(insets.bottom, scale(12)) + scale(LIFT);
+  const bottomOffset = Math.max(insets.bottom, scale(BOTTOM_MIN));
 
   // 부모(온보딩)가 펼쳐 두라고 하거나, 사용자가 연 상태면 펼친다
   const wantOpen = expanded || open;
@@ -209,7 +210,7 @@ export function HomeActivityToggle({ tourEnabled = true, expanded = false, onPra
         pointerEvents="box-none"
         style={{
           position: 'absolute',
-          right: scale(12),
+          right: scale(SIDE),
           bottom: bottomOffset,
           width: scale(AREA),
           height: scale(AREA),

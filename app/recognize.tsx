@@ -14,7 +14,6 @@ import { usePlayState } from '@/components/play-state';
 import { gachiUi, galmuri } from '@/constants/gachi-ui';
 import { ISLAND_HOME } from '@/constants/routes';
 import { uiBongging } from '@/constants/ui-assets';
-import { useIslandLook } from '@/hooks/use-island-look';
 import { useResponsive } from '@/hooks/use-responsive';
 import { createBonggingSubmission, submitBonggingCertification } from '@/lib/bongging-certification';
 import {
@@ -62,7 +61,6 @@ function toImageUri(uri: string) {
 export default function RecognizeScreen() {
   const { scale, width } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { look } = useIslandLook();
   const { pendingCertification, finishBonggingCertification, cancelBonggingCertification } = usePlayState();
   const pendingImageUri = pendingCertification?.imageUri ?? null;
   const [photoUri, setPhotoUri] = useState(pendingImageUri);
@@ -178,7 +176,7 @@ export default function RecognizeScreen() {
       {islandPhase ? (
         <VolcanoEruptionProvider>
           <View pointerEvents="none" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
-            <IslandBackdrop look={look} />
+            <IslandBackdrop />
           </View>
           <View
             pointerEvents="none"
@@ -289,13 +287,12 @@ export default function RecognizeScreen() {
   );
 }
 
-function IslandBackdrop({ look }: { look: 1 | 2 | 3 }) {
+function IslandBackdrop() {
   const [, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [, setAsh] = useState<IslandAsh>(NO_ASH);
   return (
     <IslandGame
       mode="preview"
-      look={look}
       petOpen={false}
       onTapCreature={() => undefined}
       onCamera={setCamera}

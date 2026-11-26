@@ -1,6 +1,6 @@
 import type { ImageSource } from 'expo-image';
 
-export type MotionSeqId = 'sea-shore' | 'sea-shallow' | 'sea-deep' | 'egg-still' | 'egg-hop' | 'juvenile-idle' | 'juvenile-fly-struggle' | 'juvenile-takeoff' | 'juvenile-land' | 'adult-idle' | 'adult-waddle';
+export type MotionSeqId = 'egg-still' | 'egg-hop' | 'juvenile-idle' | 'juvenile-fly-struggle' | 'juvenile-takeoff' | 'juvenile-land' | 'adult-idle' | 'adult-waddle';
 
 export type MotionSheet = {
   frameCount: number;
@@ -32,42 +32,6 @@ export type MotionStage = {
 };
 
 export const MOTION_SEQ: Record<MotionSeqId, MotionSeq> = {
-  'sea-shore': {
-    frameMs: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110],
-    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 32,
-      cols: 8,
-      rows: 4,
-      body: require('@/assets/motion/sheets/sea-shore.png'),
-    },
-  },
-  'sea-shallow': {
-    frameMs: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110],
-    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 32,
-      cols: 8,
-      rows: 4,
-      body: require('@/assets/motion/sheets/sea-shallow.png'),
-    },
-  },
-  'sea-deep': {
-    frameMs: [110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110, 110],
-    motion: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    lift: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    artSize: 32,
-    sheet: {
-      frameCount: 32,
-      cols: 8,
-      rows: 4,
-      body: require('@/assets/motion/sheets/sea-deep.png'),
-    },
-  },
   'egg-still': {
     frameMs: [100],
     motion: [0],
@@ -197,10 +161,3 @@ export const MOTION_RULES = {
   box: '귤새는 size x size 상자 가운데가 (x, y). 아래쪽(y+size/2)이 큰 순서로 위에 그림',
   stages: MOTION_STAGES,
 };
-
-export const SEA_TINT_SHEETS = {
-  deep: { frameCount: 32, cols: 8, rows: 4, body: require('@/assets/motion/sheets/sea-deep-b-soft.png') },
-  t1: { frameCount: 32, cols: 8, rows: 4, body: require('@/assets/motion/sheets/sea-t1-b-soft.png') },
-  t2: { frameCount: 32, cols: 8, rows: 4, body: require('@/assets/motion/sheets/sea-t2-b-soft.png') },
-  t3: { frameCount: 32, cols: 8, rows: 4, body: require('@/assets/motion/sheets/sea-t3-b-soft.png') },
-} satisfies Record<string, MotionSheet>;

@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-juvenile-land",
+  "label": "어린 귤새 — 착지 (날기 뒤, 1회)",
+  "playback": "once",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 6,
+  "totalMs": 630,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [100, 60, 100, 110, 100, 160],
+  "motionPx": [3, 2, 2, 1, 0, 0],
+  "liftPx": [-4, -3, -2, 0, 0, 0]
+}

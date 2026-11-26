@@ -4,7 +4,7 @@ import { Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PixelButton, PixelText } from '@/components/pixel/pixel-ui';
-import { StoreProductImage } from '@/components/store-product-image';
+import { StorePriceTag, StoreProductImage } from '@/components/store-product-image';
 import { pixel } from '@/constants/pixel-theme';
 import type { StoreProduct } from '@/constants/store-items';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -47,7 +47,7 @@ export function StoreDetailSheet({
               paddingBottom: insets.bottom + scale(16),
               gap: scale(10),
             }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="닫기"
@@ -58,23 +58,33 @@ export function StoreDetailSheet({
               </Pressable>
             </View>
 
-            <View style={{ alignItems: 'center', gap: scale(8) }}>
-              <StoreProductImage product={shown} size={scale(120)} />
-              <PixelText size={14} color={pixel.tangerine}>
-                {shown.priceLabel}
-              </PixelText>
-              <PixelText size={20}>{shown.name}</PixelText>
-              <PixelText size={13} color={pixel.muted} center>
-                {shown.description}
-              </PixelText>
-            </View>
+            <View style={{ flexDirection: 'row', gap: scale(14) }}>
+              <View style={{ alignItems: 'center', gap: scale(10) }}>
+                <StoreProductImage product={shown} size={scale(132)} />
+                <StorePriceTag product={shown} size={14} />
+              </View>
 
-            <View style={{ marginTop: scale(6) }}>
-              <PixelButton
-                label={owned ? '보유 중' : '구매하기'}
-                disabled={owned}
-                onPress={() => onPurchase(shown)}
-              />
+              <View style={{ flex: 1, gap: scale(10), justifyContent: 'space-between' }}>
+                <View
+                  style={{
+                    flex: 1,
+                    gap: scale(6),
+                    padding: scale(10),
+                    borderWidth: scale(2),
+                    borderColor: pixel.ink,
+                    backgroundColor: pixel.white,
+                  }}>
+                  <PixelText size={16}>{shown.name}</PixelText>
+                  <PixelText size={12} color={pixel.muted} weight="500">
+                    {shown.description}
+                  </PixelText>
+                </View>
+                <PixelButton
+                  label={owned ? '보유 중' : '구매하기'}
+                  disabled={owned}
+                  onPress={() => onPurchase(shown)}
+                />
+              </View>
             </View>
           </View>
         ) : null}

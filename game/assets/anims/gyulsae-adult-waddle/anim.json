@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-adult-waddle",
+  "label": "성체 귤새 — 뒤뚱 걷기 (날개를 팔처럼)",
+  "playback": "loop",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 8,
+  "totalMs": 880,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [110, 110, 110, 110, 110, 110, 110, 110],
+  "motionPx": [1, 1, 1, 1, 1, 1, 1, 1],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0]
+}

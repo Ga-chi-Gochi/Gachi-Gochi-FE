@@ -1,0 +1,14 @@
+{
+  "id": "gyulsae-adult-idle",
+  "label": "성체 귤새 — 가만히 (숨쉬기·깜빡임)",
+  "playback": "loop",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 17,
+  "totalMs": 3720,
+  "sheet": "sheet.png",
+  "shadow": "shadow.png",
+  "durationsMs": [480, 130, 450, 130, 480, 130, 280, 50, 100, 70, 120, 130, 430, 130, 320, 160, 130],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+}

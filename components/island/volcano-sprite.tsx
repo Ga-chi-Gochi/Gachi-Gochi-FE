@@ -2,7 +2,7 @@ import { AnimatedSprite, type Frame } from '@darrench3140/react-native-sprite-sh
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
-import { CELL } from '@/components/island/beach-tiles';
+import { CELL } from '@/components/island/volcano-anchor';
 
 const sheet = require('@/assets/images/beach/volcano-erupt-sheet.png');
 

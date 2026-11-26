@@ -3,8 +3,6 @@ import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'rea
 import { ScrollView, View } from 'react-native';
 
 import type { SpotlightHole } from '@/components/guide/guide-spotlight';
-
-import { VISIBLE_ISLAND_LOOKS } from '@/components/island/beach-home';
 import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
 import { IslandPlayOverlay } from '@/components/island/island-play-overlay';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
@@ -23,7 +21,6 @@ import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialHomeCards } from '@/components/tutorial/tutorial-home-cards';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { pixel } from '@/constants/pixel-theme';
-import { useIslandLook } from '@/hooks/use-island-look';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   readExploreIntroSeen,
@@ -76,7 +73,6 @@ export default function IslandHomeScreen() {
   const [soundOn, setSoundOn] = useState(true);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [petOpen, setPetOpen] = useState(false);
-  const { look: islandVersion, setLook: setIslandVersion } = useIslandLook();
   const [camera, setCamera] = useState<IslandCameraState>({ zoom: 1, x: 0, y: 0, w: 0, h: 0 });
   const [ash, setAsh] = useState<IslandAsh>(NO_ASH);
   // 섬 확장 화산재·구름이 걷힌 뒤에만 탐험 해금 안내를 연다
@@ -251,7 +247,6 @@ export default function IslandHomeScreen() {
     <View style={{ flex: 1 }}>
       {/* 섬 그림은 게임(웹뷰)이 그린다. 확대·이동·귤새 탭도 게임이 받는다. */}
       <IslandGame
-        look={VISIBLE_ISLAND_LOOKS.includes(islandVersion) ? islandVersion : 1}
         petOpen={petOpen}
         noticeEgg={eggNotice}
         onTapCreature={openPet}
@@ -285,8 +280,6 @@ export default function IslandHomeScreen() {
           onHelp={() => setHelpOpen(true)}
           onShop={() => router.push('/(tabs)/shop' as Href)}
           onCodex={() => router.push('/collection' as Href)}
-          islandVersion={islandVersion}
-          onPickIslandVersion={setIslandVersion}
         />
 
         {hasExploreReward && !exploreEggReveal ? (

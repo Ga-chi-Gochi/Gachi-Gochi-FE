@@ -25,7 +25,7 @@ export function ProgressHomeInvite() {
   const pathname = usePathname();
   const { homeInvite, dismissHomeInvite } = usePlayState();
   const onHome = isHomePath(pathname);
-  const open = Boolean(homeInvite) && !onHome;
+  const open = Boolean(homeInvite) && !onHome && pathname !== '/walking';
 
   if (!homeInvite) {
     return null;

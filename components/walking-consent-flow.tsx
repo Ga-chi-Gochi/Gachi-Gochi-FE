@@ -4,8 +4,10 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { FigButton } from '@/components/fig-button';
 import { TopBar } from '@/components/top-bar';
-import { PopupButton, PopupShell } from '@/components/walking-popup';
+import { PixelPopupFrame } from '@/components/pixel-popup';
+import { PopupButton, PopupShell, PopupSlot } from '@/components/walking-popup';
 import { palette } from '@/constants/palette';
+import { POPUP_COLORS } from '@/constants/pixel-popup';
 import { useResponsive } from '@/hooks/use-responsive';
 
 // consent: 개인정보 수집 동의 화면 / warning: 동의 안 함 경고 팝업 / leaving: 떠날지 확인 팝업 / goodbye: 작별 화면
@@ -54,16 +56,16 @@ export function WalkingConsentFlow({ onAgree, onLeave, devTools }: WalkingConsen
           건강 앱 접근이 허용되지 않았어요. 걸음으로 가치고치를 키우려면 아래 내용에 동의해 주세요.
         </Text>
         {/* [TODO: 기획 확인] 수집 항목·이용 목적·보관 기간 등 실제 동의 문구로 바꾼다. 지금 문구는 임시다. */}
-        <View style={{ backgroundColor: palette.white, borderRadius: scale(24), padding: scale(18), gap: scale(10) }}>
+        <PixelPopupFrame>
           <ConsentLine label="수집 항목" value="오늘 걸음 수, 걸은 거리" />
           <ConsentLine label="이용 목적" value="걷기 보상 지급" />
-        </View>
+        </PixelPopupFrame>
         {/* [TODO: 기획 확인] 폰 설정에서 건강 권한을 다시 켜야 하는 경우의 '설정에서 다시 허용하는 방법' 안내 문구 자리. */}
         {/* 기기(iOS/Android)별 실제 경로와, 설정 화면으로 바로 보내는 버튼을 둘지 확인이 필요하다. 지금 문구는 임시다. */}
-        <View style={{ backgroundColor: palette.seaSoft, borderRadius: scale(24), padding: scale(18), gap: scale(6) }}>
-          <Text style={{ color: palette.ink, fontSize: scale(14), fontWeight: '800' }}>설정에서 다시 허용하는 방법</Text>
-          <Text style={{ color: palette.body, fontSize: scale(13), lineHeight: scale(19) }}>휴대폰 설정에서 건강 앱 접근을 다시 켤 수 있어요. 자세한 방법은 곧 안내할게요.</Text>
-        </View>
+        <PixelPopupFrame>
+          <Text style={{ color: POPUP_COLORS.text, fontSize: scale(14), fontWeight: '800' }}>설정에서 다시 허용하는 방법</Text>
+          <Text style={{ color: POPUP_COLORS.text, fontSize: scale(13), lineHeight: scale(19) }}>휴대폰 설정에서 건강 앱 접근을 다시 켤 수 있어요. 자세한 방법은 곧 안내할게요.</Text>
+        </PixelPopupFrame>
         {devTools}
       </ScrollView>
       <View style={{ flexDirection: 'row', gap: scale(10), paddingHorizontal: scale(24), marginBottom: scale(8) }}>
@@ -71,16 +73,23 @@ export function WalkingConsentFlow({ onAgree, onLeave, devTools }: WalkingConsen
         <FigButton label="동의" onPress={onAgree} />
       </View>
       {stage === 'warning' ? (
-        <PopupShell icon="priority-high" title="잠깐만요!" message="동의하지 않으면 다마고치를 키울 수 없어요!" onBack={() => setStage('consent')}>
+        <PopupShell title="잠깐만요!" message="동의하지 않으면 다마고치를 키울 수 없어요!" onBack={() => setStage('consent')}>
+          <PopupButton label="그래도 안 할래요" tone="beige" onPress={() => setStage('leaving')} />
           <PopupButton label="다시 동의하기" onPress={() => setStage('consent')} />
-          <PopupButton label="그래도 안 할래요" tone="white" onPress={() => setStage('leaving')} />
         </PopupShell>
       ) : stage === 'leaving' ? (
-        <PopupShell icon="logout" title="정말로 떠나실 건가요?" message="가치고치가 기다리고 있어요." onBack={() => setStage('warning')}>
-          {/* [TODO: 그림] 가치고치의 귀여운 모습이 들어갈 자리. 지금은 빈 칸만 잡아 둔다. */}
-          <View style={{ height: scale(120), borderRadius: scale(16), backgroundColor: palette.mist }} />
+        <PopupShell
+          title="정말로 떠나실 건가요?"
+          message="가치고치가 기다리고 있어요."
+          onBack={() => setStage('warning')}
+          media={
+            <>
+              {/* [TODO: 그림] 가치고치의 귀여운 모습이 들어갈 자리. 지금은 빈 칸만 잡아 둔다. */}
+              <PopupSlot height={120} />
+            </>
+          }>
+          <PopupButton label="네" tone="beige" onPress={() => setStage('goodbye')} />
           <PopupButton label="아니요" onPress={() => setStage('consent')} />
-          <PopupButton label="네" tone="white" onPress={() => setStage('goodbye')} />
         </PopupShell>
       ) : null}
     </>
@@ -92,8 +101,8 @@ function ConsentLine({ label, value }: { label: string; value: string }) {
 
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: scale(12) }}>
-      <Text style={{ color: palette.muted, fontSize: scale(14), fontWeight: '700' }}>{label}</Text>
-      <Text style={{ flex: 1, color: palette.ink, fontSize: scale(14), fontWeight: '700', textAlign: 'right' }}>{value}</Text>
+      <Text style={{ color: POPUP_COLORS.fillDark, fontSize: scale(14), fontWeight: '700' }}>{label}</Text>
+      <Text style={{ flex: 1, color: POPUP_COLORS.text, fontSize: scale(14), fontWeight: '700', textAlign: 'right' }}>{value}</Text>
     </View>
   );
 }

@@ -12,10 +12,19 @@ import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
-import { ISLAND_ZONES, ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
+import {
+  exploreForestFrameFromCamera,
+  islandWorldBoxToScreen,
+} from '@/components/island/explore-button-target';
+import { ISLAND_STAGE_ART, toIslandStage } from '@/constants/island-stages';
+import {
+  getIslandStage,
+  ISLAND_ZONES,
+  ISLAND_ZONE_SHARE,
+  type IslandZoneId,
+} from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
 import { EXPLORE_ROUTE } from '@/constants/routes';
-import { EXPLORE_WEST_INSET } from '@/constants/island-zones';
 import { useResponsive } from '@/hooks/use-responsive';
 import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
 
@@ -45,10 +54,15 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     acknowledgeZoneUnlock,
     exploreForestUnlocked,
     isExploring,
+    isExploreEntering,
     hasExploreReward,
     exploreRemainLabel,
+    exploreProgress,
     petCreature,
   } = usePlayState();
+  /** 숲 진입 후 타이머가 돌 때만 바·초 표시 */
+  const showExploreTimer = isExploring && !isExploreEntering;
+  const exploreRemainRatio = Math.min(1, Math.max(0, 1 - exploreProgress));
   const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } =
     useTutorial();
   const [toastName, setToastName] = useState<string | null>(null);
@@ -91,29 +105,19 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
   /** 월드(아트) 구역 → 화면 좌표. camera.zones 는 Phaser zoneFrame 값 */
   const toScreen = (id: IslandZoneId) => {
     const share = ISLAND_ZONE_SHARE[id];
-    const zoom = camera.zoom || 1;
+    const art = ISLAND_STAGE_ART[toIslandStage(getIslandStage(unlockedZones))];
     const box = camera.zones?.[id] ?? {
-      left: share.x * width,
-      top: share.y * height,
-      width: share.w * width,
-      height: share.h * height,
+      left: share.x * art.width,
+      top: share.y * art.height,
+      width: share.w * art.width,
+      height: share.h * art.height,
     };
-    return {
-      left: box.left * zoom + camera.x,
-      top: box.top * zoom + camera.y,
-      width: box.width * zoom,
-      height: box.height * zoom,
-    };
+    // w/2 + (world − w/2)×zoom + x  (world×zoom + x 는 zoom≠1 이면 바다 쪽으로 빗나감)
+    return islandWorldBoxToScreen({ ...camera, w: width, h: height }, box);
   };
 
-  /** 탐험 터치·타이머: west 구역에서 바다 쪽을 빼고 육지만 */
-  const westFull = toScreen('west');
-  const westFrame = {
-    left: westFull.left + westFull.width * EXPLORE_WEST_INSET.left,
-    top: westFull.top + westFull.height * EXPLORE_WEST_INSET.top,
-    width: westFull.width * EXPLORE_WEST_INSET.width,
-    height: westFull.height * EXPLORE_WEST_INSET.height,
-  };
+  /** 탐험 터치·타이머: 섬 위 풀숲(forest.png) — west 배치 구역과 별개 */
+  const westFrame = exploreForestFrameFromCamera(camera, width, height);
 
   return (
     <View
@@ -153,7 +157,11 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
+            hasExploreReward
+              ? '탐험 보상 받기'
+              : isExploring
+                ? '탐험 진행 중'
+                : '서쪽 숲 모험 보내기'
           }
           onPress={() => {
             if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
@@ -165,6 +173,7 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
               } else {
                 skipTutorial();
               }
+              return;
             } else if (
               tutorialScope === 'explore' &&
               (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
@@ -172,6 +181,10 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
               if (tutorialStep === 'explore-reward') {
                 goTutorial('explore-reward-button');
               }
+            }
+            // 탐험 중에는 현황 페이지를 열지 않는다 (바·초만 표시)
+            if (isExploring && !hasExploreReward) {
+              return;
             }
             router.push(EXPLORE_ROUTE);
           }}
@@ -185,22 +198,32 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
             justifyContent: 'center',
             opacity: 1 - Math.max(ash.mid, ash.bottom),
           }}>
-          {isExploring ? (
+          {showExploreTimer ? (
             <View
               pointerEvents="none"
               style={{
-                paddingHorizontal: scale(8),
-                paddingVertical: scale(6),
-                borderWidth: scale(2),
-                borderColor: pixel.ink,
-                backgroundColor: 'rgba(255,248,230,0.92)',
+                width: Math.min(westFrame.width * 0.72, scale(120)),
                 alignItems: 'center',
-                gap: scale(2),
+                gap: scale(4),
               }}>
-              <PixelText size={10} color={pixel.ink} center>
-                탐험중
-              </PixelText>
-              <PixelText size={12} color={pixel.ink} center>
+              <View
+                style={{
+                  width: '100%',
+                  height: scale(10),
+                  borderWidth: scale(2),
+                  borderColor: pixel.ink,
+                  backgroundColor: 'rgba(255,253,248,0.55)',
+                  overflow: 'hidden',
+                }}>
+                <View
+                  style={{
+                    width: `${Math.round(exploreRemainRatio * 100)}%`,
+                    height: '100%',
+                    backgroundColor: pixel.leaf,
+                  }}
+                />
+              </View>
+              <PixelText size={11} color={pixel.ink} center>
                 {exploreRemainLabel}
               </PixelText>
             </View>

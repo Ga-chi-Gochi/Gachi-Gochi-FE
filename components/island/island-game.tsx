@@ -11,14 +11,14 @@ import { reportGameFrames } from '@/components/dev/fps-meter';
 import { useVolcanoEruption } from '@/components/island/volcano-eruption';
 import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
-import { exploreGochiLevel } from '@/constants/explore';
+import { exploreForestCharacter, exploreGochiLevel } from '@/constants/explore';
 import type { IslandZoneId } from '@/constants/island-zones';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const GAME_HTML = require('@/assets/game/island.html');
 
 /** game:build 후 웹뷰가 옛 HTML 을 붙들지 않게 올린다 */
-const ISLAND_GAME_BUILD = 'forest-9';
+const ISLAND_GAME_BUILD = 'forest-explore-5';
 
 /** 바다 기본 색. 게임이 뜨기 전에도 같은 색이 보이게 한다. */
 export const ISLAND_SEA = '#2ca6a4';
@@ -68,7 +68,8 @@ type GameMessage =
   | { type: 'fog' }
   | { type: 'reveal' }
   | { type: 'done' }
-  | { type: 'fps'; frames: number; dur: number; maxGap: number; long: number };
+  | { type: 'fps'; frames: number; dur: number; maxGap: number; long: number }
+  | { type: 'explore-entered' };
 
 type IslandGameProps = {
   /** preview: 웰컴용. 파도만 보이고 탭·핀치·화산 입력은 막는다 */
@@ -111,6 +112,7 @@ export function IslandGame({
     phase,
     reveal: play.revealExpandedZone,
     releaseExpand: play.releaseIslandExpandAttempt,
+    markExploreEntered: play.markExploreEntered,
   });
 
   useEffect(() => {
@@ -124,8 +126,20 @@ export function IslandGame({
       phase,
       reveal: play.revealExpandedZone,
       releaseExpand: play.releaseIslandExpandAttempt,
+      markExploreEntered: play.markExploreEntered,
     };
-  }, [calm, finish, onAsh, onCamera, onTapCreature, openFog, phase, play.releaseIslandExpandAttempt, play.revealExpandedZone]);
+  }, [
+    calm,
+    finish,
+    onAsh,
+    onCamera,
+    onTapCreature,
+    openFog,
+    phase,
+    play.markExploreEntered,
+    play.releaseIslandExpandAttempt,
+    play.revealExpandedZone,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -165,9 +179,13 @@ export function IslandGame({
         // 웰컴(preview)·모험 중에는 섬 고치를 숨긴다 (끝나면 다시 표시)
         hideCreature: preview || play.isExploring,
         noticeEgg: !preview && noticeEgg,
+        // 탐험 중에만 선택한 고치 애니. 끝나면 null → 게임에서 즉시 숨김
         explore:
           !preview && play.exploreForestUnlocked && play.isExploring
-            ? { level: exploreGochiLevel(play.exploringGochiId) }
+            ? {
+                level: exploreGochiLevel(play.exploringGochiId),
+                character: exploreForestCharacter(play.exploringGochiId),
+              }
             : null,
       }),
     [
@@ -248,6 +266,9 @@ export function IslandGame({
           break;
         case 'fps':
           reportGameFrames(msg);
+          break;
+        case 'explore-entered':
+          void h.markExploreEntered();
           break;
         default:
           break;

@@ -70,3 +70,6 @@ app-example
 /ios
 /android
 game/dist/
+
+# local island reference (do not push)
+gachi-island/

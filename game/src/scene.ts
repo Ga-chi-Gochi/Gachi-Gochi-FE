@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 
 import { toIslandStage, type IslandStageId } from '@/constants/island-stages';
-import { EXPLORE_WEST_INSET, ISLAND_ZONES, getIslandStage, type IslandZoneId } from '@/constants/island-zones';
+import { ISLAND_ZONES, getIslandStage, type IslandZoneId } from '@/constants/island-zones';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
@@ -37,12 +37,20 @@ import {
   magmaColor,
   shoreCells,
   spills,
-  STAGE3_FOREST,
+  FOREST_FRAME,
   stageArt,
   surgeFill,
   volcanoFrame,
   zoneFrame,
 } from './shape';
+import { ForestExplore } from './forestExplore';
+import {
+  FOREST_EXPLORE_CANVAS,
+  createForestExplore,
+  forestExploreCharacter,
+  forestExploreOrigin,
+  forestUrl,
+} from './forestExploreBundle';
 import {
   MAX_TICK_MS,
   advance,
@@ -70,8 +78,6 @@ const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: tr
   string,
   string
 >;
-
-const forestUrls = import.meta.glob('../assets/forest/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
@@ -112,12 +118,6 @@ const DEFAULT_STATE: GameState = {
   explore: null,
 };
 
-function creatureKey(level: number) {
-  if (level <= 1) return 'gyulsae-egg';
-  if (level <= 3) return 'gyulsae-young';
-  return 'gyulsae-adult';
-}
-
 const hexCache = new Map<string, number>();
 /** '#RRGGBB' → 숫자. 용암처럼 매 프레임 쓰는 색은 한 번만 바꾼다 */
 const hex = (color: string) => {
@@ -130,8 +130,6 @@ const hex = (color: string) => {
 };
 /** RN Animated.timing 기본 이징 (Easing.inOut(Easing.ease)) */
 const easeInOut = (t: number) => Phaser.Math.Easing.Cubic.InOut(t);
-/** Reanimated withTiming 기본 이징 (Easing.inOut(Easing.quad)) */
-const quadInOut = (t: number) => Phaser.Math.Easing.Quadratic.InOut(t);
 
 export class IslandScene extends Phaser.Scene {
   private dpr = 1;
@@ -241,10 +239,7 @@ export class IslandScene extends Phaser.Scene {
       const m = /volcano-cell-(\d)-(\d)\.png$/.exec(path);
       if (m) this.load.image(`volcano-${m[1]}-${m[2]}`, url);
     }
-    for (const [path, url] of Object.entries(forestUrls)) {
-      const m = /forest\/([\w-]+)\.png$/.exec(path);
-      if (m) this.load.image(`forest-${m[1]}`, url);
-    }
+    this.load.image('forest-bundle', forestUrl);
     for (const [path, url] of Object.entries(shopUrls)) {
       const m = /shop\/([\w-]+)\.png$/.exec(path);
       if (m) this.load.image(`shop-${m[1]}`, url);
@@ -262,9 +257,8 @@ export class IslandScene extends Phaser.Scene {
         this.textures.get(`volcano-${r}-${c}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
       }
     }
-    // 숲 도트는 잔디와 색이 비슷해서 LINEAR 로 줄이면 녹아 안 보인다.
-    for (const key of this.textures.getTextureKeys()) {
-      if (key.startsWith('forest-')) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    if (this.textures.exists('forest-bundle')) {
+      this.textures.get('forest-bundle').setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
     this.makeDotTextures();
 
@@ -613,16 +607,14 @@ export class IslandScene extends Phaser.Scene {
 
   private placeForest() {
     this.forest.removeAll(true);
-    this.forest.setVisible(this.stage === 3);
+    // 탐험 중엔 ForestExplore 판이 숲을 그리므로 정적 숲은 숨긴다
+    this.forest.setVisible(this.stage === 3 && !this.state.explore);
     if (this.stage !== 3) return;
-    // 칸(w×h)에 맞춰 딱 붙임 — 이름 붙여 두면 나중에 흔들림 애니 타깃으로 쓰기 쉽다
-    STAGE3_FOREST.forEach((tree, i) => {
-      const key = `forest-${tree.key}`;
-      if (!this.textures.exists(key)) return;
-      const img = this.add.image(tree.x, tree.y, key).setOrigin(0).setDisplaySize(tree.w, tree.h);
-      img.setName(`forest-tree-${i}`);
-      this.forest.add(img);
-    });
+    if (!this.textures.exists('forest-bundle')) return;
+    const f = FOREST_FRAME;
+    this.forest.add(
+      this.add.image(f.x, f.y, 'forest-bundle').setOrigin(0).setDisplaySize(f.w, f.h).setName('forest-bundle'),
+    );
   }
 
   private placeVolcano() {
@@ -1076,91 +1068,97 @@ export class IslandScene extends Phaser.Scene {
     });
   }
 
-  // ------------------------------------------------------------------ 탐험 중 미니 수색 (ExploreWaitingAnim map)
-  private exploreParts: null | {
-    treeL: Phaser.GameObjects.Container;
-    treeR: Phaser.GameObjects.Container;
-    leaf: Phaser.GameObjects.Arc;
-    sand: Phaser.GameObjects.Arc;
-    gochi: Phaser.GameObjects.Image;
-    f: number;
-    level: number;
-    boxH: number;
-  } = null;
+  // ------------------------------------------------------------------ 숲 탐험 (gachi-island forest-explore)
+  private fe: ForestExplore | null = null;
+  private feChar: string | null = null;
+  private feLoading = false;
+  private feWantStop = false;
+  private readonly feTexKey = 'forest-explore-view';
+
+  private stopForestExplore() {
+    this.fe = null;
+    this.feChar = null;
+    this.feWantStop = false;
+    this.explore.removeAll(true);
+    this.explore.setVisible(false);
+    // 마지막 장의 고치가 텍스처에 남지 않게 지운다
+    if (this.textures.exists(this.feTexKey)) {
+      const tex = this.textures.get(this.feTexKey) as Phaser.Textures.CanvasTexture;
+      const ctx = tex.getContext();
+      if (ctx) {
+        ctx.clearRect(0, 0, FOREST_EXPLORE_CANVAS.w, FOREST_EXPLORE_CANVAS.h);
+        tex.refresh();
+      }
+    }
+    if (this.stage === 3) this.forest.setVisible(true);
+  }
+
+  private ensureFeTexture() {
+    if (this.textures.exists(this.feTexKey)) return;
+    const { w, h } = FOREST_EXPLORE_CANVAS;
+    const tex = this.textures.createCanvas(this.feTexKey, w, h);
+    tex?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  }
+
+  private layoutForestExploreView() {
+    this.ensureFeTexture();
+    const origin = forestExploreOrigin();
+    this.explore.removeAll(true);
+    this.explore.add(this.add.image(0, 0, this.feTexKey).setOrigin(0));
+    this.explore.setPosition(origin.x, origin.y).setScale(1).setVisible(true);
+  }
 
   private updateExplore() {
     const s = this.state;
-    const show = Boolean(s.explore) && !s.placing && !s.petOpen;
-    const f = s.factor;
-    const level = s.explore?.level ?? 1;
+    const show = Boolean(s.explore) && !s.placing && !s.petOpen && this.stage === 3;
     if (!show) {
-      this.explore.setVisible(false);
+      // 탐험 종료·보상 대기: 보낸 고치 애니는 바로 걷어 정적 숲만 남긴다
+      if (this.fe || this.explore.visible) this.stopForestExplore();
       return;
     }
-    // 서쪽 구역 육지 중앙 (EXPLORE_WEST_INSET 과 맞춤)
-    const west = zoneFrame(this.stage, 'west');
-    const boxW = 72 * f;
-    const boxH = 64 * f;
-    const landLeft = west.left + west.width * EXPLORE_WEST_INSET.left;
-    const landTop = west.top + west.height * EXPLORE_WEST_INSET.top;
-    const landW = west.width * EXPLORE_WEST_INSET.width;
-    const landH = west.height * EXPLORE_WEST_INSET.height;
-    this.explore
-      .setPosition(landLeft + landW / 2 - boxW / 2, landTop + landH / 2 - boxH / 2)
-      .setScale(1 / this.baseDp())
-      .setVisible(true);
-    const parts = this.exploreParts;
-    if (parts && parts.f === f && parts.level === level) return;
-    this.explore.removeAll(true);
-    const tree = (size: number) => {
-      const spr = this.dotSprite('tree', size);
-      const c = this.add.container(0, 0);
-      if (spr) {
-        spr.img.setPosition(-spr.w / 2, -spr.h / 2);
-        c.add(spr.img);
-        c.setSize(spr.w, spr.h);
-      }
-      return { c, w: spr?.w ?? 0, h: spr?.h ?? 0 };
-    };
-    const tl = tree(22 * f);
-    tl.c.setPosition(tl.w / 2, 4 * f + tl.h / 2);
-    const tr = tree(24 * f);
-    tr.c.setPosition(boxW - tr.w / 2, 2 * f + tr.h / 2);
-    const leaf = this.add.circle(22 * f + 2.5 * f, 8 * f + 2.5 * f, 2.5 * f, hex(pixel.leaf));
-    const sand = this.add.circle(30 * f + 2 * f, 12 * f + 2 * f, 2 * f, hex(pixel.sand));
-    const size = 16 * f;
-    const gochi = this.add.image(0, boxH - 2 * f - size / 2, creatureKey(level)).setDisplaySize(size, size);
-    this.explore.add([tl.c, tr.c, leaf, sand, gochi]);
-    this.exploreParts = { treeL: tl.c, treeR: tr.c, leaf, sand, gochi, f, level, boxH };
+    this.feWantStop = false;
+    this.forest.setVisible(false);
+    const level = s.explore?.level ?? 2;
+    const char = s.explore?.character ?? forestExploreCharacter(level);
+    if (this.fe && this.feChar === char) {
+      if (!this.explore.visible) this.layoutForestExploreView();
+      return;
+    }
+    if (this.feLoading) return;
+    // 캐릭터가 바뀌면 이전 애니는 버리고 선택한 고치로 다시 시작
+    if (this.fe) this.stopForestExplore();
+    this.feLoading = true;
+    void createForestExplore(char)
+      .then((fx) => {
+        if (!this.state.explore) {
+          // 로딩 중 탐험이 끝나면 고치를 올리지 않는다
+          return;
+        }
+        const want = this.state.explore.character ?? forestExploreCharacter(this.state.explore.level ?? 2);
+        if (want !== char) return;
+        this.fe = fx;
+        this.feChar = char;
+        // 숲에 들어가는 intro가 끝나면 RN 타이머를 연다
+        this.fe.onPhase = (phase) => {
+          if (phase === 'loop') send({ type: 'explore-entered' });
+        };
+        this.layoutForestExploreView();
+      })
+      .finally(() => {
+        this.feLoading = false;
+      });
   }
 
-  private drawExplore(now: number) {
-    const p = this.exploreParts;
-    if (!p || !this.explore.visible) return;
-    const f = p.f;
-    const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * u);
-    // 고치가 수풀 사이를 오간다 (1100ms씩)
-    const leg = Math.floor(now / 1100) % 2;
-    const u = ease((now % 1100) / 1100);
-    const left = 8 * f;
-    const right = 36 * f;
-    const x = leg === 0 ? left + (right - left) * u : right - (right - left) * u;
-    const half = (now % 320) / 160;
-    const bob = -2.5 * quadInOut(half < 1 ? half : 2 - half);
-    p.gochi.setPosition(x + (8 * f), p.boxH - 2 * f - 8 * f + bob);
-    p.gochi.setFlipX(Math.floor(now / 1100) % 2 === 1);
-    // 나무 흔들림
-    p.treeL.setAngle(-1 + 5 * Math.sin((2 * Math.PI * now) / 1040));
-    p.treeR.setAngle(5 * Math.sin((2 * Math.PI * now) / 960 + Math.PI / 2));
-    // 잎 튀기 (240ms 올라가고, 400ms 머물고, 280ms 내려오고, 500ms 쉼)
-    const t = now % 1420;
-    const v = t < 240 ? 1 - (1 - t / 240) ** 2 : t < 640 ? 1 : t < 920 ? 1 - quadInOut((t - 640) / 280) : 0;
-    for (const dot of [p.leaf, p.sand]) {
-      dot.setAlpha(v * 0.85);
-      dot.setScale(0.7 + v * 0.4);
-    }
-    p.leaf.y = 8 * f + 2.5 * f - v * 6;
-    p.sand.y = 12 * f + 2 * f - v * 6;
+  private drawExplore(_now: number, delta: number) {
+    if (!this.fe || !this.explore.visible) return;
+    this.fe.update(delta);
+    const tex = this.textures.get(this.feTexKey) as Phaser.Textures.CanvasTexture;
+    const ctx = tex.getContext();
+    if (!ctx) return;
+    ctx.clearRect(0, 0, FOREST_EXPLORE_CANVAS.w, FOREST_EXPLORE_CANVAS.h);
+    this.fe.draw(ctx);
+    tex.refresh();
+    if (this.fe.phase === 'done') this.stopForestExplore();
   }
 
   // ------------------------------------------------------------------ 프레임
@@ -1171,7 +1169,7 @@ export class IslandScene extends Phaser.Scene {
     if (this.seaClock.tick(delta)) {
       this.stepWater();
     }
-    this.drawExplore(now);
+    this.drawExplore(now, delta);
     this.flushCamera();
 
     const fps = this.fps;

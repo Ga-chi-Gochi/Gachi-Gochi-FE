@@ -3,9 +3,31 @@ import { ISLAND_LAST_STAGE } from '@/constants/island-stages';
 
 export type IslandZoneId = 'core' | 'east' | 'west' | 'north' | 'south';
 
+/** stage3 섬 아트 크기 (game island-stages stage3 과 동일) */
+export const ISLAND_STAGE3_ART = {
+  width: 480,
+  height: 512,
+  cols: 15,
+  rows: 16,
+} as const;
+
+/**
+ * stage3 북서 풀숲 — gachi-island forest.png (192×128).
+ * Phaser 정적 숲·탐험 애니·RN 터치·튜토리얼이 같은 박스를 쓴다.
+ * (west 구역과 별개 — 배치 구역 west 는 서쪽 육지, 탐험은 이 숲 박스)
+ */
+export const ISLAND_FOREST_ART = { x: 28, y: 36, w: 192, h: 128 } as const;
+
+export const ISLAND_FOREST_SHARE = {
+  x: ISLAND_FOREST_ART.x / ISLAND_STAGE3_ART.width,
+  y: ISLAND_FOREST_ART.y / ISLAND_STAGE3_ART.height,
+  w: ISLAND_FOREST_ART.w / ISLAND_STAGE3_ART.width,
+  h: ISLAND_FOREST_ART.h / ISLAND_STAGE3_ART.height,
+} as const;
+
 /**
  * 섬 아트 기준 구역 비율 (game zoneFrame 과 동일).
- * RN 터치·가이드와 Phaser 배치가 같은 서쪽 숲을 쓰도록 공유한다.
+ * west = 서쪽 육지(배치용). 탐험 터치·가이드는 ISLAND_FOREST_ART 를 쓴다.
  */
 export const ISLAND_ZONE_SHARE: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
   core: { x: 0.25, y: 0.55, w: 0.5, h: 0.25 },
@@ -14,12 +36,6 @@ export const ISLAND_ZONE_SHARE: Record<IslandZoneId, { x: number; y: number; w: 
   north: { x: 0.4, y: 0.06, w: 0.4, h: 0.16 },
   south: { x: 0.3, y: 0.8, w: 0.4, h: 0.1 },
 };
-
-/**
- * west 구역 안 탐험 육지 inset (왼쪽 바다를 잘라냄).
- * RN 터치·가이드·Phaser 탐험 애니가 같이 쓴다.
- */
-export const EXPLORE_WEST_INSET = { left: 0.28, top: 0.1, width: 0.5, height: 0.78 } as const;
 
 export type IslandZone = {
   id: IslandZoneId;

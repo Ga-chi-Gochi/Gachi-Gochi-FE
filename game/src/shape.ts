@@ -1,7 +1,7 @@
 // 섬 땅·얕은 물·해안 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
 // 좌표 단위는 RN 화면 dp 와 같다. 한 칸 CELL = 32.
 import { ISLAND_STAGE_ART, isLandCell, type IslandStageArt, type IslandStageId } from '@/constants/island-stages';
-import { ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
+import { ISLAND_FOREST_ART, ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
 
 import { MOTION_SEQ, type MotionSheet } from './motion';
 
@@ -92,43 +92,24 @@ export function volcanoCells(stage: IslandStageId) {
 }
 
 /**
- * stage3 북서 풀숲 — 위 1·2·3 / 아래 4·5·6.
- * 칸 크기(w×h)와 간격이 같아서 빈틈 없이 맞닿는다.
- * x/y/w/h 는 섬 아트(480×512) 좌표.
+ * stage3 북서 풀숲 — constants/island-zones ISLAND_FOREST_ART 와 동일.
+ * 탐험 애니 판의 forestX/Y(34,30) 와 맞추려면 판 원점 = (x − 34, y − 30).
  */
-const FOREST_ORIGIN_X = 28;
-const FOREST_ORIGIN_Y = 36;
-const FOREST_TILE_W = 54;
-const FOREST_TILE_H = 54;
+export const FOREST_FRAME = ISLAND_FOREST_ART;
 
+/** @deprecated 조각 타일 배치 — 지금은 FOREST_FRAME 한 장 사용 */
 export const STAGE3_FOREST = [
-  // 위줄: 1 → 2 → 3
-  { key: 'part-1', x: FOREST_ORIGIN_X + FOREST_TILE_W * 0, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
-  { key: 'part-2', x: FOREST_ORIGIN_X + FOREST_TILE_W * 1, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
-  { key: 'part-3', x: FOREST_ORIGIN_X + FOREST_TILE_W * 2, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
-  // 아래줄: 4 → 5 → 6 (바로 아래 칸에 딱 붙임)
-  { key: 'part-4', x: FOREST_ORIGIN_X + FOREST_TILE_W * 0, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
-  { key: 'part-5', x: FOREST_ORIGIN_X + FOREST_TILE_W * 1, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
-  { key: 'part-6', x: FOREST_ORIGIN_X + FOREST_TILE_W * 2, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  { key: 'forest', x: FOREST_FRAME.x, y: FOREST_FRAME.y, w: FOREST_FRAME.w, h: FOREST_FRAME.h },
 ] as const;
 
 export function forestCells(stage: IslandStageId) {
   if (stage !== 3) return null;
-  let x0 = Infinity;
-  let y0 = Infinity;
-  let x1 = -Infinity;
-  let y1 = -Infinity;
-  for (const t of STAGE3_FOREST) {
-    x0 = Math.min(x0, t.x);
-    y0 = Math.min(y0, t.y);
-    x1 = Math.max(x1, t.x + t.w);
-    y1 = Math.max(y1, t.y + t.h);
-  }
+  const f = FOREST_FRAME;
   return {
-    col0: Math.floor(x0 / CELL),
-    row0: Math.floor(y0 / CELL),
-    col1: Math.ceil(x1 / CELL) - 1,
-    row1: Math.ceil(y1 / CELL) - 1,
+    col0: Math.floor(f.x / CELL),
+    row0: Math.floor(f.y / CELL),
+    col1: Math.ceil((f.x + f.w) / CELL) - 1,
+    row1: Math.ceil((f.y + f.h) / CELL) - 1,
   };
 }
 

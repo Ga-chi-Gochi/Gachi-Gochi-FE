@@ -9,11 +9,16 @@ export type ExploreStateRecord = {
   /** YYYY-MM-DD — 날짜가 바뀌면 remaining 리셋 */
   date: string;
   remaining: number;
-  /** 탐험 시작 시각(epoch ms). 없으면 null */
+  /** 탐험 시작 시각(epoch ms). 없으면 null — 숲 진입 후에만 잡힌다 */
   exploringStartedAt: number | null;
-  /** 탐험 종료 시각(epoch ms). 없으면 null */
+  /** 탐험 종료 시각(epoch ms). 없으면 null — 숲 진입 후에만 잡힌다 */
   exploringUntil: number | null;
-  /** 파견 중인 고치 id */
+  /**
+   * 모험 보내기 직후·숲 들어가기 전 예정 소요 시간.
+   * 타이머가 시작되면 null.
+   */
+  pendingDurationMs: number | null;
+  /** 파견 중인 고치 id (진입 연출 중에도 유지) */
   dispatchedGochiId: string | null;
   /** 타이머 종료 후 아직 안 받은 보상 (고치 id) */
   pendingRewardGochiId: string | null;
@@ -64,6 +69,7 @@ function defaultRecord(now = new Date()): ExploreStateRecord {
     remaining: EXPLORE_DAILY_LIMIT,
     exploringStartedAt: null,
     exploringUntil: null,
+    pendingDurationMs: null,
     dispatchedGochiId: null,
     pendingRewardGochiId: null,
     eggs: {},
@@ -86,6 +92,10 @@ function normalize(saved: Partial<ExploreStateRecord> | null | undefined, now = 
   let exploringStartedAt =
     typeof saved?.exploringStartedAt === 'number' ? saved.exploringStartedAt : null;
   let dispatchedGochiId = typeof saved?.dispatchedGochiId === 'string' ? saved.dispatchedGochiId : null;
+  let pendingDurationMs =
+    typeof saved?.pendingDurationMs === 'number' && saved.pendingDurationMs > 0
+      ? saved.pendingDurationMs
+      : null;
 
   if (exploringUntil != null && exploringUntil <= now.getTime()) {
     if (!pendingRewardGochiId && dispatchedGochiId) {
@@ -93,9 +103,21 @@ function normalize(saved: Partial<ExploreStateRecord> | null | undefined, now = 
     }
     exploringUntil = null;
     exploringStartedAt = null;
+    pendingDurationMs = null;
     dispatchedGochiId = null;
-  } else if (exploringUntil == null) {
+  } else if (exploringUntil != null) {
+    // 타이머 진행 중 — 예정 시간은 이미 소모됨
+    pendingDurationMs = null;
+    if (!dispatchedGochiId) {
+      exploringUntil = null;
+      exploringStartedAt = null;
+    }
+  } else if (dispatchedGochiId && pendingDurationMs) {
+    // 숲 진입 전: 타이머는 아직 안 흐름
     exploringStartedAt = null;
+  } else {
+    exploringStartedAt = null;
+    pendingDurationMs = null;
     dispatchedGochiId = null;
   }
 
@@ -109,7 +131,8 @@ function normalize(saved: Partial<ExploreStateRecord> | null | undefined, now = 
     remaining: remainingBase,
     exploringStartedAt: exploringUntil ? exploringStartedAt : null,
     exploringUntil,
-    dispatchedGochiId: exploringUntil ? dispatchedGochiId : null,
+    pendingDurationMs: exploringUntil ? null : pendingDurationMs,
+    dispatchedGochiId: exploringUntil || pendingDurationMs ? dispatchedGochiId : null,
     pendingRewardGochiId,
     eggs,
     newEggIds,
@@ -167,6 +190,9 @@ export function startExploreTrip(input: StartExploreTripInput): Promise<ExploreS
     if (current.exploringUntil && current.exploringUntil > now) {
       return null;
     }
+    if (current.dispatchedGochiId && current.pendingDurationMs) {
+      return null;
+    }
     if (current.remaining <= 0) {
       return null;
     }
@@ -177,12 +203,34 @@ export function startExploreTrip(input: StartExploreTripInput): Promise<ExploreS
       typeof input.durationMs === 'number' && input.durationMs > 0
         ? input.durationMs
         : EXPLORE_DURATION_MS;
+    // 타이머는 숲 진입(intro→loop) 후에 beginExploreClock 으로 시작한다
     return writeUnlocked({
       ...current,
       remaining: current.remaining - 1,
-      exploringStartedAt: now,
-      exploringUntil: now + durationMs,
+      exploringStartedAt: null,
+      exploringUntil: null,
+      pendingDurationMs: durationMs,
       dispatchedGochiId: input.gochiId,
+    });
+  });
+}
+
+/** 고치가 숲에 들어간 뒤 소요 시간 카운트 시작 */
+export function beginExploreClock(): Promise<ExploreStateRecord | null> {
+  return enqueue(async () => {
+    const current = await readUnlocked();
+    if (!current.dispatchedGochiId || !current.pendingDurationMs) {
+      return null;
+    }
+    if (current.exploringUntil && current.exploringUntil > Date.now()) {
+      return current;
+    }
+    const now = Date.now();
+    return writeUnlocked({
+      ...current,
+      exploringStartedAt: now,
+      exploringUntil: now + current.pendingDurationMs,
+      pendingDurationMs: null,
     });
   });
 }

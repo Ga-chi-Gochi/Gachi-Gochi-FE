@@ -54,6 +54,13 @@ export function exploreGochiLevel(id: string | null | undefined): number {
   }
 }
 
+/** 모험에서 고른 고치 → 숲 탐험 애니 캐릭터 */
+export function exploreForestCharacter(
+  id: string | null | undefined,
+): 'adult' | 'juvenile' {
+  return exploreGochiLevel(id) >= 4 ? 'adult' : 'juvenile';
+}
+
 export type ExploreCourseId = 'oreum' | 'camellia' | 'orchard';
 
 export type ExploreCourse = {
@@ -117,20 +124,20 @@ export type ExploreCharacter = {
   name: string;
   detail: string;
   icon: ImageSource;
-  /** 이 성장 레벨 이상이면 선택 가능. egg는 항상 잠금 */
-  minLevel: number;
   /** 갈 수 있는 최대 코스 시간. null이면 제한 없음 */
   maxHours: number | null;
 };
 
-/** 모험 캐릭터 — 와프 2페이지 */
+/**
+ * 모험에 내보낼 수 있는 고치 종류 카탈로그.
+ * 실제 선택지는 `ownedExploreCharacterIds` — 보유한 종류만.
+ */
 export const EXPLORE_CHARACTERS: ExploreCharacter[] = [
   {
     id: 'egg',
     name: '알',
     detail: '부화 전엔 못 가요',
     icon: uiCharacter.egg,
-    minLevel: 99,
     maxHours: null,
   },
   {
@@ -138,7 +145,6 @@ export const EXPLORE_CHARACTERS: ExploreCharacter[] = [
     name: '어린 귤새',
     detail: '2시간 코스까지',
     icon: uiCharacter.young,
-    minLevel: 2,
     maxHours: 2,
   },
   {
@@ -146,7 +152,6 @@ export const EXPLORE_CHARACTERS: ExploreCharacter[] = [
     name: '어른 귤새',
     detail: '모든 코스 가능',
     icon: uiCharacter.adult,
-    minLevel: 3,
     maxHours: null,
   },
 ];
@@ -158,22 +163,62 @@ export function getExploreCharacter(id: ExploreCharacterId | null | undefined): 
   return EXPLORE_CHARACTERS.find((entry) => entry.id === id);
 }
 
-/** 성장 단계·코스 시간에 따라 캐릭터를 보낼 수 있는지 */
+/**
+ * 지금 키우는 고치 → 보유 종류 한 가지.
+ * (레벨로 young·adult를 같이 여는 게 아니라, 현재 형태만 보유로 본다)
+ * 알은 모험 불가 → 빈 목록.
+ */
+export function ownedExploreCharacterIds(growthLevel: number): ExploreCharacterId[] {
+  if (growthLevel >= 4) {
+    return ['adult'];
+  }
+  if (growthLevel >= 2) {
+    return ['young'];
+  }
+  return [];
+}
+
+/** @deprecated ownedExploreCharacterIds 사용 */
+export function exploreCharacterIdForGrowthLevel(growthLevel: number): ExploreCharacterId | null {
+  return ownedExploreCharacterIds(growthLevel)[0] ?? null;
+}
+
+/** 보유 여부 */
+export function ownsExploreCharacter(
+  characterId: ExploreCharacterId,
+  ownedIds: readonly ExploreCharacterId[],
+): boolean {
+  return characterId !== 'egg' && ownedIds.includes(characterId);
+}
+
+/** 보유 종류 + 코스 시간에 따라 보낼 수 있는지 */
 export function canSendExploreCharacter(
   character: ExploreCharacter,
-  growthLevel: number,
+  ownedIds: readonly ExploreCharacterId[],
   courseHours: number,
 ): boolean {
-  if (character.id === 'egg') {
-    return false;
-  }
-  if (growthLevel < character.minLevel) {
+  if (!ownsExploreCharacter(character.id, ownedIds)) {
     return false;
   }
   if (character.maxHours != null && courseHours > character.maxHours) {
     return false;
   }
   return true;
+}
+
+/** 잠금·불가 사유 — UI 보조 문구 */
+export function exploreCharacterLockReason(
+  character: ExploreCharacter,
+  ownedIds: readonly ExploreCharacterId[],
+  courseHours: number,
+): string | null {
+  if (character.id === 'egg' || !ownsExploreCharacter(character.id, ownedIds)) {
+    return '아직 없어요';
+  }
+  if (character.maxHours != null && courseHours > character.maxHours) {
+    return `${character.maxHours}시간 코스까지`;
+  }
+  return null;
 }
 
 export function formatExploreRemain(ms: number): string {

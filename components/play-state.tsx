@@ -8,6 +8,10 @@ import {
   EXPLORE_FOREST_ZONE,
   exploreProgress,
   formatExploreRemain,
+  getExploreCharacter,
+  ownedExploreCharacterIds,
+  ownsExploreCharacter,
+  type ExploreCharacterId,
 } from '@/constants/explore';
 import { getGrowthStage, getGrowthStageByLevel, type GrowthStage } from '@/constants/growth';
 import {
@@ -29,6 +33,7 @@ import {
 } from '@/lib/creature-state';
 import { dispatchExploreTrip } from '@/lib/explore-api';
 import {
+  beginExploreClock,
   claimExploreReward,
   completeExploreTripIfDone,
   markGochiEggSeen,
@@ -149,7 +154,10 @@ type PlayState = {
   exploreStartedAt: number | null;
   exploreProgress: number;
   exploringGochiId: string | null;
+  /** 모험 중(숲 진입 연출 포함). 타이머가 아직 안 돌아도 true */
   isExploring: boolean;
+  /** 숲 진입 전 — 소요 시간은 아직 안 흐름 */
+  isExploreEntering: boolean;
   /** 타이머 끝, 보상 수령 대기 */
   hasExploreReward: boolean;
   pendingExploreGochiId: string | null;
@@ -162,6 +170,8 @@ type PlayState = {
   canStartExplore: boolean;
   exploreRemainLabel: string;
   startExplore: (input: { gochiId: string; durationMs?: number }) => Promise<boolean>;
+  /** 고치가 숲에 들어간 뒤 호출 — 소요 시간 카운트 시작 */
+  markExploreEntered: () => Promise<void>;
   claimExploreEgg: () => Promise<boolean>;
   acknowledgeExploreEggReveal: () => void;
   markGochiEggDetailSeen: (eggId: string) => Promise<void>;
@@ -194,6 +204,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const [exploreRemaining, setExploreRemaining] = useState(EXPLORE_DAILY_LIMIT);
   const [exploreEndsAt, setExploreEndsAt] = useState<number | null>(null);
   const [exploreStartedAt, setExploreStartedAt] = useState<number | null>(null);
+  const [explorePendingDurationMs, setExplorePendingDurationMs] = useState<number | null>(null);
   const [exploringGochiId, setExploringGochiId] = useState<string | null>(null);
   const [pendingExploreGochiId, setPendingExploreGochiId] = useState<string | null>(null);
   const [exploreEggCount, setExploreEggCount] = useState(0);
@@ -222,14 +233,20 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   );
   const growLocked = Boolean(growthReveal) || islandExpandBusy || growInFlight;
   const exploreForestUnlocked = unlockedZones.includes(EXPLORE_FOREST_ZONE);
-  const isExploring = exploreEndsAt != null && exploreEndsAt > nowTick;
+  const isExploreTiming = exploreEndsAt != null && exploreEndsAt > nowTick;
+  const isExploreEntering =
+    Boolean(exploringGochiId) && explorePendingDurationMs != null && !isExploreTiming;
+  /** 파견 중(진입 연출·타이머) — 섬 애니·고치 숨김에 사용 */
+  const isExploring = isExploreTiming || isExploreEntering;
   const hasExploreReward = Boolean(pendingExploreGochiId);
   const canStartExplore =
     exploreForestUnlocked && !isExploring && !hasExploreReward && exploreRemaining > 0;
-  const exploreRemainLabel = isExploring && exploreEndsAt
+  const exploreRemainLabel = isExploreTiming && exploreEndsAt
     ? formatExploreRemain(exploreEndsAt - nowTick)
-    : '00:00';
-  const exploreProgressValue = isExploring
+    : isExploreEntering && explorePendingDurationMs
+      ? formatExploreRemain(explorePendingDurationMs)
+      : '00:00';
+  const exploreProgressValue = isExploreTiming
     ? exploreProgress(exploreStartedAt, exploreEndsAt, nowTick)
     : 0;
 
@@ -361,6 +378,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setExploreRemaining(explore.remaining);
     setExploreEndsAt(explore.exploringUntil);
     setExploreStartedAt(explore.exploringStartedAt);
+    setExplorePendingDurationMs(explore.pendingDurationMs);
     setExploringGochiId(explore.dispatchedGochiId);
     setPendingExploreGochiId(explore.pendingRewardGochiId);
     setExploreEggCount(explore.eggCount);
@@ -619,6 +637,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setExploreRemaining(EXPLORE_DAILY_LIMIT);
     setExploreEndsAt(null);
     setExploreStartedAt(null);
+    setExplorePendingDurationMs(null);
     setExploringGochiId(null);
     setPendingExploreGochiId(null);
     setExploreEggCount(0);
@@ -634,6 +653,11 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
 
   const startExplore = useCallback(async (input: { gochiId: string; durationMs?: number }) => {
     if (!unlockedRef.current.includes(EXPLORE_FOREST_ZONE)) {
+      return false;
+    }
+    const character = getExploreCharacter(input.gochiId as ExploreCharacterId);
+    const ownedIds = ownedExploreCharacterIds(getGrowthStage(xpRef.current).level);
+    if (!character || !ownsExploreCharacter(character.id, ownedIds)) {
       return false;
     }
     const durationMs =
@@ -652,6 +676,29 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     applyExploreRecord(next);
     return true;
   }, [applyExploreRecord]);
+
+  /** 섬 게임 intro→loop 때 호출. 소요 시간 카운트를 여기서 연다 */
+  const markExploreEntered = useCallback(async () => {
+    const next = await beginExploreClock();
+    if (!next) {
+      return;
+    }
+    applyExploreRecord(next);
+  }, [applyExploreRecord]);
+
+  /**
+   * 숲 진입 신호(explore-entered)가 유실되면 타이머가 영구히 안 돈다.
+   * intro(~3초)보다 여유 있게 기다린 뒤 강제 시작한다.
+   */
+  useEffect(() => {
+    if (!exploringGochiId || explorePendingDurationMs == null || exploreEndsAt) {
+      return;
+    }
+    const fallback = setTimeout(() => {
+      void markExploreEntered();
+    }, 4500);
+    return () => clearTimeout(fallback);
+  }, [exploreEndsAt, explorePendingDurationMs, exploringGochiId, markExploreEntered]);
 
   const claimExploreEgg = useCallback(async () => {
     const result = await claimExploreReward();
@@ -715,6 +762,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       exploreProgress: exploreProgressValue,
       exploringGochiId,
       isExploring,
+      isExploreEntering,
       hasExploreReward,
       pendingExploreGochiId,
       exploreEggCount,
@@ -724,6 +772,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       canStartExplore,
       exploreRemainLabel,
       startExplore,
+      markExploreEntered,
       claimExploreEgg,
       acknowledgeExploreEggReveal,
       markGochiEggDetailSeen,
@@ -859,6 +908,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       exploreProgressValue,
       exploringGochiId,
       isExploring,
+      isExploreEntering,
       hasExploreReward,
       pendingExploreGochiId,
       exploreEggCount,
@@ -868,6 +918,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       canStartExplore,
       exploreRemainLabel,
       startExplore,
+      markExploreEntered,
       claimExploreEgg,
       acknowledgeExploreEggReveal,
       markGochiEggDetailSeen,

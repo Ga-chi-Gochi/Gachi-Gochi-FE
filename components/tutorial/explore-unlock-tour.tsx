@@ -101,9 +101,9 @@ export function ExploreUnlockTour({
         key="explore-button"
         step={2}
         total={EXPLORE_TOUR_TOTAL}
-        title="서쪽 숲을 눌러 봅서"
-        body="섬 왼쪽 서쪽 숲을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
-        hint="서쪽 숲을 눌러 보세요"
+        title="숲을 눌러 봅서"
+        body="섬 북서쪽 풀숲을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
+        hint="풀숲을 눌러 보세요"
         placement="below"
         align="start"
         hole={() => forestHole}
@@ -120,8 +120,8 @@ export function ExploreUnlockTour({
         step={6}
         total={EXPLORE_TOUR_TOTAL}
         title="모험이 진행 중이에요"
-        body="서쪽 숲 위에 남은 시간이 보여요. 시간이 끝나면 고치가 돌아와요."
-        hint="숲을 누르거나 다음을 눌러 보세요"
+        body="풀숲 위에 남은 시간이 보여요. 시간이 끝나면 고치가 돌아와요."
+        hint="다음을 눌러 보세요"
         placement="below"
         align="start"
         hole={() => forestHole}

@@ -7,16 +7,24 @@ import type { StoreProduct } from '@/constants/store-items';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const COLUMNS = 3;
+const DIM_OPACITY = 0.45;
+const DIM_COVER = 'rgba(120,116,124,0.28)';
 
 export function StoreGrid({
   products,
   selectedId,
   ownedIds,
+  equippedIds = [],
+  dimmedIds = [],
+  dimmedLabel,
   onSelect,
 }: {
   products: StoreProduct[];
   selectedId: string | null;
   ownedIds: string[];
+  equippedIds?: string[];
+  dimmedIds?: string[];
+  dimmedLabel?: string;
   onSelect: (product: StoreProduct) => void;
 }) {
   const { scale, width } = useResponsive();
@@ -48,12 +56,14 @@ export function StoreGrid({
       {products.map((product) => {
         const selected = product.id === selectedId;
         const has = product.kind === 'item' && ownedIds.includes(product.id);
+        const worn = has && equippedIds.includes(product.id);
+        const dimmed = dimmedIds.includes(product.id);
         return (
           <Pressable
             key={product.id}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            accessibilityLabel={`${product.name}, ${product.priceLabel}${has ? ', 보유 중' : ''}`}
+            accessibilityLabel={`${product.name}, ${product.priceLabel}${worn ? ', 착용 중' : has ? ', 보유 중' : ''}`}
             onPress={() => onSelect(product)}
             style={{
               width: cellWidth,
@@ -64,17 +74,29 @@ export function StoreGrid({
               borderColor: selected ? pixel.tangerine : pixel.ink,
               backgroundColor: selected ? '#FFE2C7' : pixel.white,
             }}>
-            <StoreProductImage product={product} size={imageSize} />
-            <PixelText size={12} center>
+            <View style={{ opacity: dimmed ? DIM_OPACITY : 1 }}>
+              <StoreProductImage product={product} size={imageSize} />
+            </View>
+            <PixelText size={12} center color={dimmed ? pixel.muted : pixel.ink}>
               {product.name}
             </PixelText>
-            {has ? (
-              <PixelText size={11} color={pixel.muted} center>
-                보유 중
+            {dimmed && !worn ? (
+              <PixelText size={10} color={pixel.muted} center>
+                {dimmedLabel}
+              </PixelText>
+            ) : has ? (
+              <PixelText size={11} color={worn ? pixel.tangerine : pixel.muted} center>
+                {worn ? '착용 중' : '보유 중'}
               </PixelText>
             ) : (
               <StorePriceTag product={product} size={11} />
             )}
+            {dimmed ? (
+              <View
+                pointerEvents="none"
+                style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: DIM_COVER }}
+              />
+            ) : null}
           </Pressable>
         );
       })}

@@ -17,14 +17,13 @@ export type ShopArtId = keyof typeof SHOP_ITEM_ART;
 
 export type GyulsaeWearStage = 'egg' | 'young' | 'adult';
 
-export const CHARACTER_WEAR: Record<string, Record<GyulsaeWearStage, ImageSource>> = {
+export const CHARACTER_WEAR: Record<string, Partial<Record<GyulsaeWearStage, ImageSource>>> = {
   nest: {
     egg: require('@/assets/shop/wear-nest-egg.png'),
     young: require('@/assets/shop/wear-nest-young.png'),
     adult: require('@/assets/shop/wear-nest-adult.png'),
   },
   sunglasses: {
-    egg: require('@/assets/shop/wear-sunglasses-egg.png'),
     young: require('@/assets/shop/wear-sunglasses-young.png'),
     adult: require('@/assets/shop/wear-sunglasses-adult.png'),
   },

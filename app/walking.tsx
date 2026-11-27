@@ -7,8 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FigButton } from '@/components/fig-button';
 import { FigScreen } from '@/components/fig-screen';
+import { GyulsaeWear } from '@/components/gyulsae-wear';
 import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
-import { growthSpriteId, PixelSprite } from '@/components/pixel/pixel-sprite';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { TopBar } from '@/components/top-bar';
@@ -202,7 +202,7 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
     distanceMeters,
     source: stepSource,
   });
-  const { coins, growthStage } = usePlayState();
+  const { coins, growthStage, equipped } = usePlayState();
   const { show: showNotice, element: noticeElement } = usePixelNotice();
   const [introStep, setIntroStep] = useState<number | null>(null);
   const [introChecked, setIntroChecked] = useState(false);
@@ -306,7 +306,7 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
         />
         <View style={{ marginTop: scale(LAYOUT.bubbleTop - LAYOUT.boardTop) - board.height, height: scale(LAYOUT.bubble), flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: scale(LAYOUT.bubbleGap) }}>
           <WalkCoinBubble coins={coins} size={scale(LAYOUT.bubble)} />
-          <PixelSprite id={growthSpriteId(growthStage.level)} size={scale(LAYOUT.bubble)} />
+          <GyulsaeWear level={growthStage.level} size={scale(LAYOUT.bubble)} equipped={equipped} />
         </View>
         <View style={{ marginTop: scale(LAYOUT.barTop - LAYOUT.bubbleTop - LAYOUT.bubble) }}>
           <WalkProgress steps={steps} claimedSteps={claimedSteps} pendingSteps={pendingSteps} width={scale(LAYOUT.barWidth)} />

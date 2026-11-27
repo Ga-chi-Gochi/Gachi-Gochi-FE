@@ -24,6 +24,7 @@ export type GameState = {
   /** 온보딩 스토리: 알 주변에 느낌표 강조 이펙트를 켠다 */
   noticeEgg?: boolean;
   explore: { level: number } | null;
+  wear?: { back: string[]; front: string[]; face?: string; seat?: string };
 };
 
 export type ZoneBox = { left: number; top: number; width: number; height: number };

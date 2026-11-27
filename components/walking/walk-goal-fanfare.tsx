@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
-import { growthSpriteId, PixelSprite } from '@/components/pixel/pixel-sprite';
+import { GyulsaeWear } from '@/components/gyulsae-wear';
 import { usePlayState } from '@/components/play-state';
 import { snapArt, walkArt, walkColor, walkPixelImage, walkUi } from '@/components/walking/walk-assets';
 import { WalkFireworks } from '@/components/walking/walk-fireworks';
@@ -12,6 +12,7 @@ import { WalkRewardCard } from '@/components/walking/walk-reward-popup';
 import { WalkText } from '@/components/walking/walk-text';
 import { WalkButton } from '@/components/walking/walk-wide-button';
 import { WALKING_GOAL, WALKING_REWARD_TIERS } from '@/constants/walking-reward';
+import type { EquippedWear } from '@/constants/wear-slots';
 import type { WalkingRewardEvent } from '@/hooks/use-walking-reward';
 import { useResponsive } from '@/hooks/use-responsive';
 
@@ -27,7 +28,7 @@ type WalkGoalFanfareProps = {
 
 export function WalkGoalFanfare({ reward, claimedSteps, onDone }: WalkGoalFanfareProps) {
   const { scale } = useResponsive();
-  const { growthStage } = usePlayState();
+  const { growthStage, equipped } = usePlayState();
   const fruit = snapArt(scale(45), walkArt.tangerine);
   const badgeFruit = snapArt(scale(16), walkArt.tangerine);
   const check = snapArt(scale(17), walkArt.check);
@@ -56,7 +57,7 @@ export function WalkGoalFanfare({ reward, claimedSteps, onDone }: WalkGoalFanfar
         <Image source={walkUi.tangerine} style={{ width: badgeFruit, height: badgeFruit, ...walkPixelImage }} contentFit="fill" />
         <WalkText size={14}>{`${WALKING_GOAL.toLocaleString('ko-KR')} 걸음 달성`}</WalkText>
       </View>
-      <BouncingSprite level={growthStage.level} size={scale(96)} />
+      <BouncingSprite level={growthStage.level} size={scale(96)} equipped={equipped} />
       <View style={{ flexDirection: 'row', gap: scale(12) }}>
         <WalkRewardCard label={`귤 ${reward.coins}개`} stepsLabel={stepsLabel}>
           <View style={{ width: fruit, height: fruit }}>
@@ -83,7 +84,7 @@ export function WalkGoalFanfare({ reward, claimedSteps, onDone }: WalkGoalFanfar
   );
 }
 
-function BouncingSprite({ level, size }: { level: number; size: number }) {
+function BouncingSprite({ level, size, equipped }: { level: number; size: number; equipped: EquippedWear }) {
   const lift = useSharedValue(0);
 
   useEffect(() => {
@@ -98,7 +99,7 @@ function BouncingSprite({ level, size }: { level: number; size: number }) {
 
   return (
     <Animated.View style={style}>
-      <PixelSprite id={growthSpriteId(level)} size={size} />
+      <GyulsaeWear level={level} size={size} equipped={equipped} />
     </Animated.View>
   );
 }

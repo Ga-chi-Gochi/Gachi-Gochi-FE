@@ -45,7 +45,7 @@ import {
   type Engine,
   type Planner,
 } from './creature';
-import { MOTION_RULES, MOTION_SEQ } from './motion';
+import { MOTION_RULES, MOTION_SEQ, type MotionStageId } from './motion';
 import { Player } from './player';
 import { SeaClock, waveLag } from './seaClock';
 import { crossesVolcano, keepOnLand, settleOnLand, shiftEngine, walkSetup, type WalkSetup } from './walker';
@@ -65,6 +65,16 @@ const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, imp
 const stageUrls: Record<IslandStageId, string> = { 1: stage1Url, 2: stage2Url, 3: stage3Url };
 
 const shopUrls = import.meta.glob('../assets/shop/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+const wearUrls = import.meta.glob('../assets/wear/*.png', { eager: true, import: 'default' }) as Record<string, string>;
+type WearOffsetData = Record<string, [number, number][]> & {
+  face?: Record<string, ([number, number] | null)[]>;
+  hip?: Record<string, [number, number][]>;
+};
+const wearOffsetFiles = import.meta.glob('../assets/wear-offsets.json', { eager: true, import: 'default' }) as Record<string, WearOffsetData>;
+const WEAR_OFFSETS: WearOffsetData = Object.values(wearOffsetFiles)[0] ?? {};
+const FACE_OFFSETS = WEAR_OFFSETS.face ?? {};
+const HIP_OFFSETS = WEAR_OFFSETS.hip ?? {};
+const FACE_TRACK_ANIMS = new Set(Object.keys(FACE_OFFSETS));
 
 // ------------------------------------------------------------------ 카메라 (island-camera.tsx)
 const MIN_ZOOM = 0.62;
@@ -95,6 +105,8 @@ const DEFAULT_STATE: GameState = {
   noticeEgg: false,
   explore: null,
 };
+
+const WEAR_STAGE: Record<MotionStageId, string> = { egg: 'egg', juvenile: 'young', adult: 'adult' };
 
 function creatureKey(level: number) {
   if (level <= 1) return 'gyulsae-egg';
@@ -242,6 +254,9 @@ export class IslandScene extends Phaser.Scene {
   private creature!: Phaser.GameObjects.Container;
   private creatureBody!: Phaser.GameObjects.Image;
   private creatureShadow!: Phaser.GameObjects.Image;
+  private wearBack!: Phaser.GameObjects.Container;
+  private wearFront!: Phaser.GameObjects.Container;
+  private wearKey = '';
   /** 온보딩: 알을 가리키는 픽셀 느낌표·반짝이 */
   private notice!: Phaser.GameObjects.Container;
   private noticeBang!: Phaser.GameObjects.Image;
@@ -319,6 +334,10 @@ export class IslandScene extends Phaser.Scene {
       const m = /shop\/([\w-]+)\.png$/.exec(path);
       if (m) this.load.image(`shop-${m[1]}`, url);
     }
+    for (const [path, url] of Object.entries(wearUrls)) {
+      const m = /wear\/([\w-]+)\.png$/.exec(path);
+      if (m) this.load.image(`wear-${m[1]}`, url);
+    }
   }
 
   create() {
@@ -347,7 +366,9 @@ export class IslandScene extends Phaser.Scene {
     this.creature = this.add.container(0, 0);
     this.creatureShadow = this.add.image(0, 0, 'juvenile-idle-shadow', 0);
     this.creatureBody = this.add.image(0, 0, 'juvenile-idle', 0);
-    this.creature.add([this.creatureShadow, this.creatureBody]);
+    this.wearBack = this.add.container(0, 0);
+    this.wearFront = this.add.container(0, 0);
+    this.creature.add([this.creatureShadow, this.wearBack, this.creatureBody, this.wearFront]);
     this.creature.setVisible(false);
     this.buildNoticeMarks();
     this.explore = this.add.container(0, 0).setVisible(false);
@@ -662,8 +683,55 @@ export class IslandScene extends Phaser.Scene {
     }
     this.updateWalkers();
     this.updateExplore();
+    this.syncWear();
   }
 
+  private syncWear() {
+    const stage = WEAR_STAGE[stageIdFor(this.state.level)];
+    const wear = this.state.wear ?? { back: [], front: [] };
+    const key = JSON.stringify([stage, wear.back, wear.front]);
+    if (key === this.wearKey) return;
+    this.wearKey = key;
+    const fill = (layer: Phaser.GameObjects.Container, items: string[]) => {
+      layer.removeAll(true);
+      for (const item of items) {
+        if (stage === 'egg' && item === wear.face) continue;
+        const tex = `wear-${item}-${stage}`;
+        if (this.textures.exists(tex)) layer.add(this.add.image(0, 0, tex).setName(item));
+      }
+    };
+    fill(this.wearBack, wear.back);
+    fill(this.wearFront, wear.front);
+  }
+
+  private poseWear(flip: boolean, animId: string, frame: number) {
+    const size = this.walk.shown;
+    const unit = size / CELL;
+    const [dx, dy] = WEAR_OFFSETS[animId]?.[frame] ?? [0, 0];
+    const face = this.state.wear?.face;
+    const seat = this.state.wear?.seat;
+    const track = FACE_TRACK_ANIMS.has(animId);
+    const faceAt = track ? (FACE_OFFSETS[animId]?.[frame] ?? null) : null;
+    const hipAt = HIP_OFFSETS[animId]?.[frame] ?? [0, 0];
+    for (const layer of [this.wearBack, this.wearFront]) {
+      layer.x = (flip ? -dx : dx) * unit;
+      layer.y = this.creatureBody.y + dy * unit;
+      for (const img of layer.list as Phaser.GameObjects.Image[]) {
+        img.setDisplaySize(size, size).setFlipX(flip);
+        let at: [number, number] = [dx, dy];
+        if (seat != null && img.name === seat) {
+          at = hipAt;
+        } else if (face != null && img.name === face && track) {
+          if (!faceAt) {
+            img.setVisible(false);
+            continue;
+          }
+          at = faceAt;
+        }
+        img.setPosition((flip ? dx - at[0] : at[0] - dx) * unit, (at[1] - dy) * unit).setVisible(true);
+      }
+    }
+  }
   // ------------------------------------------------------------------ 섬 땅 (BeachHome)
   private buildTerrain() {
     const next = toIslandStage(getIslandStage(this.state.zones));
@@ -958,6 +1026,7 @@ export class IslandScene extends Phaser.Scene {
     this.creature.setPosition(this.snap(p.x - half) + half, this.snap(p.y - half) + half);
     this.creatureBody.y = this.snap(lift);
     this.creatureShadow.y = 0;
+    this.poseWear(flip, p.src, p.player.f);
     const gx = this.snap(p.x - half);
     const gy = this.snap(p.y - half + lift);
     while (this.panicFx.length < p.fx.length) this.panicFx.add(this.add.sprite(0, 0, 'fx-panic-bang').setOrigin(0));
@@ -1167,6 +1236,7 @@ export class IslandScene extends Phaser.Scene {
     this.creature.setPosition(this.snap(engine.x - half) + half, this.snap(engine.y - half) + half);
     this.creatureBody.y = this.snap(currentLift(engine, w.unit));
     this.creatureShadow.y = 0;
+    this.poseWear(engine.facing === -1, sheet.body as unknown as string, engine.frame);
     this.drawNotice(this.time.now);
   }
 

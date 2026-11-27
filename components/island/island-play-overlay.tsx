@@ -12,20 +12,12 @@ import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
-import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
+import { ISLAND_ZONES, ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
-import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_ROUTE } from '@/constants/routes';
+import { EXPLORE_WEST_INSET } from '@/constants/island-zones';
 import { useResponsive } from '@/hooks/use-responsive';
 import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
-/** 해변 화면 비율 (game/src/scene.ts 와 같다) */
-const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
-  core: { x: 0.24, y: 0.28, w: 0.52, h: 0.44 },
-  west: { x: 0.0, y: 0.34, w: 0.24, h: 0.36 },
-  east: { x: 0.76, y: 0.34, w: 0.24, h: 0.36 },
-  north: { x: 0.24, y: 0.16, w: 0.52, h: 0.14 },
-  south: { x: 0.24, y: 0.7, w: 0.52, h: 0.12 },
-};
 
 type IslandPlayOverlayProps = {
   camera: IslandCameraState;
@@ -96,30 +88,32 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     return () => clearTimeout(timer);
   }, [acknowledgeLastPlaced, lastPlaced]);
 
-  /** 섬 좌표 → 화면 좌표 (게임 카메라: 화면 가운데 기준 확대 후 이동) */
+  /** 월드(아트) 구역 → 화면 좌표. camera.zones 는 Phaser zoneFrame 값 */
   const toScreen = (id: IslandZoneId) => {
-    const f = ZONE_FRAME[id];
-    const box = camera.zones?.[id] ?? { left: f.x * width, top: f.y * height, width: f.w * width, height: f.h * height };
+    const share = ISLAND_ZONE_SHARE[id];
+    const zoom = camera.zoom || 1;
+    const box = camera.zones?.[id] ?? {
+      left: share.x * width,
+      top: share.y * height,
+      width: share.w * width,
+      height: share.h * height,
+    };
     return {
-      left: width / 2 + (box.left - width / 2) * camera.zoom + camera.x,
-      top: height / 2 + (box.top - height / 2) * camera.zoom + camera.y,
-      width: box.width * camera.zoom,
-      height: box.height * camera.zoom,
+      left: box.left * zoom + camera.x,
+      top: box.top * zoom + camera.y,
+      width: box.width * zoom,
+      height: box.height * zoom,
     };
   };
 
-  /** 탐험 터치·타이머는 바다보다 섬 육지 쪽으로 당긴 프레임을 쓴다 */
-  const westFrame = (() => {
-    const f = EXPLORE_WEST_FRAME;
-    const left = f.x * width;
-    const top = f.y * height;
-    return {
-      left: width / 2 + (left - width / 2) * camera.zoom + camera.x,
-      top: height / 2 + (top - height / 2) * camera.zoom + camera.y,
-      width: f.w * width * camera.zoom,
-      height: f.h * height * camera.zoom,
-    };
-  })();
+  /** 탐험 터치·타이머: west 구역에서 바다 쪽을 빼고 육지만 */
+  const westFull = toScreen('west');
+  const westFrame = {
+    left: westFull.left + westFull.width * EXPLORE_WEST_INSET.left,
+    top: westFull.top + westFull.height * EXPLORE_WEST_INSET.top,
+    width: westFull.width * EXPLORE_WEST_INSET.width,
+    height: westFull.height * EXPLORE_WEST_INSET.height,
+  };
 
   return (
     <View

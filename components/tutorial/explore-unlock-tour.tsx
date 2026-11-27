@@ -29,10 +29,13 @@ const HOME_STEPS = new Set([
 export function ExploreUnlockTour({
   enabled = true,
   rewardPopupHole = null,
+  westHole = null,
 }: {
   enabled?: boolean;
   /** 홈 위쪽 탐험 완료 팝업 실측 구멍. 없으면 대략 위치로 대체 */
   rewardPopupHole?: SpotlightHole | null;
+  /** 카메라 기준 서쪽 육지 구멍. 없으면 화면 비율 대략 위치 */
+  westHole?: SpotlightHole | null;
 }) {
   const { scale } = useResponsive();
   const { width, height } = useWindowDimensions();
@@ -90,7 +93,7 @@ export function ExploreUnlockTour({
     );
   }
 
-  const westHole = exploreWestZoneHole(width, height);
+  const forestHole = westHole ?? exploreWestZoneHole(width, height);
 
   if (step === 'explore-button') {
     return (
@@ -103,7 +106,7 @@ export function ExploreUnlockTour({
         hint="서쪽 숲을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => westHole}
+        hole={() => forestHole}
         onSkip={dismissIntro}
         zIndex={92}
       />
@@ -121,7 +124,7 @@ export function ExploreUnlockTour({
         hint="숲을 누르거나 다음을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => westHole}
+        hole={() => forestHole}
         primary={{
           label: '다음',
           onPress: finishProgress,

@@ -1,7 +1,7 @@
 // 섬 땅·얕은 물·해안 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
 // 좌표 단위는 RN 화면 dp 와 같다. 한 칸 CELL = 32.
 import { ISLAND_STAGE_ART, isLandCell, type IslandStageArt, type IslandStageId } from '@/constants/island-stages';
-import type { IslandZoneId } from '@/constants/island-zones';
+import { ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
 
 import { MOTION_SEQ, type MotionSheet } from './motion';
 
@@ -139,17 +139,9 @@ export function shoreCells(stage: IslandStageId): CellPos[] {
   return cells;
 }
 
-const ZONE_SHARE: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
-  core: { x: 0.25, y: 0.55, w: 0.5, h: 0.25 },
-  east: { x: 0.62, y: 0.25, w: 0.28, h: 0.3 },
-  west: { x: 0.08, y: 0.35, w: 0.28, h: 0.25 },
-  north: { x: 0.4, y: 0.06, w: 0.4, h: 0.16 },
-  south: { x: 0.3, y: 0.8, w: 0.4, h: 0.1 },
-};
-
 export function zoneFrame(stage: IslandStageId, zoneId: IslandZoneId): WorldBox {
   const art = stageArt(stage);
-  const s = ZONE_SHARE[zoneId];
+  const s = ISLAND_ZONE_SHARE[zoneId];
   return { left: s.x * art.width, top: s.y * art.height, width: s.w * art.width, height: s.h * art.height };
 }
 

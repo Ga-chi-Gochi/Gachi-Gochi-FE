@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'rea
 import { ScrollView, View } from 'react-native';
 
 import type { SpotlightHole } from '@/components/guide/guide-spotlight';
+import { exploreWestHoleFromCamera } from '@/components/island/explore-button-target';
 import { IslandGame, NO_ASH, type IslandAsh, type IslandCameraState } from '@/components/island/island-game';
 import { IslandPlayOverlay } from '@/components/island/island-play-overlay';
 import { VolcanoEruptionProvider } from '@/components/island/volcano-eruption';
@@ -454,6 +455,7 @@ export default function IslandHomeScreen() {
       <ExploreUnlockTour
         enabled={!showGuide}
         rewardPopupHole={hasExploreReward && !exploreEggReveal ? rewardPopupHole : null}
+        westHole={exploreWestHoleFromCamera(camera)}
       />
       {helpOpen && !showGuide ? (
         <FeatureHelpOverlay topic="home" onClose={() => setHelpOpen(false)} zIndex={90} />

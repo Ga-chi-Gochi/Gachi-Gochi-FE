@@ -3,8 +3,7 @@
 import Phaser from 'phaser';
 
 import { toIslandStage, type IslandStageId } from '@/constants/island-stages';
-import type { IslandZoneId } from '@/constants/island-zones';
-import { ISLAND_ZONES, getIslandStage } from '@/constants/island-zones';
+import { EXPLORE_WEST_INSET, ISLAND_ZONES, getIslandStage, type IslandZoneId } from '@/constants/island-zones';
 import { COLOR, PATTERNS } from '@/constants/pixel-patterns';
 import { pixel } from '@/constants/pixel-theme';
 
@@ -1070,17 +1069,21 @@ export class IslandScene extends Phaser.Scene {
       this.explore.setVisible(false);
       return;
     }
-    const art = stageArt(this.stage);
-    // 서쪽 섬 육지 (RN EXPLORE_WEST_FRAME). develop art 좌표계 + scale 유지, 바다 쪽 0.06 대신 안쪽
+    // 서쪽 구역 육지 중앙 (EXPLORE_WEST_INSET 과 맞춤)
+    const west = zoneFrame(this.stage, 'west');
+    const boxW = 72 * f;
+    const boxH = 64 * f;
+    const landLeft = west.left + west.width * EXPLORE_WEST_INSET.left;
+    const landTop = west.top + west.height * EXPLORE_WEST_INSET.top;
+    const landW = west.width * EXPLORE_WEST_INSET.width;
+    const landH = west.height * EXPLORE_WEST_INSET.height;
     this.explore
-      .setPosition(art.width * 0.18, art.height * 0.4)
+      .setPosition(landLeft + landW / 2 - boxW / 2, landTop + landH / 2 - boxH / 2)
       .setScale(1 / this.baseDp())
       .setVisible(true);
     const parts = this.exploreParts;
     if (parts && parts.f === f && parts.level === level) return;
     this.explore.removeAll(true);
-    const boxW = 72 * f;
-    const boxH = 64 * f;
     const tree = (size: number) => {
       const spr = this.dotSprite('tree', size);
       const c = this.add.container(0, 0);

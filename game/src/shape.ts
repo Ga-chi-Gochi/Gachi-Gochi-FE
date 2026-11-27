@@ -91,13 +91,60 @@ export function volcanoCells(stage: IslandStageId) {
   };
 }
 
+/**
+ * stage3 북서 풀숲 — 위 1·2·3 / 아래 4·5·6.
+ * 칸 크기(w×h)와 간격이 같아서 빈틈 없이 맞닿는다.
+ * x/y/w/h 는 섬 아트(480×512) 좌표.
+ */
+const FOREST_ORIGIN_X = 28;
+const FOREST_ORIGIN_Y = 36;
+const FOREST_TILE_W = 54;
+const FOREST_TILE_H = 54;
+
+export const STAGE3_FOREST = [
+  // 위줄: 1 → 2 → 3
+  { key: 'part-1', x: FOREST_ORIGIN_X + FOREST_TILE_W * 0, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  { key: 'part-2', x: FOREST_ORIGIN_X + FOREST_TILE_W * 1, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  { key: 'part-3', x: FOREST_ORIGIN_X + FOREST_TILE_W * 2, y: FOREST_ORIGIN_Y, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  // 아래줄: 4 → 5 → 6 (바로 아래 칸에 딱 붙임)
+  { key: 'part-4', x: FOREST_ORIGIN_X + FOREST_TILE_W * 0, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  { key: 'part-5', x: FOREST_ORIGIN_X + FOREST_TILE_W * 1, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
+  { key: 'part-6', x: FOREST_ORIGIN_X + FOREST_TILE_W * 2, y: FOREST_ORIGIN_Y + FOREST_TILE_H, w: FOREST_TILE_W, h: FOREST_TILE_H },
+] as const;
+
+export function forestCells(stage: IslandStageId) {
+  if (stage !== 3) return null;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const t of STAGE3_FOREST) {
+    x0 = Math.min(x0, t.x);
+    y0 = Math.min(y0, t.y);
+    x1 = Math.max(x1, t.x + t.w);
+    y1 = Math.max(y1, t.y + t.h);
+  }
+  return {
+    col0: Math.floor(x0 / CELL),
+    row0: Math.floor(y0 / CELL),
+    col1: Math.ceil(x1 / CELL) - 1,
+    row1: Math.ceil(y1 / CELL) - 1,
+  };
+}
+
 export function nearVolcano(stage: IslandStageId, col: number, row: number) {
   const v = volcanoCells(stage);
   return col >= v.col0 - 1 && col <= v.col1 + 1 && row >= v.row0 - 1 && row <= v.row1 + 1;
 }
 
+export function nearForest(stage: IslandStageId, col: number, row: number) {
+  const f = forestCells(stage);
+  if (!f) return false;
+  return col >= f.col0 && col <= f.col1 && row >= f.row0 && row <= f.row1;
+}
+
 export function isWalkableCell(stage: IslandStageId, col: number, row: number) {
-  return isLandCell(stageArt(stage), col, row) && !nearVolcano(stage, col, row);
+  return isLandCell(stageArt(stage), col, row) && !nearVolcano(stage, col, row) && !nearForest(stage, col, row);
 }
 
 export function isWalkable(stage: IslandStageId, px: number, py: number) {

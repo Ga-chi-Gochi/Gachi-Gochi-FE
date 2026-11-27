@@ -37,6 +37,7 @@ import {
   magmaColor,
   shoreCells,
   spills,
+  STAGE3_FOREST,
   stageArt,
   surgeFill,
   volcanoFrame,
@@ -69,6 +70,8 @@ const volcanoUrls = import.meta.glob('../assets/volcano-cell-*.png', { eager: tr
   string,
   string
 >;
+
+const forestUrls = import.meta.glob('../assets/forest/*.png', { eager: true, import: 'default' }) as Record<string, string>;
 
 /** 지수 님 모션 시트 (assets/motion/sheets 를 1/8 로 줄인 32px 칸). 키 = 파일 이름 */
 const motionUrls = import.meta.glob('../assets/motion/*.png', { eager: true, import: 'default' }) as Record<string, string>;
@@ -151,6 +154,7 @@ export class IslandScene extends Phaser.Scene {
   private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
   private quake!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
+  private forest!: Phaser.GameObjects.Container;
   private volcano!: Phaser.GameObjects.Container;
   private lava!: Phaser.GameObjects.Graphics;
   private decor!: Phaser.GameObjects.Container;
@@ -237,6 +241,10 @@ export class IslandScene extends Phaser.Scene {
       const m = /volcano-cell-(\d)-(\d)\.png$/.exec(path);
       if (m) this.load.image(`volcano-${m[1]}-${m[2]}`, url);
     }
+    for (const [path, url] of Object.entries(forestUrls)) {
+      const m = /forest\/([\w-]+)\.png$/.exec(path);
+      if (m) this.load.image(`forest-${m[1]}`, url);
+    }
     for (const [path, url] of Object.entries(shopUrls)) {
       const m = /shop\/([\w-]+)\.png$/.exec(path);
       if (m) this.load.image(`shop-${m[1]}`, url);
@@ -254,6 +262,10 @@ export class IslandScene extends Phaser.Scene {
         this.textures.get(`volcano-${r}-${c}`).setFilter(Phaser.Textures.FilterMode.LINEAR);
       }
     }
+    // 숲 도트는 잔디와 색이 비슷해서 LINEAR 로 줄이면 녹아 안 보인다.
+    for (const key of this.textures.getTextureKeys()) {
+      if (key.startsWith('forest-')) this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
     this.makeDotTextures();
 
     // 층: 섬 세계(바다 포함, 확대·이동) → 화산재(화면 고정)
@@ -268,9 +280,10 @@ export class IslandScene extends Phaser.Scene {
     // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
     this.water = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
+    this.forest = this.add.container(0, 0);
     this.volcano = this.add.container(0, 0);
     this.lava = this.add.graphics();
-    this.quake.add([this.terrain, this.water, this.volcano, this.lava]);
+    this.quake.add([this.terrain, this.water, this.forest, this.volcano, this.lava]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
@@ -594,7 +607,22 @@ export class IslandScene extends Phaser.Scene {
     }
     this.terrain.setTexture(`v3-stage${this.stage}`).setPosition(0, 0).setVisible(true);
     this.buildShore();
+    this.placeForest();
     this.placeVolcano();
+  }
+
+  private placeForest() {
+    this.forest.removeAll(true);
+    this.forest.setVisible(this.stage === 3);
+    if (this.stage !== 3) return;
+    // 칸(w×h)에 맞춰 딱 붙임 — 이름 붙여 두면 나중에 흔들림 애니 타깃으로 쓰기 쉽다
+    STAGE3_FOREST.forEach((tree, i) => {
+      const key = `forest-${tree.key}`;
+      if (!this.textures.exists(key)) return;
+      const img = this.add.image(tree.x, tree.y, key).setOrigin(0).setDisplaySize(tree.w, tree.h);
+      img.setName(`forest-tree-${i}`);
+      this.forest.add(img);
+    });
   }
 
   private placeVolcano() {

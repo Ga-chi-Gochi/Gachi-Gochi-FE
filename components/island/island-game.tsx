@@ -17,6 +17,9 @@ import { useResponsive } from '@/hooks/use-responsive';
 
 const GAME_HTML = require('@/assets/game/island.html');
 
+/** game:build 후 웹뷰가 옛 HTML 을 붙들지 않게 올린다 */
+const ISLAND_GAME_BUILD = 'forest-9';
+
 /** 바다 기본 색. 게임이 뜨기 전에도 같은 색이 보이게 한다. */
 export const ISLAND_SEA = '#2ca6a4';
 
@@ -40,19 +43,20 @@ type GameSource = { html?: string; uri: string };
 type WebViewHandle = { injectJavaScript: (script: string) => void };
 const GameWebView = WebView as unknown as ComponentType<WebViewProps & { ref?: Ref<WebViewHandle> }>;
 
-let cachedHtml: string | null = null;
+let cachedHtml: { build: string; html: string } | null = null;
 
 async function loadGame(): Promise<GameSource> {
   const asset = Asset.fromModule(GAME_HTML);
   await asset.downloadAsync();
   const uri = asset.localUri ?? asset.uri;
   if (Platform.OS === 'web') {
-    return { uri };
+    const join = uri.includes('?') ? '&' : '?';
+    return { uri: `${uri}${join}v=${ISLAND_GAME_BUILD}` };
   }
-  if (!cachedHtml) {
-    cachedHtml = await new File(uri).text();
+  if (!cachedHtml || cachedHtml.build !== ISLAND_GAME_BUILD) {
+    cachedHtml = { build: ISLAND_GAME_BUILD, html: await new File(uri).text() };
   }
-  return { html: cachedHtml, uri };
+  return { html: cachedHtml.html, uri };
 }
 
 type GameMessage =

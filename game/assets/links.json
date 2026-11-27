@@ -1,0 +1,296 @@
+{
+  "_about": "애니메이션끼리 잇는 정보 — 단계(알·어린 귤새·성체)마다 쓰는 동작, 날기 묶음(이륙 → 날기 → 착지), 혼비백산 이펙트 붙일 자리, 부화·자라기·쓰담 연결, 바다·화산 목록. id = animations/index.json 의 id. (예전 screen.json 에서 섬 지도·화면 요소를 뺀 것)",
+  "ashTimeline": "volcano/ash-cover/timeline.json",
+  "seas": [
+    {
+      "key": "sea-v4-b",
+      "label": "일렁임 (선 그물이 너울 타고 0/1칸 — 디자이너 색만, 반짝이 없음)"
+    },
+    {
+      "key": "sea",
+      "label": "정지 (디자이너 원본)"
+    }
+  ],
+  "volcano": [
+    {
+      "key": "volcano-idle-a",
+      "kind": "rest",
+      "label": "가만히 A 모락모락"
+    },
+    {
+      "key": "volcano-idle-b",
+      "kind": "rest",
+      "label": "가만히 B 퐁"
+    },
+    {
+      "key": "volcano",
+      "kind": "rest",
+      "label": "정지 (디자이너 원본)"
+    },
+    {
+      "key": "volcano-erupt-a",
+      "kind": "erupt",
+      "label": "분출 A 펑"
+    },
+    {
+      "key": "volcano-erupt-b",
+      "kind": "erupt",
+      "label": "분출 B 퐁퐁"
+    }
+  ],
+  "stages": {
+    "egg": {
+      "label": "알",
+      "rest": "idle-a",
+      "auto": "waddle",
+      "anims": [
+        {
+          "key": "still",
+          "label": "정지 (원본)",
+          "kind": "idle",
+          "src": "gyulsae-egg"
+        },
+        {
+          "key": "idle-a",
+          "label": "가만히 A 꿈틀",
+          "kind": "idle",
+          "src": "gyulsae-egg-idle-a"
+        },
+        {
+          "key": "idle-b",
+          "label": "가만히 B 갸웃",
+          "kind": "idle",
+          "src": "gyulsae-egg-idle-b"
+        },
+        {
+          "key": "waddle",
+          "label": "뒤뚱 걷기",
+          "kind": "move",
+          "src": "gyulsae-egg-waddle"
+        },
+        {
+          "key": "hop",
+          "label": "통통",
+          "kind": "move",
+          "src": "gyulsae-egg-hop"
+        },
+        {
+          "key": "roll",
+          "label": "구르기",
+          "kind": "move",
+          "src": "gyulsae-egg-roll"
+        }
+      ]
+    },
+    "juvenile": {
+      "label": "어린 귤새",
+      "rest": "idle",
+      "auto": "fly",
+      "anims": [
+        {
+          "key": "still",
+          "label": "정지 (원본)",
+          "kind": "idle",
+          "src": "gyulsae-juvenile"
+        },
+        {
+          "key": "idle",
+          "label": "가만히 (숨쉬기·깜빡임)",
+          "kind": "idle",
+          "src": "gyulsae-juvenile-idle"
+        },
+        {
+          "key": "fly",
+          "label": "날기 (이륙 → 날기 → 착지)",
+          "kind": "flight",
+          "takeoff": "gyulsae-juvenile-takeoff",
+          "src": "gyulsae-juvenile-fly",
+          "land": "gyulsae-juvenile-land"
+        },
+        {
+          "key": "fly-struggle",
+          "label": "빨빨 날기 (힘겹게 버둥)",
+          "kind": "flight",
+          "takeoff": "gyulsae-juvenile-takeoff",
+          "src": "gyulsae-juvenile-fly-struggle",
+          "land": "gyulsae-juvenile-land"
+        }
+      ]
+    },
+    "adult": {
+      "label": "성체 귤새",
+      "rest": "idle",
+      "auto": "waddle",
+      "anims": [
+        {
+          "key": "still",
+          "label": "정지 (원본)",
+          "kind": "idle",
+          "src": "gyulsae-adult"
+        },
+        {
+          "key": "idle",
+          "label": "가만히 (숨쉬기·깜빡임)",
+          "kind": "idle",
+          "src": "gyulsae-adult-idle"
+        },
+        {
+          "key": "waddle",
+          "label": "뒤뚱 걷기 (날개를 팔처럼)",
+          "kind": "move",
+          "src": "gyulsae-adult-waddle"
+        }
+      ]
+    }
+  },
+  "panic": {
+    "_about": "섬 넓히기 때 고치 혼비백산: startle(1회) → panic 달리기(반복, A/B 중 하나) + 이펙트. attach[단계][이펙트 id] = 이펙트 pivot 을 붙일 자리 — 귤새 그림(32×32, 오른쪽 보기) 왼쪽 위 기준 그림 px, 뜬 높이(lift)도 더함. 왼쪽 보기면 x 를 32 - x 로. \"!\" 는 안 뒤집고 땀방울은 같이 뒤집음.",
+    "stages": {
+      "egg": {
+        "startle": [
+          "gyulsae-egg-startle"
+        ],
+        "panic": [
+          "gyulsae-egg-panic-a",
+          "gyulsae-egg-panic-b"
+        ]
+      },
+      "juvenile": {
+        "startle": [
+          "gyulsae-juvenile-startle"
+        ],
+        "panic": [
+          "gyulsae-juvenile-panic-a",
+          "gyulsae-juvenile-panic-b"
+        ]
+      },
+      "adult": {
+        "startle": [
+          "gyulsae-adult-startle"
+        ],
+        "panic": [
+          "gyulsae-adult-panic-a",
+          "gyulsae-adult-panic-b"
+        ]
+      }
+    },
+    "fx": [
+      "fx-panic-bang",
+      "fx-panic-sweat"
+    ],
+    "attach": {
+      "egg": {
+        "fx-panic-bang": [
+          16,
+          8
+        ],
+        "fx-panic-sweat": [
+          10,
+          13
+        ]
+      },
+      "juvenile": {
+        "fx-panic-bang": [
+          16,
+          9
+        ],
+        "fx-panic-sweat": [
+          8,
+          15
+        ]
+      },
+      "adult": {
+        "fx-panic-bang": [
+          16,
+          -1
+        ],
+        "fx-panic-sweat": [
+          8,
+          9
+        ]
+      }
+    }
+  },
+  "growth": [
+    {
+      "key": "a",
+      "kind": "hatch",
+      "label": "A 번쩍 (포켓몬식) 재생",
+      "anim": "gyulsae-hatch-a",
+      "reveal": 20,
+      "frm": "egg",
+      "to": "juvenile",
+      "title": "알이 부화했어요!",
+      "body": "새싹 단계로 깨어났어요. 계속 쓰다듬고 키워 주세요.",
+      "lv": "Lv.1 알 → Lv.2 새싹"
+    },
+    {
+      "key": "b",
+      "kind": "hatch",
+      "label": "B 뚜껑 퐁 (병아리식) 재생",
+      "anim": "gyulsae-hatch-b",
+      "reveal": 30,
+      "frm": "egg",
+      "to": "juvenile",
+      "title": "알이 부화했어요!",
+      "body": "새싹 단계로 깨어났어요. 계속 쓰다듬고 키워 주세요.",
+      "lv": "Lv.1 알 → Lv.2 새싹"
+    },
+    {
+      "key": "ga",
+      "kind": "grow",
+      "label": "A 진화 (하얀 실루엣이 번갈며 빨라짐 → 번쩍)",
+      "anim": "gyulsae-grow-a",
+      "reveal": 27,
+      "frm": "juvenile",
+      "to": "adult",
+      "title": "가치고치(으)로 자랐어요!",
+      "body": "Lv.3 → Lv.4. 물방울과 쓰다듬기 경험치가 쌓였어요.",
+      "lv": "Lv.3 성장 → Lv.4 가치고치"
+    },
+    {
+      "key": "gb",
+      "kind": "grow",
+      "label": "B 쑥쑥 (웅크렸다 배가 한 줄씩 자람 → 새싹 퐁)",
+      "anim": "gyulsae-grow-b",
+      "reveal": 8,
+      "frm": "juvenile",
+      "to": "adult",
+      "title": "가치고치(으)로 자랐어요!",
+      "body": "Lv.3 → Lv.4. 물방울과 쓰다듬기 경험치가 쌓였어요.",
+      "lv": "Lv.3 성장 → Lv.4 가치고치"
+    },
+    {
+      "key": "gc",
+      "kind": "grow",
+      "label": "C 깜빡 (작은·중간·큰 그림 번갈기, 마리오식)",
+      "anim": "gyulsae-grow-c",
+      "reveal": 6,
+      "frm": "juvenile",
+      "to": "adult",
+      "title": "가치고치(으)로 자랐어요!",
+      "body": "Lv.3 → Lv.4. 물방울과 쓰다듬기 경험치가 쌓였어요.",
+      "lv": "Lv.3 성장 → Lv.4 가치고치"
+    }
+  ],
+  "pet": {
+    "egg": {
+      "hold": "gyulsae-egg-pet-a",
+      "happy": "gyulsae-egg-pet-b"
+    },
+    "juvenile": {
+      "hold": "gyulsae-juvenile-pet-a",
+      "happy": "gyulsae-juvenile-pet-b"
+    },
+    "adult": {
+      "hold": "gyulsae-adult-pet-a",
+      "happy": "gyulsae-adult-pet-b"
+    }
+  },
+  "petFx": [
+    "pet-heart",
+    "pet-heart-l",
+    "pet-heart-r",
+    "pet-love"
+  ]
+}

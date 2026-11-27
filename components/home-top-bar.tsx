@@ -231,8 +231,8 @@ export function HomeLevelBar() {
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+            <PixelText size={10}>Lv.</PixelText>
             <PixelText size={16}>{growthStage.level}</PixelText>
-            <PixelText size={10}>Lv</PixelText>
           </View>
         </View>
       </View>

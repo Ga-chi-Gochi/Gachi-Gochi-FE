@@ -1,0 +1,15 @@
+{
+  "id": "fx-panic-sweat",
+  "label": "이펙트 — 혼비백산 땀방울 (1회, 자주 다시 띄움)",
+  "playback": "once",
+  "frameWidth": 16,
+  "frameHeight": 16,
+  "frameCount": 8,
+  "totalMs": 420,
+  "sheet": "sheet.png",
+  "shadow": null,
+  "pivot": [12, 8],
+  "durationsMs": [40, 50, 50, 50, 60, 60, 60, 50],
+  "motionPx": [0, 0, 0, 0, 0, 0, 0, 0],
+  "liftPx": [0, 0, 0, 0, 0, 0, 0, 0]
+}

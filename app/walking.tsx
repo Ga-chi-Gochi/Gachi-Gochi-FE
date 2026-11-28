@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FigButton } from '@/components/fig-button';
 import { FigScreen } from '@/components/fig-screen';
 import { GyulsaeWear } from '@/components/gyulsae-wear';
-import { HomeTopBar, HomeTopIcons, useHomeTopLayout } from '@/components/home-top-bar';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
 import { TopBar } from '@/components/top-bar';
@@ -16,9 +15,7 @@ import { FeatureHelpOverlay } from '@/components/tutorial/feature-help';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { WalkingConsentFlow } from '@/components/walking-consent-flow';
-import { WalkingGyulsae } from '@/components/walking-gyulsae';
 import { WALKING_INTRO_MESSAGES, WalkingIntroPopup } from '@/components/walking-popup';
-import { WalkingRewardBoard } from '@/components/walking-reward-board';
 import { snapArt, walkArt, walkColor, walkPixelImage, walkUi } from '@/components/walking/walk-assets';
 import { useWalkBoardSize, WalkBoard } from '@/components/walking/walk-board';
 import { WalkCoinBubble } from '@/components/walking/walk-coin-bubble';
@@ -29,7 +26,6 @@ import { WalkRewardPopup } from '@/components/walking/walk-reward-popup';
 import { WalkText } from '@/components/walking/walk-text';
 import { WalkButton } from '@/components/walking/walk-wide-button';
 import { palette } from '@/constants/palette';
-import { pixel } from '@/constants/pixel-theme';
 import { WALKING_GOAL, WALKING_REWARD_TIERS } from '@/constants/walking-reward';
 import { useHealthAccess } from '@/hooks/use-health-access';
 import { useHealthSteps } from '@/hooks/use-health-steps';
@@ -39,6 +35,28 @@ import { openHealthStepsSettings } from '@/lib/health-steps';
 import type { WalkingDataSource } from '@/lib/walking-api';
 import { hasSeenWalkingIntro, markWalkingIntroSeen } from '@/lib/walking-reward';
 
+const KCAL_PER_STEP = 0.04;
+const STEP_LENGTH_METERS = 0.7;
+const DEV_STEP_INCREMENT = 1000;
+const LAYOUT = {
+  headerHeight: 79,
+  headerCenter: 47,
+  side: 20,
+  back: 50,
+  help: 64,
+  titleSize: 26,
+  boardTop: 130,
+  bubbleTop: 332,
+  bubble: 130,
+  bubbleGap: 4,
+  barTop: 473.7,
+  barWidth: 334,
+  buttonWidth: 350,
+  buttonHeight: 47,
+  buttonText: 22,
+  buttonBottom: 88,
+};
+
 // 걷기 화면. 먼저 '건강 앱 접근 허용' 여부를 확인하고,
 // 허용했거나 개인정보 수집에 동의한 경우에만 걸음을 불러온다. 거부했으면 동의 흐름을 보여 준다.
 export default function WalkingScreen() {
@@ -46,7 +64,7 @@ export default function WalkingScreen() {
   const insets = useSafeAreaInsets();
   const tutorial = useTutorial();
   const { leaveScreen } = tutorial;
-  // 튜토리얼 중에는 동의·권한·걸음 수 확인 없이 설명용 화면만 보여 준다
+  // 튜토리얼도 최신 걷기 UI 위에서 안내한다 (옛 목업 화면 대신)
   const guided = tutorial.step === 'walking-screen';
   const [helpOpen, setHelpOpen] = useState(false);
   const { status, permission, consented, agree, resetConsent, refreshPermission } = useHealthAccess();
@@ -74,11 +92,16 @@ export default function WalkingScreen() {
     </View>
   ) : null;
 
+  const showLivePage = guided || status === 'ready';
+  const backSize = snapArt(scale(LAYOUT.back), walkArt.button);
+  const backLeft = scale(LAYOUT.side) + (scale(LAYOUT.back) - backSize) / 2;
+  const backTop = insets.top + scale(LAYOUT.headerCenter) - backSize / 2;
+
   return (
     <View style={{ flex: 1 }}>
-      <FigScreen colors={!guided && status === 'ready' ? [walkColor.background, walkColor.background] : [palette.cream, palette.cream]}>
+      <FigScreen colors={showLivePage ? [walkColor.background, walkColor.background] : [palette.cream, palette.cream]}>
         {guided ? (
-          <WalkingTutorialView />
+          <WalkingContent guided devTools={null} onHelp={() => setHelpOpen(true)} />
         ) : status === 'checking' ? (
           <TopBar title="걷기" />
         ) : status === 'ready' ? (
@@ -93,15 +116,19 @@ export default function WalkingScreen() {
           total={tutorial.scope === 'full' ? undefined : 1}
           title="걷기는 이렇게 해요"
           body="걸은 만큼 귤과 경험치를 받아요. 이 경험치로도 고치가 자라요."
-          hint="아래 '섬으로 돌아가기'를 눌러 돌아가요"
-          hole={(box) => ({
-            left: scale(24) - scale(4),
-            top: box.height - (insets.bottom + scale(8)) - scale(58) - scale(4),
-            width: box.width - scale(48) + scale(8),
-            height: scale(58) + scale(8),
-            radius: scale(24),
-          })}
-          placement="above"
+          hint="왼쪽 위 뒤로가기를 눌러 섬으로 돌아가요"
+          hole={() => {
+            const pad = scale(4);
+            return {
+              left: backLeft - pad,
+              top: backTop - pad,
+              width: backSize + pad * 2,
+              height: backSize + pad * 2,
+              radius: scale(12),
+            };
+          }}
+          placement="below"
+          align="start"
           onSkip={() => {
             tutorial.skip();
             router.replace('/(tabs)');
@@ -115,67 +142,16 @@ export default function WalkingScreen() {
   );
 }
 
-// 튜토리얼 중에 보여 주는 걷기 화면. 실제 화면과 같은 모양이지만 걸음 수를 읽거나 보상을 주지 않는다.
-function WalkingTutorialView() {
-  const { scale } = useResponsive();
-  const { coins } = usePlayState();
-  const { iconsInset, iconsHeight } = useHomeTopLayout();
-
-  return (
-    <>
-      <View
-        style={{
-          paddingLeft: scale(16),
-          paddingRight: scale(16) + iconsInset,
-          paddingTop: scale(8),
-          paddingBottom: scale(10),
-          minHeight: scale(18) + iconsHeight,
-          zIndex: 10,
-        }}>
-        <HomeTopBar />
-        <HomeTopIcons top={scale(8)} side={scale(16)} />
-      </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: scale(16), paddingBottom: scale(16), gap: scale(14) }}>
-        <View style={{ alignItems: 'center', gap: scale(6) }}>
-          <Text accessibilityLabel="오늘 0 걸음" style={{ color: pixel.ink, fontWeight: '800' }}>
-            <Text style={{ fontSize: scale(44) }}>0</Text>
-            <Text style={{ fontSize: scale(18) }}> 걸음</Text>
-          </Text>
-        </View>
-        <WalkingGyulsae size={scale(200)} />
-        <WalkingRewardBoard steps={0} claimedSteps={[]} coins={coins} />
-      </ScrollView>
-      <View style={{ flexDirection: 'row', paddingHorizontal: scale(24), marginBottom: scale(8) }}>
-        <FigButton label="섬으로 돌아가기" onPress={() => router.replace('/(tabs)')} />
-      </View>
-    </>
-  );
-}
-
-const KCAL_PER_STEP = 0.04;
-const STEP_LENGTH_METERS = 0.7;
-const DEV_STEP_INCREMENT = 1000;
-const LAYOUT = {
-  headerHeight: 79,
-  headerCenter: 47,
-  side: 20,
-  back: 50,
-  help: 64,
-  titleSize: 26,
-  boardTop: 130,
-  bubbleTop: 332,
-  bubble: 130,
-  bubbleGap: 4,
-  barTop: 473.7,
-  barWidth: 334,
-  buttonWidth: 350,
-  buttonHeight: 47,
-  buttonText: 22,
-  buttonBottom: 88,
-};
-
 // 권한·동의 확인이 끝난 뒤에 보이는 걷기 본문. HealthKit / Health Connect 로 오늘 걸음을 불러온다.
-function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () => void }) {
+function WalkingContent({
+  guided = false,
+  devTools,
+  onHelp,
+}: {
+  guided?: boolean;
+  devTools: ReactNode;
+  onHelp: () => void;
+}) {
   const { scale, width } = useResponsive();
   const insets = useSafeAreaInsets();
   const { steps: healthSteps, distanceMeters: healthDistance, status: stepStatus, source, refresh } = useHealthSteps();
@@ -208,6 +184,10 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
   const [introChecked, setIntroChecked] = useState(false);
 
   useEffect(() => {
+    if (guided) {
+      setIntroChecked(true);
+      return;
+    }
     hasSeenWalkingIntro()
       .then((seen) => {
         if (!seen) {
@@ -216,7 +196,7 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
       })
       .catch(() => undefined)
       .finally(() => setIntroChecked(true));
-  }, []);
+  }, [guided]);
 
   const nextIntro = useCallback(() => {
     if (introStep == null) {
@@ -244,7 +224,7 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
 
   const deniedNoticeShown = useRef(false);
   useEffect(() => {
-    if (stepStatus !== 'denied') {
+    if (guided || stepStatus !== 'denied') {
       deniedNoticeShown.current = false;
       return;
     }
@@ -261,7 +241,7 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
         { label: '다시 확인', onPress: () => void refresh() },
       ],
     });
-  }, [celebrating, introChecked, refresh, showIntro, showNotice, stepStatus]);
+  }, [celebrating, guided, introChecked, refresh, showIntro, showNotice, stepStatus]);
 
   const kcal = Math.round(steps * KCAL_PER_STEP);
   const canClaim = pendingSteps.length > 0 && !claiming;
@@ -359,15 +339,15 @@ function WalkingContent({ devTools, onHelp }: { devTools: ReactNode; onHelp: () 
           textSize={LAYOUT.buttonText}
         />
       </View>
-      {showIntro ? <WalkingIntroPopup step={introStep} onNext={nextIntro} /> : null}
-      {reward && introChecked && !showIntro ? (
+      {!guided && showIntro ? <WalkingIntroPopup step={introStep} onNext={nextIntro} /> : null}
+      {!guided && reward && introChecked && !showIntro ? (
         shouldPlayWalkGoalFanfare(reward) ? (
           <WalkGoalFanfare reward={reward} claimedSteps={claimedSteps} onDone={dismissReward} />
         ) : (
           <WalkRewardPopup coins={reward.coins} xp={reward.xp} steps={reward.topSteps} onConfirm={dismissReward} />
         )
       ) : null}
-      <WalkHomeInvite hidden={showIntro || reward != null} />
+      <WalkHomeInvite hidden={guided || showIntro || reward != null} />
       {noticeElement}
     </>
   );

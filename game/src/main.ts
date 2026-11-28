@@ -4,6 +4,8 @@ import Phaser from 'phaser';
 import { IslandScene } from './scene';
 
 const dpr = Math.max(1, Math.min(4, window.devicePixelRatio || 1));
+/** Expo Go / RN 웹뷰는 WebGL 메모리·컨텍스트 이슈가 있어 Canvas 가 더 안정적이다 */
+const inRnWebView = Boolean((window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView);
 
 function viewport() {
   // 웹뷰가 아직 크기를 못 받은 순간(0×0)에 WebGL을 만들면 실패하므로 기본값을 쓴다
@@ -12,7 +14,7 @@ function viewport() {
 
 const v = viewport();
 const game = new Phaser.Game({
-  type: Phaser.AUTO,
+  type: inRnWebView ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#2ca6a4',
   pixelArt: true,

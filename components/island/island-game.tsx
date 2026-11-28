@@ -3,6 +3,7 @@
 // 폰에서는 웹뷰, 웹에서는 iframe 으로 띄우고, 상태는 메시지로 주고받는다. 버튼·시트·토스트는 RN 그대로다.
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
+import { readAsStringAsync } from 'expo-file-system/legacy';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type Ref } from 'react';
 import { Platform, View } from 'react-native';
 import { WebView, type WebViewMessageEvent, type WebViewProps } from 'react-native-webview';
@@ -19,7 +20,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 const GAME_HTML = require('@/assets/game/island.html');
 
 /** game:build 후 웹뷰가 옛 HTML 을 붙들지 않게 올린다 */
-const ISLAND_GAME_BUILD = 'forest-explore-5';
+const ISLAND_GAME_BUILD = 'forest-explore-20';
 
 /** 바다 기본 색. 게임이 뜨기 전에도 같은 색이 보이게 한다. */
 export const ISLAND_SEA = '#2ca6a4';
@@ -46,6 +47,20 @@ const GameWebView = WebView as unknown as ComponentType<WebViewProps & { ref?: R
 
 let cachedHtml: { build: string; html: string } | null = null;
 
+async function readHtml(uri: string): Promise<string> {
+  try {
+    return await new File(uri).text();
+  } catch {
+    // Expo Go 등에서 새 File API 가 실패하면 legacy 로 읽는다
+    try {
+      return await readAsStringAsync(uri);
+    } catch {
+      const res = await fetch(uri);
+      return await res.text();
+    }
+  }
+}
+
 async function loadGame(): Promise<GameSource> {
   const asset = Asset.fromModule(GAME_HTML);
   await asset.downloadAsync();
@@ -54,8 +69,13 @@ async function loadGame(): Promise<GameSource> {
     const join = uri.includes('?') ? '&' : '?';
     return { uri: `${uri}${join}v=${ISLAND_GAME_BUILD}` };
   }
+  // 네이티브(Expo Go 포함): 단일 HTML 을 문자열로 주입한다 (file:// URI 는 Android 권한 이슈가 잦다)
   if (!cachedHtml || cachedHtml.build !== ISLAND_GAME_BUILD) {
-    cachedHtml = { build: ISLAND_GAME_BUILD, html: await new File(uri).text() };
+    const html = await readHtml(uri);
+    if (!html || html.length < 1000 || !html.includes('<script')) {
+      throw new Error(`island.html 로드 실패 (${html?.length ?? 0} bytes)`);
+    }
+    cachedHtml = { build: ISLAND_GAME_BUILD, html };
   }
   return { html: cachedHtml.html, uri };
 }
@@ -144,9 +164,15 @@ export function IslandGame({
 
   useEffect(() => {
     let alive = true;
-    void loadGame().then((next) => {
-      if (alive) setSource(next);
-    });
+    void loadGame()
+      .then((next) => {
+        if (alive) setSource(next);
+      })
+      .catch((err) => {
+        console.error('[IslandGame] load failed', err);
+        // 캐시가 깨졌으면 다음 시도에서 다시 읽게 한다
+        cachedHtml = null;
+      });
     return () => {
       alive = false;
     };
@@ -315,9 +341,12 @@ export function IslandGame({
         originWhitelist={['*']}
         source={{ html: source.html, baseUrl: 'https://island.gachigochi.local/' }}
         onMessage={(event: WebViewMessageEvent) => onGameMessage(event.nativeEvent.data)}
+        onError={(e) => console.error('[IslandGame] webview error', e.nativeEvent)}
+        onHttpError={(e) => console.error('[IslandGame] webview http', e.nativeEvent)}
         onRenderProcessGone={restart}
         onContentProcessDidTerminate={restart}
         javaScriptEnabled
+        domStorageEnabled
         scrollEnabled={false}
         bounces={false}
         overScrollMode="never"

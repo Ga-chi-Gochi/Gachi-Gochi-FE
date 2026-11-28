@@ -269,6 +269,8 @@ export class IslandScene extends Phaser.Scene {
   private ashSolid!: Phaser.GameObjects.Rectangle;
   private ashEdge!: Phaser.GameObjects.Graphics;
   private ashPool: Phaser.GameObjects.Sprite[] = [];
+  /** 걷힘 말미에 timeline 이 비어도 마지막 장을 페이드아웃하기 위해 보관 */
+  private ashLastItems: [string, number, number, number][] = [];
 
   private cam = { z: 1, x: 0, y: 0 };
   private camSentAt = 0;
@@ -386,14 +388,16 @@ export class IslandScene extends Phaser.Scene {
     // 깊은 바다는 흔들림(quake) 밖에 둔다. 원래도 깊은 바다는 안 흔들렸다.
     this.world.add([this.sea, this.quake, this.decor, this.creature, this.panicFx, this.notice, this.explore, this.ashLayer]);
 
-    // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
+    // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동)
+    // 화산재는 world(ashLayer)에 있어서 fixedCam 은 끈다.
+    // Expo Go WebView 에서 빈 fixedCam 이 위에 그려지면 섬이 통째로 안 보인다.
     const main = this.cameras.main;
     main.setBackgroundColor(SEA_PLAIN_COLOR);
     this.worldCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.fixedCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     main.ignore([this.world, this.overlay]);
     this.worldCam.ignore([this.overlay]);
-    this.fixedCam.ignore([this.world]);
+    this.fixedCam.setVisible(false);
     for (const c of [main, this.worldCam, this.fixedCam]) c.setRoundPixels(false);
     this.applyFixedCams();
     this.applyCamera(true);
@@ -402,9 +406,16 @@ export class IslandScene extends Phaser.Scene {
     this.scale.on('resize', () => this.onResize());
 
     listen((msg) => this.onMessage(msg));
+    // RN 웹뷰는 첫 state 가 오기 전엔 숨긴다. state 가 안 오면 섬이 영구히 안 보이므로 짧게 기다린다.
     this.world.setVisible(!embedded);
     this.applyState(this.state, true);
     send({ type: 'ready' });
+    if (embedded) {
+      this.time.delayedCall(2000, () => {
+        // state 핸드셰이크가 막혀도 섬만은 보이게 (gotState 는 건드리지 않음)
+        if (!this.gotState) this.world.setVisible(true);
+      });
+    }
 
     (window as unknown as { __island?: IslandScene }).__island = this;
   }
@@ -751,10 +762,29 @@ export class IslandScene extends Phaser.Scene {
       this.layoutSea();
       this.applyCamera(true);
     }
-    this.terrain.setTexture(`v3-stage${this.stage}`).setPosition(0, 0).setVisible(true);
+    const key = `v3-stage${this.stage}`;
+    if (this.textures.exists(key)) {
+      this.terrain.setTexture(key).setPosition(0, 0).setAlpha(1).setScale(1).setVisible(true);
+    } else {
+      // 텍스처가 없으면 바다만 남아 섬이 사라진 것처럼 보인다
+      this.terrain.setVisible(false);
+    }
     this.buildShore();
     this.placeForest();
     this.placeVolcano();
+  }
+
+  /** 화산재 연출이 끝난 뒤 섬이 안 남는 경우 대비 */
+  private restoreIslandView() {
+    this.world.setVisible(true);
+    this.ashLastItems = [];
+    for (const s of this.ashPool) s.setVisible(false).setScale(1).setAlpha(1);
+    this.ashSolid.setVisible(false).setAlpha(1);
+    this.ashEdge.clear().setVisible(false).setAlpha(1);
+    this.terrainKey = '';
+    this.decorKey = '';
+    this.applyState(this.state, true);
+    this.applyCamera(true);
   }
 
   private placeForest() {
@@ -808,6 +838,7 @@ export class IslandScene extends Phaser.Scene {
 
   private startExpand() {
     if (this.ex) return;
+    this.ashLastItems = [];
     this.ex = { t: 0, volcano: false, calm: false, fog: false, reveal: false, pending: false, held: 0, swapped: false };
     this.startPanic();
     this.stepExpand(0);
@@ -834,29 +865,158 @@ export class IslandScene extends Phaser.Scene {
       ex.reveal = true;
       send({ type: 'reveal' });
     }
-    if (!ex.swapped && ex.t >= ASH.swap_ms) {
+    // 완전 덮임(solid)이 끝난 뒤에 지형을 갈아끼운다. 덮는 중에 카메라·스테이지가
+    // 바뀌면 섬이 통째로 안 보이거나 깜빡인다.
+    const swapAt = Math.max(ASH.swap_ms, ASH.solid.to_ms);
+    if (!ex.swapped && ex.t >= swapAt) {
       if (!ex.pending && ex.held < SWAP_WAIT_MS) {
         ex.held += dt;
-        ex.t = ASH.swap_ms;
+        ex.t = swapAt;
       } else {
         ex.swapped = true;
         this.stopPanic();
-        this.applyState(this.state);
+        this.applyState(this.state, true);
         this.applyCamera(true);
       }
     }
     if (ex.t >= P.done) {
       this.ex = null;
-      for (const s of this.ashPool) s.setVisible(false);
-      this.ashSolid.setVisible(false);
-      this.ashEdge.clear().setVisible(false);
+      this.restoreIslandView();
       this.sendAsh(this.time.now, 0, true);
-      this.applyCamera(true);
+      if (this.volcKey !== VOLCANO_REST) this.setVolcano(VOLCANO_REST, true);
       send({ type: 'done' });
       return;
     }
-    this.drawAsh(ex.t);
-    this.sendAsh(this.time.now, this.ashLevel(ex.t));
+    try {
+      this.drawAsh(ex.t);
+      this.sendAsh(this.time.now, this.ashLevel(ex.t));
+    } catch (err) {
+      console.error(err);
+      this.ex = null;
+      this.restoreIslandView();
+      this.sendAsh(this.time.now, 0, true);
+      send({ type: 'done' });
+    }
+  }
+
+  /** 화산 스프라이트 입구(월드). parent(quake) 변환까지 반영한다. */
+  private ashEruptPivot() {
+    const top = this.volcano.getTopCenter();
+    return { x: top.x, y: top.y + 8 };
+  }
+
+  /** 타임라인에서 구름이 처음 뜨는 장의 중심 — 여기가 에셋상 퍼짐 시작점 */
+  private ashLocalEruptPoint() {
+    for (const frame of ASH.frames) {
+      if (!frame.length) continue;
+      let sx = 0;
+      let sy = 0;
+      for (const [name, , x, y] of frame) {
+        const a = anim(name);
+        sx += x + a.frameWidth / 2;
+        sy += y + a.frameHeight / 2;
+      }
+      const n = frame.length;
+      return { x: sx / n, y: sy / n };
+    }
+    return { x: ASH.origin[0] * CELL, y: ASH.origin[1] * CELL };
+  }
+
+  /**
+   * 타임라인 로컬 → 월드.
+   * expand 0: 첫 구름 군집이 화산 입구에 붙음 (오프셋 증폭 없음).
+   * expand 1: 입구 기준으로 화면을 가득 채우게 퍼짐.
+   */
+  private ashViewFit(
+    o: { x: number; y: number },
+    vx0: number,
+    vy0: number,
+    vx1: number,
+    vy1: number,
+    expand: number,
+  ) {
+    const [bx0, by0, bx1, by1] = ASH.box;
+    const localErupt = this.ashLocalEruptPoint();
+    const assetEruptX = o.x + localErupt.x;
+    const assetEruptY = o.y + localErupt.y;
+    const pivot = this.ashEruptPivot();
+    const reachX = Math.max(Math.abs(vx0 - pivot.x), Math.abs(vx1 - pivot.x));
+    const reachY = Math.max(Math.abs(vy0 - pivot.y), Math.abs(vy1 - pivot.y));
+    const boxReachX = Math.max(Math.abs(bx0 - localErupt.x), Math.abs(bx1 - localErupt.x));
+    const boxReachY = Math.max(Math.abs(by0 - localErupt.y), Math.abs(by1 - localErupt.y));
+    const fitFull = Math.max(reachX / Math.max(1, boxReachX), reachY / Math.max(1, boxReachY)) * 1.12;
+    const e = Math.max(0, Math.min(1, expand));
+    const fit = 1 + (fitFull - 1) * e;
+    const spriteScale = Math.min(1 + (Math.min(fitFull, 1.85) - 1) * e, 1.85);
+    const mapLocal = (localX: number, localY: number) => {
+      const ax = o.x + localX;
+      const ay = o.y + localY;
+      return {
+        x: pivot.x + (ax - assetEruptX) * fit,
+        y: pivot.y + (ay - assetEruptY) * fit,
+      };
+    };
+    return { fit, fitFull, spriteScale, mapLocal };
+  }
+
+  /**
+   * timeline 한 장을 화면 전체에 맞게 늘린다.
+   * - 애장(f)은 에셋 그대로
+   * - 퍼짐 초반엔 화산 입구에서 시작하고, 가득 찰수록 화면을 채움
+   */
+  private layAshFill(
+    items: [string, number, number, number][],
+    o: { x: number; y: number },
+    vx0: number,
+    vy0: number,
+    vx1: number,
+    vy1: number,
+    expand: number,
+    clearing: boolean,
+  ) {
+    if (!items.length) return [] as { name: string; f: number; x: number; y: number; scale: number }[];
+    const { fitFull, spriteScale, mapLocal } = this.ashViewFit(o, vx0, vy0, vx1, vy1, expand);
+    const map = (name: string, f: number, x: number, y: number) => {
+      const a = anim(name);
+      const p = mapLocal(x + a.frameWidth / 2, y + a.frameHeight / 2);
+      // 구름 중심이 매핑점을 따르게 (입구에 붙는 첫 군집이 맞음)
+      return {
+        name,
+        f,
+        x: p.x - (a.frameWidth * spriteScale) / 2,
+        y: p.y - (a.frameHeight * spriteScale) / 2,
+        scale: spriteScale,
+      };
+    };
+
+    // 걷힐 땐 위성 구름을 빼서, 타임라인 흩어짐이 보이게 한다
+    const pads: [number, number][] =
+      !clearing && fitFull > 1.45 && expand > 0.55
+        ? [
+            [52, 0],
+            [-52, 0],
+            [0, 52],
+            [0, -52],
+            [52, 52],
+            [-52, 52],
+            [52, -52],
+            [-52, -52],
+          ]
+        : !clearing && fitFull > 1.15 && expand > 0.55
+          ? [
+              [48, 0],
+              [-48, 0],
+              [0, 48],
+              [0, -48],
+            ]
+          : [];
+
+    const out: { name: string; f: number; x: number; y: number; scale: number }[] = [];
+    for (const [name, f, x, y] of items) {
+      out.push(map(name, f, x, y));
+      for (const [ox, oy] of pads) out.push(map(name, f, x + ox, y + oy));
+    }
+    return out;
   }
 
   private drawAsh(t: number) {
@@ -870,18 +1030,10 @@ export class IslandScene extends Phaser.Scene {
       }
     }
     const o = this.ashOffset();
-    const items = ASH.frames[i] ?? [];
-    while (this.ashPool.length < items.length) {
-      const s = this.add.sprite(0, 0, items[0][0]).setOrigin(0).setVisible(false);
-      this.ashPool.push(s);
-      this.ashLayer.add(s);
-    }
-    items.forEach(([name, f, x, y], k) => {
-      const s = this.ashPool[k];
-      if (s.texture.key !== name) s.setTexture(name);
-      s.setFrame(f).setPosition(this.snap(o.x + x), this.snap(o.y + y)).setVisible(true);
-    });
-    for (let k = items.length; k < this.ashPool.length; k += 1) this.ashPool[k].setVisible(false);
+    const rawItems = ASH.frames[i] ?? [];
+    if (rawItems.length) this.ashLastItems = rawItems.map((it) => [...it] as [string, number, number, number]);
+    // 마지막 장이 비어도 페이드가 끝나기 전엔 직전 장을 유지
+    const items = rawItems.length ? rawItems : this.ashLastItems;
     const z = this.worldCam.zoom;
     const vw = this.scale.width / z;
     const vh = this.scale.height / z;
@@ -890,26 +1042,84 @@ export class IslandScene extends Phaser.Scene {
     const vy0 = cy - vh / 2 - CELL;
     const vx1 = cx + vw / 2 + CELL;
     const vy1 = cy + vh / 2 + CELL;
+    const P = ASH.phases;
+    const clearing = t >= P.clear;
+    const clearU = clearing ? Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear)) : 0;
+    // 초반엔 천천히, 후반에 더 걷히게 (샤라락)
+    const clearEase = clearU * clearU * (3 - 2 * clearU);
+    // 퍼짐 초반(expand~0)엔 입구에 붙고, covered 이후엔 화면을 가득 채움
+    const expand =
+      t <= P.cover ? 0 : t >= P.covered ? 1 : (t - P.cover) / Math.max(1, P.covered - P.cover);
+    const laid = this.layAshFill(items, o, vx0, vy0, vx1, vy1, expand, clearing);
+    const pivot = this.ashEruptPivot();
+    let maxD = 1;
+    for (const it of laid) {
+      const a = anim(it.name);
+      const sx = it.x + (a.frameWidth * it.scale) / 2;
+      const sy = it.y + (a.frameHeight * it.scale) / 2;
+      maxD = Math.max(maxD, Math.hypot(sx - pivot.x, sy - pivot.y));
+    }
+
+    while (this.ashPool.length < laid.length) {
+      const seed = laid[0]?.name ?? items[0]?.[0];
+      if (!seed) break;
+      const s = this.add.sprite(0, 0, seed).setOrigin(0).setVisible(false);
+      this.ashPool.push(s);
+      this.ashLayer.add(s);
+    }
+    laid.forEach((it, k) => {
+      const s = this.ashPool[k];
+      if (s.texture.key !== it.name) s.setTexture(it.name);
+      const a = anim(it.name);
+      const cx = it.x + (a.frameWidth * it.scale) / 2;
+      const cy = it.y + (a.frameHeight * it.scale) / 2;
+      const dist = Math.hypot(cx - pivot.x, cy - pivot.y);
+      // 바깥쪽부터 걷히고, 살짝 바깥으로 밀리며 옅어짐
+      const wave = (dist / maxD) * 0.72;
+      const local = clearing
+        ? Math.min(1, Math.max(0, (clearEase - wave * 0.85) / Math.max(0.12, 1 - wave * 0.85)))
+        : 0;
+      const alpha = 1 - local;
+      const drift = local * (22 + dist * 0.04);
+      const ang = Math.atan2(cy - pivot.y, cx - pivot.x);
+      const scale = it.scale * (1 - local * 0.4);
+      s
+        .setFrame(it.f)
+        .setPosition(this.snap(it.x + Math.cos(ang) * drift), this.snap(it.y + Math.sin(ang) * drift))
+        .setScale(scale)
+        .setAlpha(alpha)
+        .setVisible(alpha > 0.03);
+    });
+    for (let k = laid.length; k < this.ashPool.length; k += 1) {
+      this.ashPool[k].setVisible(false).setScale(1).setAlpha(1);
+    }
+
+    const { mapLocal } = this.ashViewFit(o, vx0, vy0, vx1, vy1, expand);
+    const mapX = (localX: number) => mapLocal(localX, 0).x;
+    const mapY = (localY: number) => mapLocal(0, localY).y;
+
     const solid = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
     this.ashSolid.setVisible(solid);
-    if (solid) this.ashSolid.setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
-    const g = this.ashEdge.clear().setVisible(!solid);
-    if (!solid) {
+    if (solid) this.ashSolid.setAlpha(1).setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
+    const edgeAlpha = clearing ? Math.max(0, 1 - clearEase * 1.15) : 1;
+    const g = this.ashEdge.clear().setVisible(!solid && edgeAlpha > 0.02);
+    this.ashEdge.setAlpha(edgeAlpha);
+    if (!solid && edgeAlpha > 0.02) {
       const color = hex(ASH.solid.color);
-      const runs = ASH_RUNS[i];
-      const cx = (v: number) => Math.min(vx1, Math.max(vx0, o.x + v));
-      const cy = (v: number) => Math.min(vy1, Math.max(vy0, o.y + v));
+      const runs = ASH_RUNS[Math.min(i, ASH_RUNS.length - 1)];
+      const clampX = (v: number) => Math.min(vx1, Math.max(vx0, mapX(v)));
+      const clampY = (v: number) => Math.min(vy1, Math.max(vy0, mapY(v)));
       for (const [a, b, d, k] of runs.top) {
-        if (b > a) g.fillStyle(color, k).fillRect(cx(a), vy0, cx(b) - cx(a), o.y + d - vy0);
+        if (b > a) g.fillStyle(color, k).fillRect(clampX(a), vy0, clampX(b) - clampX(a), mapY(d) - vy0);
       }
       for (const [a, b, d, k] of runs.bottom) {
-        if (b > a) g.fillStyle(color, k).fillRect(cx(a), o.y + d, cx(b) - cx(a), vy1 - o.y - d);
+        if (b > a) g.fillStyle(color, k).fillRect(clampX(a), mapY(d), clampX(b) - clampX(a), vy1 - mapY(d));
       }
       for (const [a, b, d, k] of runs.left) {
-        if (b > a) g.fillStyle(color, k).fillRect(vx0, cy(a), o.x + d - vx0, cy(b) - cy(a));
+        if (b > a) g.fillStyle(color, k).fillRect(vx0, clampY(a), mapX(d) - vx0, clampY(b) - clampY(a));
       }
       for (const [a, b, d, k] of runs.right) {
-        if (b > a) g.fillStyle(color, k).fillRect(o.x + d, cy(a), vx1 - o.x - d, cy(b) - cy(a));
+        if (b > a) g.fillStyle(color, k).fillRect(mapX(d), clampY(a), vx1 - mapX(d), clampY(b) - clampY(a));
       }
     }
   }
@@ -919,7 +1129,9 @@ export class IslandScene extends Phaser.Scene {
     if (t < P.cover) return 0;
     if (t < P.covered) return (t - P.cover) / (P.covered - P.cover);
     if (t < P.clear) return 1;
-    return Math.max(0, 1 - (t - P.clear) / (P.done - P.clear));
+    const u = Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear));
+    const ease = u * u * (3 - 2 * u);
+    return Math.max(0, 1 - ease);
   }
 
   private ashSentAt = 0;

@@ -18,6 +18,9 @@ export type GochiEggDef = {
   weight: number;
 };
 
+/** 탐험 튜토리얼 첫 보상 — 항상 이 알로 고정 */
+export const EXPLORE_TUTORIAL_EGG_ID = 'moss-egg';
+
 export const GOCHI_EGGS: GochiEggDef[] = [
   {
     id: 'sprout-egg',
@@ -26,7 +29,7 @@ export const GOCHI_EGGS: GochiEggDef[] = [
     sprite: 'egg',
     rarity: 'common',
     source: '서쪽 숲 탐험',
-    weight: 40,
+    weight: 35,
   },
   {
     id: 'dew-egg',
@@ -35,7 +38,16 @@ export const GOCHI_EGGS: GochiEggDef[] = [
     sprite: 'seed',
     rarity: 'common',
     source: '서쪽 숲 탐험',
-    weight: 30,
+    weight: 25,
+  },
+  {
+    id: 'moss-egg',
+    name: '이끼 알',
+    detail: '초록 점무늬가 돋는 알. 숲 이끼 냄새가 나요.',
+    sprite: 'moss-egg',
+    rarity: 'uncommon',
+    source: '서쪽 숲 탐험',
+    weight: 20,
   },
   {
     id: 'forest-egg',
@@ -44,7 +56,7 @@ export const GOCHI_EGGS: GochiEggDef[] = [
     sprite: 'egg',
     rarity: 'uncommon',
     source: '서쪽 숲 탐험',
-    weight: 20,
+    weight: 12,
   },
   {
     id: 'star-egg',
@@ -53,7 +65,7 @@ export const GOCHI_EGGS: GochiEggDef[] = [
     sprite: 'egg',
     rarity: 'rare',
     source: '서쪽 숲 탐험',
-    weight: 10,
+    weight: 8,
   },
 ];
 

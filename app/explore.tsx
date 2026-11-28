@@ -29,6 +29,7 @@ import {
   type ExploreCourseId,
 } from '@/constants/explore';
 import { gachiUi } from '@/constants/gachi-ui';
+import { EXPLORE_TUTORIAL_EGG_ID } from '@/constants/gochi-eggs';
 import { ISLAND_HOME } from '@/constants/routes';
 import { uiButtons } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -292,7 +293,9 @@ export default function ExploreScreen() {
     }
     setClaiming(true);
     try {
-      await claimExploreEgg();
+      await claimExploreEgg(
+        tutorialScope === 'explore' ? { eggId: EXPLORE_TUTORIAL_EGG_ID } : undefined,
+      );
       if (
         tutorialScope === 'explore' &&
         (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')

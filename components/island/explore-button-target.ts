@@ -154,19 +154,33 @@ export function exploreButtonHole(
 }
 
 /**
- * 홈 위쪽 탐험 완료 보상 팝업 (가운데, 문장·버튼 너비에 맞춤).
- * 실측 구멍이 없을 때 쓰는 대략 위치.
+ * 숲 위 말풍선 결과창 대략 구멍 (실측 전 폴백).
+ * island-play-overlay 배치식과 맞춘다.
  */
-export function exploreRewardPopupHole(
+export function exploreRewardBubbleHole(
   scale: (value: number) => number,
-  windowWidth: number,
+  camera: IslandCameraState,
+  fallbackWidth: number,
+  fallbackHeight: number,
 ): SpotlightHole {
-  const width = scale(240);
+  const west = exploreForestFrameFromCamera(camera, fallbackWidth, fallbackHeight);
+  const width = Math.min(west.width * 1.05, scale(144));
+  const left = Math.max(scale(8), west.left + west.width / 2 - scale(72));
+  const top = Math.max(scale(8), west.top - scale(78));
   return {
-    left: Math.max(scale(12), (windowWidth - width) / 2),
-    top: scale(108),
+    left,
+    top,
     width,
     height: scale(108),
     radius: scale(10),
   };
+}
+
+/** @deprecated exploreRewardBubbleHole 사용 */
+export function exploreRewardPopupHole(
+  scale: (value: number) => number,
+  windowWidth: number,
+  windowHeight = 844,
+): SpotlightHole {
+  return exploreRewardBubbleHole(scale, { zoom: 1, x: 0, y: 0, w: 0, h: 0 }, windowWidth, windowHeight);
 }

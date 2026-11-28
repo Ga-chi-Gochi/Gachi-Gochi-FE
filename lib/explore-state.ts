@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { EXPLORE_DAILY_LIMIT, EXPLORE_DURATION_MS } from '@/constants/explore';
-import { pickRandomGochiEggId, totalEggCount } from '@/constants/gochi-eggs';
+import { getGochiEgg, pickRandomGochiEggId, totalEggCount } from '@/constants/gochi-eggs';
 
 export const EXPLORE_STATE_KEY = 'explore/state';
 
@@ -267,15 +267,19 @@ export type ClaimExploreRewardResult = {
   isNewType: boolean;
 };
 
-/** 보상 수령 — 랜덤 고치 알 +1 */
-export function claimExploreReward(): Promise<ClaimExploreRewardResult | null> {
+/** 보상 수령 — 랜덤 고치 알 +1. eggId 를 주면 해당 알로 고정 */
+export function claimExploreReward(options?: {
+  eggId?: string;
+}): Promise<ClaimExploreRewardResult | null> {
   return enqueue(async () => {
     const current = await readUnlocked();
     if (!current.pendingRewardGochiId) {
       return null;
     }
     const gochiId = current.pendingRewardGochiId;
-    const eggId = pickRandomGochiEggId();
+    const forced = options?.eggId?.trim();
+    const eggId =
+      forced && getGochiEgg(forced) ? forced : pickRandomGochiEggId();
     const prev = current.eggs[eggId] ?? 0;
     const isNewType = prev <= 0;
     const eggs = { ...current.eggs, [eggId]: prev + 1 };

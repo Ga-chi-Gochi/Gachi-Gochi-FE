@@ -172,7 +172,7 @@ type PlayState = {
   startExplore: (input: { gochiId: string; durationMs?: number }) => Promise<boolean>;
   /** 고치가 숲에 들어간 뒤 호출 — 소요 시간 카운트 시작 */
   markExploreEntered: () => Promise<void>;
-  claimExploreEgg: () => Promise<boolean>;
+  claimExploreEgg: (options?: { eggId?: string }) => Promise<boolean>;
   acknowledgeExploreEggReveal: () => void;
   markGochiEggDetailSeen: (eggId: string) => Promise<void>;
   /** 앱 복귀·화면 포커스 시 탐험 상태 재동기화 */
@@ -700,8 +700,8 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(fallback);
   }, [exploreEndsAt, explorePendingDurationMs, exploringGochiId, markExploreEntered]);
 
-  const claimExploreEgg = useCallback(async () => {
-    const result = await claimExploreReward();
+  const claimExploreEgg = useCallback(async (options?: { eggId?: string }) => {
+    const result = await claimExploreReward(options);
     if (!result) {
       return false;
     }

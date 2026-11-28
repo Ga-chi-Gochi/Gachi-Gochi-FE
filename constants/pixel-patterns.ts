@@ -53,6 +53,19 @@ export const PATTERNS: Record<PixelSpriteId, string[]> = {
     '..EEEEE...',
     '..........',
   ],
+  // 이끼 알 — 초록 점무늬 (에셋 없을 때 폴백)
+  'moss-egg': [
+    '..........',
+    '..EEEEE...',
+    '.EGEEEEE..',
+    '.EEEEGEG..',
+    'EEGEEEEE..',
+    'EEEEEGEE..',
+    '.EGEEEEE..',
+    '.EEEEGE...',
+    '..EEEEE...',
+    '..........',
+  ],
   // 새싹 — 작은 귤 + 큰 새싹 (부화 직후)
   sprout: [
     '...GGG....',

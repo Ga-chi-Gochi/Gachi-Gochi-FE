@@ -1,7 +1,7 @@
 // 섬 땅·얕은 물·해안 모양 계산. components/island/beach-home.tsx 의 순수 함수들을 그대로 옮겼다 (그림 결과가 RN판과 같아야 한다).
 // 좌표 단위는 RN 화면 dp 와 같다. 한 칸 CELL = 32.
 import { ISLAND_STAGE_ART, isLandCell, type IslandStageArt, type IslandStageId } from '@/constants/island-stages';
-import type { IslandZoneId } from '@/constants/island-zones';
+import { ISLAND_FOREST_ART, ISLAND_ZONE_SHARE, type IslandZoneId } from '@/constants/island-zones';
 
 import { MOTION_SEQ, type MotionSheet } from './motion';
 
@@ -99,13 +99,41 @@ export function volcanoCells(stage: IslandStageId) {
   };
 }
 
+/**
+ * stage3 북서 풀숲 — constants/island-zones ISLAND_FOREST_ART 와 동일.
+ * 탐험 애니 판의 forestX/Y(34,30) 와 맞추려면 판 원점 = (x − 34, y − 30).
+ */
+export const FOREST_FRAME = ISLAND_FOREST_ART;
+
+/** @deprecated 조각 타일 배치 — 지금은 FOREST_FRAME 한 장 사용 */
+export const STAGE3_FOREST = [
+  { key: 'forest', x: FOREST_FRAME.x, y: FOREST_FRAME.y, w: FOREST_FRAME.w, h: FOREST_FRAME.h },
+] as const;
+
+export function forestCells(stage: IslandStageId) {
+  if (stage !== 3) return null;
+  const f = FOREST_FRAME;
+  return {
+    col0: Math.floor(f.x / CELL),
+    row0: Math.floor(f.y / CELL),
+    col1: Math.ceil((f.x + f.w) / CELL) - 1,
+    row1: Math.ceil((f.y + f.h) / CELL) - 1,
+  };
+}
+
 export function nearVolcano(stage: IslandStageId, col: number, row: number) {
   const v = volcanoCells(stage);
   return col >= v.col0 - 1 && col <= v.col1 + 1 && row >= v.row0 - 1 && row <= v.row1 + 1;
 }
 
+export function nearForest(stage: IslandStageId, col: number, row: number) {
+  const f = forestCells(stage);
+  if (!f) return false;
+  return col >= f.col0 && col <= f.col1 && row >= f.row0 && row <= f.row1;
+}
+
 export function isWalkableCell(stage: IslandStageId, col: number, row: number) {
-  return isLandCell(stageArt(stage), col, row) && !nearVolcano(stage, col, row);
+  return isLandCell(stageArt(stage), col, row) && !nearVolcano(stage, col, row) && !nearForest(stage, col, row);
 }
 
 export function isWalkable(stage: IslandStageId, px: number, py: number) {
@@ -147,17 +175,9 @@ export function shoreCells(stage: IslandStageId): CellPos[] {
   return cells;
 }
 
-const ZONE_SHARE: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
-  core: { x: 0.25, y: 0.55, w: 0.5, h: 0.25 },
-  east: { x: 0.62, y: 0.25, w: 0.28, h: 0.3 },
-  west: { x: 0.08, y: 0.35, w: 0.28, h: 0.25 },
-  north: { x: 0.4, y: 0.06, w: 0.4, h: 0.16 },
-  south: { x: 0.3, y: 0.8, w: 0.4, h: 0.1 },
-};
-
 export function zoneFrame(stage: IslandStageId, zoneId: IslandZoneId): WorldBox {
   const art = stageArt(stage);
-  const s = ZONE_SHARE[zoneId];
+  const s = ISLAND_ZONE_SHARE[zoneId];
   return { left: s.x * art.width, top: s.y * art.height, width: s.w * art.width, height: s.h * art.height };
 }
 

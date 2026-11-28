@@ -9,6 +9,7 @@ import type { ImageSource } from 'expo-image';
  */
 export type PixelSpriteId =
   | 'egg'
+  | 'moss-egg'
   | 'sprout'
   | 'buddy'
   | 'gachi'
@@ -25,6 +26,7 @@ export type PixelSpriteId =
 
 export const PIXEL_ASSETS: Partial<Record<PixelSpriteId, ImageSource>> = {
   egg: require('@/assets/pixel/gyulsae-egg.png'),
+  'moss-egg': require('@/assets/pixel/gochi-moss-egg.png'),
   sprout: require('@/assets/pixel/gyulsae-juvenile.png'),
   buddy: require('@/assets/pixel/gyulsae-juvenile.png'),
   gachi: require('@/assets/pixel/gyulsae-adult.png'),

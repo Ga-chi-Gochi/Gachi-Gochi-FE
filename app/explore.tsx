@@ -19,14 +19,17 @@ import {
   canSendExploreCharacter,
   EXPLORE_CHARACTERS,
   EXPLORE_COURSES,
+  exploreCharacterLockReason,
   formatExploreReturnLabel,
   getExploreCharacter,
   getExploreCourse,
   getExploreGochi,
+  ownedExploreCharacterIds,
   type ExploreCharacterId,
   type ExploreCourseId,
 } from '@/constants/explore';
 import { gachiUi } from '@/constants/gachi-ui';
+import { EXPLORE_TUTORIAL_EGG_ID } from '@/constants/gochi-eggs';
 import { ISLAND_HOME } from '@/constants/routes';
 import { uiButtons } from '@/constants/ui-assets';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -87,9 +90,6 @@ export default function ExploreScreen() {
     isExploring,
     hasExploreReward,
     canStartExplore,
-    exploreRemainLabel,
-    exploreProgress,
-    exploringGochiId,
     pendingExploreGochiId,
     exploreEggReveal,
     startExplore,
@@ -103,7 +103,7 @@ export default function ExploreScreen() {
   const [selectedCharacterId, setSelectedCharacterId] = useState<ExploreCharacterId | null>(null);
   const [sending, setSending] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  /** 파견 성공 직후 isExploring 으로 상태 화면이 한 프레임 뜨는 것 방지 */
+  /** 파견 성공 직후 보상/코스 UI가 깜빡이지 않게 */
   const [suppressStatus, setSuppressStatus] = useState(false);
   const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } = useTutorial();
   const courseListRef = useRef<ViewNode>(null);
@@ -188,19 +188,30 @@ export default function ExploreScreen() {
   );
 
   const activeName = useMemo(() => {
-    const id = isExploring
-      ? exploringGochiId
-      : hasExploreReward
-        ? pendingExploreGochiId
-        : selectedCharacterId;
+    const id = hasExploreReward ? pendingExploreGochiId : selectedCharacterId;
     return getExploreGochi(id)?.name ?? getExploreCharacter(id as ExploreCharacterId)?.name ?? '귤새';
-  }, [
-    exploringGochiId,
-    hasExploreReward,
-    isExploring,
-    pendingExploreGochiId,
-    selectedCharacterId,
-  ]);
+  }, [hasExploreReward, pendingExploreGochiId, selectedCharacterId]);
+
+  // 탐험 중 현황 페이지는 없앰 — 들어오면 섬으로 돌려보낸다
+  useEffect(() => {
+    if (isExploring && !hasExploreReward && !suppressStatus) {
+      leaveExplore();
+    }
+  }, [hasExploreReward, isExploring, suppressStatus]);
+
+  /** 보유한 고치 종류만 — 레벨로 young/adult를 같이 열지 않음 */
+  const ownedCharacterIds = useMemo(
+    () => ownedExploreCharacterIds(growthStage.level),
+    [growthStage.level],
+  );
+
+  const ownedCharacters = useMemo(
+    () =>
+      EXPLORE_CHARACTERS.filter(
+        (entry) => entry.id !== 'egg' && ownedCharacterIds.includes(entry.id),
+      ),
+    [ownedCharacterIds],
+  );
 
   const pickDefaultCharacter = useCallback(
     (courseId: ExploreCourseId) => {
@@ -208,16 +219,12 @@ export default function ExploreScreen() {
       if (!course) {
         return;
       }
-      const eligible = EXPLORE_CHARACTERS.filter((entry) =>
-        canSendExploreCharacter(entry, growthStage.level, course.hours),
+      const eligible = ownedCharacters.filter((entry) =>
+        canSendExploreCharacter(entry, ownedCharacterIds, course.hours),
       );
-      const preferred =
-        eligible.find((entry) => entry.id === 'adult') ??
-        eligible.find((entry) => entry.id === 'young') ??
-        null;
-      setSelectedCharacterId(preferred?.id ?? null);
+      setSelectedCharacterId(eligible[0]?.id ?? null);
     },
-    [growthStage.level],
+    [ownedCharacterIds, ownedCharacters],
   );
 
   const onSelectCourse = (courseId: ExploreCourseId) => {
@@ -250,7 +257,7 @@ export default function ExploreScreen() {
     canStartExplore &&
     !!selectedCourse &&
     !!selectedCharacter &&
-    canSendExploreCharacter(selectedCharacter, growthStage.level, selectedCourse.hours);
+    canSendExploreCharacter(selectedCharacter, ownedCharacterIds, selectedCourse.hours);
 
   const onDispatch = async () => {
     if (!canDispatch || sending || !selectedCourse || !selectedCharacter) {
@@ -286,7 +293,9 @@ export default function ExploreScreen() {
     }
     setClaiming(true);
     try {
-      await claimExploreEgg();
+      await claimExploreEgg(
+        tutorialScope === 'explore' ? { eggId: EXPLORE_TUTORIAL_EGG_ID } : undefined,
+      );
       if (
         tutorialScope === 'explore' &&
         (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
@@ -320,7 +329,7 @@ export default function ExploreScreen() {
         <GachiCoinBadge value={coins} />
       </View>
 
-      {(isExploring || hasExploreReward) && !suppressStatus ? (
+      {hasExploreReward && !suppressStatus ? (
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -330,7 +339,7 @@ export default function ExploreScreen() {
             gap: scale(14),
             alignItems: 'center',
           }}>
-          <ExploreWaitingAnim gochiId={exploringGochiId ?? pendingExploreGochiId} variant="full" />
+          <ExploreWaitingAnim gochiId={pendingExploreGochiId} variant="full" />
           <View
             style={{
               width: '100%',
@@ -343,60 +352,30 @@ export default function ExploreScreen() {
               alignItems: 'center',
             }}>
             <GalmuriText size={12} bold center>
-              {hasExploreReward
-                ? '고치가 무언가를 찾아왔수다!'
-                : `${activeName}가 모험 중이에요`}
+              고치가 무언가를 찾아왔수다!
             </GalmuriText>
-            {isExploring ? (
-              <>
-                <GalmuriText size={20} bold color={gachiUi.greenDeep} center>
-                  {exploreRemainLabel}
-                </GalmuriText>
-                <View
-                  style={{
-                    width: '100%',
-                    height: scale(12),
-                    borderWidth: border,
-                    borderColor: gachiUi.ink,
-                    backgroundColor: gachiUi.white,
-                    overflow: 'hidden',
-                    borderRadius: scale(4),
-                  }}>
-                  <View
-                    style={{
-                      width: `${Math.round(Math.min(1, Math.max(0, exploreProgress)) * 100)}%`,
-                      height: '100%',
-                      backgroundColor: gachiUi.green,
-                    }}
-                  />
-                </View>
-              </>
-            ) : (
-              <GalmuriText size={9} color={gachiUi.inkSoft} center>
-                {activeName}가 숲에서 무언가를 들고 돌아왔어요
-              </GalmuriText>
-            )}
+            <GalmuriText size={9} color={gachiUi.inkSoft} center>
+              {activeName}가 숲에서 무언가를 들고 돌아왔어요
+            </GalmuriText>
           </View>
-          {hasExploreReward ? (
-            <View
-              ref={claimRef}
-              collapsable={false}
-              onLayout={() => {
-                if (tutorialStep === 'explore-reward-button') {
-                  void measureHole(claimRef.current, scale(2)).then(setClaimHole);
-                }
-              }}>
-              <GachiButton
-                label={claiming ? '받는 중…' : '받아 봅서'}
-                tone="green"
-                width="wide"
-                disabled={claiming}
-                onPress={() => {
-                  void onClaim();
-                }}
-              />
-            </View>
-          ) : null}
+          <View
+            ref={claimRef}
+            collapsable={false}
+            onLayout={() => {
+              if (tutorialStep === 'explore-reward-button') {
+                void measureHole(claimRef.current, scale(2)).then(setClaimHole);
+              }
+            }}>
+            <GachiButton
+              label={claiming ? '받는 중…' : '받아 봅서'}
+              tone="green"
+              width="wide"
+              disabled={claiming}
+              onPress={() => {
+                void onClaim();
+              }}
+            />
+          </View>
         </ScrollView>
       ) : (
         <ScrollView
@@ -516,7 +495,7 @@ export default function ExploreScreen() {
                   누구를 보낼까요?
                 </GalmuriText>
                 <GalmuriText size={9} color={gachiUi.inkSoft}>
-                  어디로 어떤 캐릭터를 보내느냐에 따라 결과가 달라져요
+                  가지고 있는 고치만 보낼 수 있어요
                 </GalmuriText>
               </View>
 
@@ -529,49 +508,70 @@ export default function ExploreScreen() {
                   }
                 }}
                 style={{ flexDirection: 'row', gap: scale(8) }}>
-                {EXPLORE_CHARACTERS.filter((character) => character.id !== 'egg').map((character) => {
-                  const unlocked = selectedCourse
-                    ? canSendExploreCharacter(character, growthStage.level, selectedCourse.hours)
-                    : false;
-                  const selected = selectedCharacterId === character.id;
-                  return (
-                    <Pressable
-                      key={character.id}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected, disabled: !unlocked }}
-                      disabled={!unlocked}
-                      onPress={() => {
-                        setSelectedCharacterId(character.id);
-                        if (tutorialScope === 'explore' && tutorialStep === 'explore-character') {
-                          goTutorial('explore-send');
-                        }
-                      }}
-                      style={{
-                        flex: 1,
-                        alignItems: 'center',
-                        gap: scale(6),
-                        paddingVertical: scale(10),
-                        paddingHorizontal: scale(4),
-                        borderWidth: scale(selected ? 3 : gachiUi.border),
-                        borderColor: selected ? SELECT_ORANGE : gachiUi.ink,
-                        backgroundColor: gachiUi.panel,
-                        borderRadius: scale(10),
-                        opacity: unlocked ? 1 : 0.45,
-                      }}>
-                      <Image
-                        source={character.icon}
-                        style={{ width: scale(48), height: scale(48), ...pixelImageStyle }}
-                        contentFit="contain"
-                      />
-                      <GalmuriText size={9} bold center numberOfLines={1}>
-                        {character.name}
-                      </GalmuriText>
-                      <GalmuriText size={7} color={gachiUi.inkSoft} center numberOfLines={2}>
-                        {character.detail}
-                      </GalmuriText>
-                    </Pressable>
-                  );
-                })}
+                {ownedCharacters.length === 0 ? (
+                  <View
+                    style={{
+                      flex: 1,
+                      paddingVertical: scale(16),
+                      paddingHorizontal: scale(12),
+                      borderWidth: border,
+                      borderColor: gachiUi.ink,
+                      backgroundColor: gachiUi.panel,
+                      borderRadius: scale(10),
+                    }}>
+                    <GalmuriText size={9} color={gachiUi.inkSoft} center>
+                      보낼 수 있는 고치가 없어요. 부화한 뒤 다시 와요
+                    </GalmuriText>
+                  </View>
+                ) : (
+                  ownedCharacters.map((character) => {
+                    const courseHours = selectedCourse?.hours ?? 0;
+                    const unlocked = selectedCourse
+                      ? canSendExploreCharacter(character, ownedCharacterIds, courseHours)
+                      : false;
+                    const lockReason = selectedCourse
+                      ? exploreCharacterLockReason(character, ownedCharacterIds, courseHours)
+                      : null;
+                    const selected = selectedCharacterId === character.id;
+                    return (
+                      <Pressable
+                        key={character.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled: !unlocked }}
+                        disabled={!unlocked}
+                        onPress={() => {
+                          setSelectedCharacterId(character.id);
+                          if (tutorialScope === 'explore' && tutorialStep === 'explore-character') {
+                            goTutorial('explore-send');
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          alignItems: 'center',
+                          gap: scale(6),
+                          paddingVertical: scale(10),
+                          paddingHorizontal: scale(4),
+                          borderWidth: scale(selected ? 3 : gachiUi.border),
+                          borderColor: selected ? SELECT_ORANGE : gachiUi.ink,
+                          backgroundColor: gachiUi.panel,
+                          borderRadius: scale(10),
+                          opacity: unlocked ? 1 : 0.45,
+                        }}>
+                        <Image
+                          source={character.icon}
+                          style={{ width: scale(48), height: scale(48), ...pixelImageStyle }}
+                          contentFit="contain"
+                        />
+                        <GalmuriText size={9} bold center numberOfLines={1}>
+                          {character.name}
+                        </GalmuriText>
+                        <GalmuriText size={7} color={gachiUi.inkSoft} center numberOfLines={2}>
+                          {lockReason ?? character.detail}
+                        </GalmuriText>
+                      </Pressable>
+                    );
+                  })
+                )}
               </View>
 
               {selectedCourse ? (
@@ -641,9 +641,11 @@ export default function ExploreScreen() {
                   <GalmuriText size={8} color={gachiUi.inkSoft} center style={{ marginTop: scale(8) }}>
                     {exploreRemaining <= 0
                       ? '오늘 모험은 모두 끝났어요'
-                      : !selectedCharacter
-                        ? '이 코스에 보낼 수 있는 캐릭터가 없어요'
-                        : '보낼 캐릭터를 골라 주세요'}
+                      : ownedCharacters.length === 0
+                        ? '보낼 수 있는 고치가 없어요. 부화 후 다시 와요'
+                        : !selectedCharacter
+                          ? '이 코스에 보낼 수 있는 고치가 없어요'
+                          : '보낼 고치를 골라 주세요'}
                   </GalmuriText>
                 ) : null}
               </View>
@@ -695,38 +697,6 @@ export default function ExploreScreen() {
           align="center"
           hole={sendHole ? () => sendHole : undefined}
           onSkip={finishExploreTour}
-          interceptBack={false}
-          zIndex={100}
-        />
-      ) : null}
-
-      {tutorialStep === 'explore-progress' &&
-      tutorialScope === 'explore' &&
-      (isExploring || hasExploreReward) &&
-      !suppressStatus ? (
-        <TutorialOverlay
-          step={6}
-          total={EXPLORE_TOUR_TOTAL}
-          title="모험이 진행 중이에요"
-          body="남은 시간이 끝나면 고치가 돌아와요. 섬의 서쪽 숲 위에서도 남은 시간을 볼 수 있어요."
-          placement="center"
-          primary={{
-            label: '섬으로',
-            onPress: () => {
-              void saveExploreIntroSeen();
-              if (hasExploreReward) {
-                goTutorial('explore-reward');
-                leaveExplore();
-                return;
-              }
-              skipTutorial();
-              leaveExplore();
-            },
-          }}
-          onSkip={() => {
-            finishExploreTour();
-            leaveExplore();
-          }}
           interceptBack={false}
           zIndex={100}
         />

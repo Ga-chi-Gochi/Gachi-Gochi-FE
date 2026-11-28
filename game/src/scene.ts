@@ -24,6 +24,7 @@ import {
 import { embedded, listen, send, type GameState, type ToGame, type ZoneBoxes } from './bridge';
 import {
   CELL,
+  FOREST_FRAME,
   SEA_PLAIN_COLOR,
   SHORE_FOAM,
   SHORE_TUCK,
@@ -35,6 +36,14 @@ import {
   volcanoSlot,
   zoneFrame,
 } from './shape';
+import { ForestExplore } from './forestExplore';
+import {
+  FOREST_EXPLORE_CANVAS,
+  createForestExplore,
+  forestExploreCharacter,
+  forestExploreOrigin,
+  forestUrl,
+} from './forestExploreBundle';
 import {
   MAX_TICK_MS,
   advance,
@@ -107,12 +116,6 @@ const DEFAULT_STATE: GameState = {
 };
 
 const WEAR_STAGE: Record<MotionStageId, string> = { egg: 'egg', juvenile: 'young', adult: 'adult' };
-
-function creatureKey(level: number) {
-  if (level <= 1) return 'gyulsae-egg';
-  if (level <= 3) return 'gyulsae-young';
-  return 'gyulsae-adult';
-}
 
 const hexCache = new Map<string, number>();
 /** '#RRGGBB' → 숫자. 용암처럼 매 프레임 쓰는 색은 한 번만 바꾼다 */
@@ -224,8 +227,6 @@ type Expand = {
   swapped: boolean;
 };
 
-const quadInOut = (t: number) => Phaser.Math.Easing.Quadratic.InOut(t);
-
 export class IslandScene extends Phaser.Scene {
   private dpr = 1;
   private W = 0;
@@ -247,6 +248,7 @@ export class IslandScene extends Phaser.Scene {
   private rampBlocks: { img: Phaser.GameObjects.Image; lag: number }[] = [];
   private quake!: Phaser.GameObjects.Container;
   private terrain!: Phaser.GameObjects.Image;
+  private forest!: Phaser.GameObjects.Container;
   private volcano!: Phaser.GameObjects.Sprite;
   private volcKey = VOLCANO_REST;
   private volcP = new Player(anim(VOLCANO_REST));
@@ -267,6 +269,8 @@ export class IslandScene extends Phaser.Scene {
   private ashSolid!: Phaser.GameObjects.Rectangle;
   private ashEdge!: Phaser.GameObjects.Graphics;
   private ashPool: Phaser.GameObjects.Sprite[] = [];
+  /** 걷힘 말미에 timeline 이 비어도 마지막 장을 페이드아웃하기 위해 보관 */
+  private ashLastItems: [string, number, number, number][] = [];
 
   private cam = { z: 1, x: 0, y: 0 };
   private camSentAt = 0;
@@ -330,6 +334,7 @@ export class IslandScene extends Phaser.Scene {
     this.load.image('gyulsae-egg', eggUrl);
     this.load.image('gyulsae-young', youngUrl);
     this.load.image('gyulsae-adult', adultUrl);
+    this.load.image('forest-bundle', forestUrl);
     for (const [path, url] of Object.entries(shopUrls)) {
       const m = /shop\/([\w-]+)\.png$/.exec(path);
       if (m) this.load.image(`shop-${m[1]}`, url);
@@ -346,6 +351,9 @@ export class IslandScene extends Phaser.Scene {
     this.H = this.scale.height / this.dpr;
 
     this.makeDotTextures();
+    if (this.textures.exists('forest-bundle')) {
+      this.textures.get('forest-bundle').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
 
     // 층: 섬 세계(바다 포함, 확대·이동) → 화산재(화면 고정)
     // 바다도 섬과 같은 세계에 둔다. 끌거나 확대하면 바다와 섬이 한 화면처럼 같이 움직인다.
@@ -359,8 +367,9 @@ export class IslandScene extends Phaser.Scene {
     // 얕은 물(3단계 색 블록·디더링 점·반짝이)과 남쪽 해안 파도 띠. 땅 아래에 깔리고 땅과 같이 흔들린다
     this.water = this.add.container(0, 0);
     this.terrain = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setVisible(false);
+    this.forest = this.add.container(0, 0);
     this.volcano = this.add.sprite(0, 0, VOLCANO_REST, 0).setOrigin(0, 1);
-    this.quake.add([this.terrain, this.water, this.volcano]);
+    this.quake.add([this.terrain, this.water, this.forest, this.volcano]);
 
     this.decor = this.add.container(0, 0);
     this.creature = this.add.container(0, 0);
@@ -379,14 +388,16 @@ export class IslandScene extends Phaser.Scene {
     // 깊은 바다는 흔들림(quake) 밖에 둔다. 원래도 깊은 바다는 안 흔들렸다.
     this.world.add([this.sea, this.quake, this.decor, this.creature, this.panicFx, this.notice, this.explore, this.ashLayer]);
 
-    // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동), fixedCam = 화산재(고정)
+    // 카메라: main = 배경색만(고정), worldCam = 바다+섬(확대·이동)
+    // 화산재는 world(ashLayer)에 있어서 fixedCam 은 끈다.
+    // Expo Go WebView 에서 빈 fixedCam 이 위에 그려지면 섬이 통째로 안 보인다.
     const main = this.cameras.main;
     main.setBackgroundColor(SEA_PLAIN_COLOR);
     this.worldCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     this.fixedCam = this.cameras.add(0, 0, this.scale.width, this.scale.height);
     main.ignore([this.world, this.overlay]);
     this.worldCam.ignore([this.overlay]);
-    this.fixedCam.ignore([this.world]);
+    this.fixedCam.setVisible(false);
     for (const c of [main, this.worldCam, this.fixedCam]) c.setRoundPixels(false);
     this.applyFixedCams();
     this.applyCamera(true);
@@ -395,9 +406,16 @@ export class IslandScene extends Phaser.Scene {
     this.scale.on('resize', () => this.onResize());
 
     listen((msg) => this.onMessage(msg));
+    // RN 웹뷰는 첫 state 가 오기 전엔 숨긴다. state 가 안 오면 섬이 영구히 안 보이므로 짧게 기다린다.
     this.world.setVisible(!embedded);
     this.applyState(this.state, true);
     send({ type: 'ready' });
+    if (embedded) {
+      this.time.delayedCall(2000, () => {
+        // state 핸드셰이크가 막혀도 섬만은 보이게 (gotState 는 건드리지 않음)
+        if (!this.gotState) this.world.setVisible(true);
+      });
+    }
 
     (window as unknown as { __island?: IslandScene }).__island = this;
   }
@@ -735,6 +753,7 @@ export class IslandScene extends Phaser.Scene {
   // ------------------------------------------------------------------ 섬 땅 (BeachHome)
   private buildTerrain() {
     const next = toIslandStage(getIslandStage(this.state.zones));
+    const prevStage = this.stage;
     if (next !== this.stage) {
       const [ax0, ay0] = stageArt(this.stage).volcanoAnchor;
       const [ax1, ay1] = stageArt(next).volcanoAnchor;
@@ -744,9 +763,43 @@ export class IslandScene extends Phaser.Scene {
       this.layoutSea();
       this.applyCamera(true);
     }
-    this.terrain.setTexture(`v3-stage${this.stage}`).setPosition(0, 0).setVisible(true);
+    const key = `v3-stage${this.stage}`;
+    if (this.textures.exists(key)) {
+      this.terrain.setTexture(key).setPosition(0, 0).setAlpha(1).setScale(1).setVisible(true);
+    } else if (this.textures.exists(`v3-stage${prevStage}`)) {
+      // 새 장 텍스처가 아직이면 이전 섬을 유지 (바다만 보이는 깜빡임 방지)
+      this.terrain.setTexture(`v3-stage${prevStage}`).setVisible(true);
+    } else {
+      this.terrain.setVisible(false);
+    }
     this.buildShore();
+    this.placeForest();
     this.placeVolcano();
+  }
+
+  /** 화산재 연출이 끝난 뒤 섬이 안 남는 경우 대비 */
+  private restoreIslandView() {
+    this.world.setVisible(true);
+    this.ashLastItems = [];
+    for (const s of this.ashPool) s.setVisible(false).setScale(1).setAlpha(1);
+    this.ashSolid.setVisible(false).setAlpha(1);
+    this.ashEdge.clear().setVisible(false).setAlpha(1);
+    this.terrainKey = '';
+    this.decorKey = '';
+    this.applyState(this.state, true);
+    this.applyCamera(true);
+  }
+
+  private placeForest() {
+    this.forest.removeAll(true);
+    // 탐험 중엔 ForestExplore 판이 숲을 그리므로 정적 숲은 숨긴다
+    this.forest.setVisible(this.stage === 3 && !this.state.explore);
+    if (this.stage !== 3) return;
+    if (!this.textures.exists('forest-bundle')) return;
+    const f = FOREST_FRAME;
+    this.forest.add(
+      this.add.image(f.x, f.y, 'forest-bundle').setOrigin(0).setDisplaySize(f.w, f.h).setName('forest-bundle'),
+    );
   }
 
   private placeVolcano() {
@@ -788,6 +841,7 @@ export class IslandScene extends Phaser.Scene {
 
   private startExpand() {
     if (this.ex) return;
+    this.ashLastItems = [];
     this.ex = { t: 0, volcano: false, calm: false, fog: false, reveal: false, pending: false, held: 0, swapped: false };
     this.startPanic();
     this.stepExpand(0);
@@ -814,32 +868,166 @@ export class IslandScene extends Phaser.Scene {
       ex.reveal = true;
       send({ type: 'reveal' });
     }
-    if (!ex.swapped && ex.t >= ASH.swap_ms) {
+    // 완전 덮임 뒤에 지형을 갈아끼운다. 교체가 끝나기 전엔 시간을 멈춰
+    // 화산재 덮개를 유지한다 (안 그러면 바다만 보이는 ‘로딩’ 깜빡임이 난다).
+    const swapAt = Math.max(ASH.swap_ms, ASH.solid.to_ms);
+    if (!ex.swapped && ex.t >= swapAt) {
       if (!ex.pending && ex.held < SWAP_WAIT_MS) {
         ex.held += dt;
-        ex.t = ASH.swap_ms;
+        ex.t = swapAt;
       } else {
         ex.swapped = true;
         this.stopPanic();
-        this.applyState(this.state);
+        this.applyState(this.state, true);
         this.applyCamera(true);
+        // 새 지형이 한 프레임 그려진 뒤부터 걷히도록 짧게 덮개를 유지
+        ex.t = swapAt;
+        ex.held = SWAP_WAIT_MS;
       }
     }
+    // 지형 교체 전에는 clear/done 으로 진행하지 않음
+    if (!ex.swapped && ex.t > swapAt) ex.t = swapAt;
     if (ex.t >= P.done) {
       this.ex = null;
-      for (const s of this.ashPool) s.setVisible(false);
-      this.ashSolid.setVisible(false);
-      this.ashEdge.clear().setVisible(false);
+      this.restoreIslandView();
       this.sendAsh(this.time.now, 0, true);
-      this.applyCamera(true);
+      if (this.volcKey !== VOLCANO_REST) this.setVolcano(VOLCANO_REST, true);
       send({ type: 'done' });
       return;
     }
-    this.drawAsh(ex.t);
-    this.sendAsh(this.time.now, this.ashLevel(ex.t));
+    try {
+      this.drawAsh(ex.t, ex.swapped);
+      this.sendAsh(this.time.now, this.ashLevel(ex.t, ex.swapped));
+    } catch (err) {
+      console.error(err);
+      this.ex = null;
+      this.restoreIslandView();
+      this.sendAsh(this.time.now, 0, true);
+      send({ type: 'done' });
+    }
   }
 
-  private drawAsh(t: number) {
+  /** 화산 스프라이트 입구(월드). parent(quake) 변환까지 반영한다. */
+  private ashEruptPivot() {
+    const top = this.volcano.getTopCenter();
+    return { x: top.x, y: top.y + 8 };
+  }
+
+  /** 타임라인에서 구름이 처음 뜨는 장의 중심 — 여기가 에셋상 퍼짐 시작점 */
+  private ashLocalEruptPoint() {
+    for (const frame of ASH.frames) {
+      if (!frame.length) continue;
+      let sx = 0;
+      let sy = 0;
+      for (const [name, , x, y] of frame) {
+        const a = anim(name);
+        sx += x + a.frameWidth / 2;
+        sy += y + a.frameHeight / 2;
+      }
+      const n = frame.length;
+      return { x: sx / n, y: sy / n };
+    }
+    return { x: ASH.origin[0] * CELL, y: ASH.origin[1] * CELL };
+  }
+
+  /**
+   * 타임라인 로컬 → 월드.
+   * expand 0: 첫 구름 군집이 화산 입구에 붙음 (오프셋 증폭 없음).
+   * expand 1: 입구 기준으로 화면을 가득 채우게 퍼짐.
+   */
+  private ashViewFit(
+    o: { x: number; y: number },
+    vx0: number,
+    vy0: number,
+    vx1: number,
+    vy1: number,
+    expand: number,
+  ) {
+    const [bx0, by0, bx1, by1] = ASH.box;
+    const localErupt = this.ashLocalEruptPoint();
+    const assetEruptX = o.x + localErupt.x;
+    const assetEruptY = o.y + localErupt.y;
+    const pivot = this.ashEruptPivot();
+    const reachX = Math.max(Math.abs(vx0 - pivot.x), Math.abs(vx1 - pivot.x));
+    const reachY = Math.max(Math.abs(vy0 - pivot.y), Math.abs(vy1 - pivot.y));
+    const boxReachX = Math.max(Math.abs(bx0 - localErupt.x), Math.abs(bx1 - localErupt.x));
+    const boxReachY = Math.max(Math.abs(by0 - localErupt.y), Math.abs(by1 - localErupt.y));
+    const fitFull = Math.max(reachX / Math.max(1, boxReachX), reachY / Math.max(1, boxReachY)) * 1.12;
+    const e = Math.max(0, Math.min(1, expand));
+    const fit = 1 + (fitFull - 1) * e;
+    const spriteScale = Math.min(1 + (Math.min(fitFull, 1.85) - 1) * e, 1.85);
+    const mapLocal = (localX: number, localY: number) => {
+      const ax = o.x + localX;
+      const ay = o.y + localY;
+      return {
+        x: pivot.x + (ax - assetEruptX) * fit,
+        y: pivot.y + (ay - assetEruptY) * fit,
+      };
+    };
+    return { fit, fitFull, spriteScale, mapLocal };
+  }
+
+  /**
+   * timeline 한 장을 화면 전체에 맞게 늘린다.
+   * - 애장(f)은 에셋 그대로
+   * - 퍼짐 초반엔 화산 입구에서 시작하고, 가득 찰수록 화면을 채움
+   */
+  private layAshFill(
+    items: [string, number, number, number][],
+    o: { x: number; y: number },
+    vx0: number,
+    vy0: number,
+    vx1: number,
+    vy1: number,
+    expand: number,
+    clearing: boolean,
+  ) {
+    if (!items.length) return [] as { name: string; f: number; x: number; y: number; scale: number }[];
+    const { fitFull, spriteScale, mapLocal } = this.ashViewFit(o, vx0, vy0, vx1, vy1, expand);
+    const map = (name: string, f: number, x: number, y: number) => {
+      const a = anim(name);
+      const p = mapLocal(x + a.frameWidth / 2, y + a.frameHeight / 2);
+      // 구름 중심이 매핑점을 따르게 (입구에 붙는 첫 군집이 맞음)
+      return {
+        name,
+        f,
+        x: p.x - (a.frameWidth * spriteScale) / 2,
+        y: p.y - (a.frameHeight * spriteScale) / 2,
+        scale: spriteScale,
+      };
+    };
+
+    // 걷힐 땐 위성 구름을 빼서, 타임라인 흩어짐이 보이게 한다
+    const pads: [number, number][] =
+      !clearing && fitFull > 1.45 && expand > 0.55
+        ? [
+            [52, 0],
+            [-52, 0],
+            [0, 52],
+            [0, -52],
+            [52, 52],
+            [-52, 52],
+            [52, -52],
+            [-52, -52],
+          ]
+        : !clearing && fitFull > 1.15 && expand > 0.55
+          ? [
+              [48, 0],
+              [-48, 0],
+              [0, 48],
+              [0, -48],
+            ]
+          : [];
+
+    const out: { name: string; f: number; x: number; y: number; scale: number }[] = [];
+    for (const [name, f, x, y] of items) {
+      out.push(map(name, f, x, y));
+      for (const [ox, oy] of pads) out.push(map(name, f, x + ox, y + oy));
+    }
+    return out;
+  }
+
+  private drawAsh(t: number, swapped: boolean) {
     let acc = 0;
     let i = ASH.ms.length - 1;
     for (let k = 0; k < ASH.ms.length; k += 1) {
@@ -850,18 +1038,10 @@ export class IslandScene extends Phaser.Scene {
       }
     }
     const o = this.ashOffset();
-    const items = ASH.frames[i] ?? [];
-    while (this.ashPool.length < items.length) {
-      const s = this.add.sprite(0, 0, items[0][0]).setOrigin(0).setVisible(false);
-      this.ashPool.push(s);
-      this.ashLayer.add(s);
-    }
-    items.forEach(([name, f, x, y], k) => {
-      const s = this.ashPool[k];
-      if (s.texture.key !== name) s.setTexture(name);
-      s.setFrame(f).setPosition(this.snap(o.x + x), this.snap(o.y + y)).setVisible(true);
-    });
-    for (let k = items.length; k < this.ashPool.length; k += 1) this.ashPool[k].setVisible(false);
+    const rawItems = ASH.frames[i] ?? [];
+    if (rawItems.length) this.ashLastItems = rawItems.map((it) => [...it] as [string, number, number, number]);
+    // 마지막 장이 비어도 페이드가 끝나기 전엔 직전 장을 유지
+    const items = rawItems.length ? rawItems : this.ashLastItems;
     const z = this.worldCam.zoom;
     const vw = this.scale.width / z;
     const vh = this.scale.height / z;
@@ -870,36 +1050,105 @@ export class IslandScene extends Phaser.Scene {
     const vy0 = cy - vh / 2 - CELL;
     const vx1 = cx + vw / 2 + CELL;
     const vy1 = cy + vh / 2 + CELL;
-    const solid = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
-    this.ashSolid.setVisible(solid);
-    if (solid) this.ashSolid.setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
-    const g = this.ashEdge.clear().setVisible(!solid);
-    if (!solid) {
+    const P = ASH.phases;
+    // 지형 교체가 끝난 뒤에만 걷힘 시작 (교체 대기 중 바다가 비치는 것 방지)
+    const clearing = swapped && t >= P.clear;
+    const clearU = clearing ? Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear)) : 0;
+    // 초반엔 천천히, 후반에 더 걷히게 (샤라락)
+    const clearEase = clearU * clearU * (3 - 2 * clearU);
+    // 퍼짐 초반(expand~0)엔 입구에 붙고, covered 이후엔 화면을 가득 채움
+    const expand =
+      t <= P.cover ? 0 : t >= P.covered ? 1 : (t - P.cover) / Math.max(1, P.covered - P.cover);
+    const laid = this.layAshFill(items, o, vx0, vy0, vx1, vy1, expand, clearing);
+    const pivot = this.ashEruptPivot();
+    let maxD = 1;
+    for (const it of laid) {
+      const a = anim(it.name);
+      const sx = it.x + (a.frameWidth * it.scale) / 2;
+      const sy = it.y + (a.frameHeight * it.scale) / 2;
+      maxD = Math.max(maxD, Math.hypot(sx - pivot.x, sy - pivot.y));
+    }
+
+    while (this.ashPool.length < laid.length) {
+      const seed = laid[0]?.name ?? items[0]?.[0];
+      if (!seed) break;
+      const s = this.add.sprite(0, 0, seed).setOrigin(0).setVisible(false);
+      this.ashPool.push(s);
+      this.ashLayer.add(s);
+    }
+    laid.forEach((it, k) => {
+      const s = this.ashPool[k];
+      if (s.texture.key !== it.name) s.setTexture(it.name);
+      const a = anim(it.name);
+      const cx = it.x + (a.frameWidth * it.scale) / 2;
+      const cy = it.y + (a.frameHeight * it.scale) / 2;
+      const dist = Math.hypot(cx - pivot.x, cy - pivot.y);
+      // 바깥쪽부터 걷히고, 살짝 바깥으로 밀리며 옅어짐
+      const wave = (dist / maxD) * 0.72;
+      const local = clearing
+        ? Math.min(1, Math.max(0, (clearEase - wave * 0.85) / Math.max(0.12, 1 - wave * 0.85)))
+        : 0;
+      const alpha = 1 - local;
+      const drift = local * (22 + dist * 0.04);
+      const ang = Math.atan2(cy - pivot.y, cx - pivot.x);
+      const scale = it.scale * (1 - local * 0.4);
+      s
+        .setFrame(it.f)
+        .setPosition(this.snap(it.x + Math.cos(ang) * drift), this.snap(it.y + Math.sin(ang) * drift))
+        .setScale(scale)
+        .setAlpha(alpha)
+        .setVisible(alpha > 0.03);
+    });
+    for (let k = laid.length; k < this.ashPool.length; k += 1) {
+      this.ashPool[k].setVisible(false).setScale(1).setAlpha(1);
+    }
+
+    const { mapLocal } = this.ashViewFit(o, vx0, vy0, vx1, vy1, expand);
+    const mapX = (localX: number) => mapLocal(localX, 0).x;
+    const mapY = (localY: number) => mapLocal(0, localY).y;
+
+    // 가득 찬 뒤~지형 교체 전, 그리고 걷힘 중엔 화면 덮개로 빈틈(바다)을 가린다
+    const holdCover = !swapped && t >= P.covered;
+    const solidWindow = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
+    const veilAlpha = clearing ? Math.max(0, 1 - clearEase) : holdCover || solidWindow ? 1 : 0;
+    const showVeil = veilAlpha > 0.02;
+    this.ashSolid.setVisible(showVeil);
+    if (showVeil) {
+      this.ashSolid.setAlpha(veilAlpha).setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
+    } else {
+      this.ashSolid.setAlpha(1);
+    }
+    const edgeAlpha = clearing ? Math.max(0, 1 - clearEase * 1.15) : showVeil ? 0 : 1;
+    const g = this.ashEdge.clear().setVisible(!showVeil && edgeAlpha > 0.02);
+    this.ashEdge.setAlpha(edgeAlpha);
+    if (!showVeil && edgeAlpha > 0.02) {
       const color = hex(ASH.solid.color);
-      const runs = ASH_RUNS[i];
-      const cx = (v: number) => Math.min(vx1, Math.max(vx0, o.x + v));
-      const cy = (v: number) => Math.min(vy1, Math.max(vy0, o.y + v));
+      const runs = ASH_RUNS[Math.min(i, ASH_RUNS.length - 1)];
+      const clampX = (v: number) => Math.min(vx1, Math.max(vx0, mapX(v)));
+      const clampY = (v: number) => Math.min(vy1, Math.max(vy0, mapY(v)));
       for (const [a, b, d, k] of runs.top) {
-        if (b > a) g.fillStyle(color, k).fillRect(cx(a), vy0, cx(b) - cx(a), o.y + d - vy0);
+        if (b > a) g.fillStyle(color, k).fillRect(clampX(a), vy0, clampX(b) - clampX(a), mapY(d) - vy0);
       }
       for (const [a, b, d, k] of runs.bottom) {
-        if (b > a) g.fillStyle(color, k).fillRect(cx(a), o.y + d, cx(b) - cx(a), vy1 - o.y - d);
+        if (b > a) g.fillStyle(color, k).fillRect(clampX(a), mapY(d), clampX(b) - clampX(a), vy1 - mapY(d));
       }
       for (const [a, b, d, k] of runs.left) {
-        if (b > a) g.fillStyle(color, k).fillRect(vx0, cy(a), o.x + d - vx0, cy(b) - cy(a));
+        if (b > a) g.fillStyle(color, k).fillRect(vx0, clampY(a), mapX(d) - vx0, clampY(b) - clampY(a));
       }
       for (const [a, b, d, k] of runs.right) {
-        if (b > a) g.fillStyle(color, k).fillRect(o.x + d, cy(a), vx1 - o.x - d, cy(b) - cy(a));
+        if (b > a) g.fillStyle(color, k).fillRect(mapX(d), clampY(a), vx1 - mapX(d), clampY(b) - clampY(a));
       }
     }
   }
 
-  private ashLevel(t: number) {
+  private ashLevel(t: number, swapped = true) {
     const P = ASH.phases;
     if (t < P.cover) return 0;
     if (t < P.covered) return (t - P.cover) / (P.covered - P.cover);
-    if (t < P.clear) return 1;
-    return Math.max(0, 1 - (t - P.clear) / (P.done - P.clear));
+    if (!swapped || t < P.clear) return 1;
+    const u = Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear));
+    const ease = u * u * (3 - 2 * u);
+    return Math.max(0, 1 - ease);
   }
 
   private ashSentAt = 0;
@@ -1319,87 +1568,97 @@ export class IslandScene extends Phaser.Scene {
     });
   }
 
-  // ------------------------------------------------------------------ 탐험 중 미니 수색 (ExploreWaitingAnim map)
-  private exploreParts: null | {
-    treeL: Phaser.GameObjects.Container;
-    treeR: Phaser.GameObjects.Container;
-    leaf: Phaser.GameObjects.Arc;
-    sand: Phaser.GameObjects.Arc;
-    gochi: Phaser.GameObjects.Image;
-    f: number;
-    level: number;
-    boxH: number;
-  } = null;
+  // ------------------------------------------------------------------ 숲 탐험 (gachi-island forest-explore)
+  private fe: ForestExplore | null = null;
+  private feChar: string | null = null;
+  private feLoading = false;
+  private feWantStop = false;
+  private readonly feTexKey = 'forest-explore-view';
+
+  private stopForestExplore() {
+    this.fe = null;
+    this.feChar = null;
+    this.feWantStop = false;
+    this.explore.removeAll(true);
+    this.explore.setVisible(false);
+    // 마지막 장의 고치가 텍스처에 남지 않게 지운다
+    if (this.textures.exists(this.feTexKey)) {
+      const tex = this.textures.get(this.feTexKey) as Phaser.Textures.CanvasTexture;
+      const ctx = tex.getContext();
+      if (ctx) {
+        ctx.clearRect(0, 0, FOREST_EXPLORE_CANVAS.w, FOREST_EXPLORE_CANVAS.h);
+        tex.refresh();
+      }
+    }
+    if (this.stage === 3) this.forest.setVisible(true);
+  }
+
+  private ensureFeTexture() {
+    if (this.textures.exists(this.feTexKey)) return;
+    const { w, h } = FOREST_EXPLORE_CANVAS;
+    const tex = this.textures.createCanvas(this.feTexKey, w, h);
+    tex?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+  }
+
+  private layoutForestExploreView() {
+    this.ensureFeTexture();
+    const origin = forestExploreOrigin();
+    this.explore.removeAll(true);
+    this.explore.add(this.add.image(0, 0, this.feTexKey).setOrigin(0));
+    this.explore.setPosition(origin.x, origin.y).setScale(1).setVisible(true);
+  }
 
   private updateExplore() {
     const s = this.state;
-    const show = Boolean(s.explore) && !s.placing && !s.petOpen;
-    const f = s.factor;
-    const level = s.explore?.level ?? 1;
+    const show = Boolean(s.explore) && !s.placing && !s.petOpen && this.stage === 3;
     if (!show) {
-      this.explore.setVisible(false);
+      // 탐험 종료·보상 대기: 보낸 고치 애니는 바로 걷어 정적 숲만 남긴다
+      if (this.fe || this.explore.visible) this.stopForestExplore();
       return;
     }
-    const art = stageArt(this.stage);
-    // 서쪽 섬 육지 (RN EXPLORE_WEST_FRAME). develop art 좌표계 + scale 유지, 바다 쪽 0.06 대신 안쪽
-    this.explore
-      .setPosition(art.width * 0.18, art.height * 0.4)
-      .setScale(1 / this.baseDp())
-      .setVisible(true);
-    const parts = this.exploreParts;
-    if (parts && parts.f === f && parts.level === level) return;
-    this.explore.removeAll(true);
-    const boxW = 72 * f;
-    const boxH = 64 * f;
-    const tree = (size: number) => {
-      const spr = this.dotSprite('tree', size);
-      const c = this.add.container(0, 0);
-      if (spr) {
-        spr.img.setPosition(-spr.w / 2, -spr.h / 2);
-        c.add(spr.img);
-        c.setSize(spr.w, spr.h);
-      }
-      return { c, w: spr?.w ?? 0, h: spr?.h ?? 0 };
-    };
-    const tl = tree(22 * f);
-    tl.c.setPosition(tl.w / 2, 4 * f + tl.h / 2);
-    const tr = tree(24 * f);
-    tr.c.setPosition(boxW - tr.w / 2, 2 * f + tr.h / 2);
-    const leaf = this.add.circle(22 * f + 2.5 * f, 8 * f + 2.5 * f, 2.5 * f, hex(pixel.leaf));
-    const sand = this.add.circle(30 * f + 2 * f, 12 * f + 2 * f, 2 * f, hex(pixel.sand));
-    const size = 16 * f;
-    const gochi = this.add.image(0, boxH - 2 * f - size / 2, creatureKey(level)).setDisplaySize(size, size);
-    this.explore.add([tl.c, tr.c, leaf, sand, gochi]);
-    this.exploreParts = { treeL: tl.c, treeR: tr.c, leaf, sand, gochi, f, level, boxH };
+    this.feWantStop = false;
+    this.forest.setVisible(false);
+    const level = s.explore?.level ?? 2;
+    const char = s.explore?.character ?? forestExploreCharacter(level);
+    if (this.fe && this.feChar === char) {
+      if (!this.explore.visible) this.layoutForestExploreView();
+      return;
+    }
+    if (this.feLoading) return;
+    // 캐릭터가 바뀌면 이전 애니는 버리고 선택한 고치로 다시 시작
+    if (this.fe) this.stopForestExplore();
+    this.feLoading = true;
+    void createForestExplore(char)
+      .then((fx) => {
+        if (!this.state.explore) {
+          // 로딩 중 탐험이 끝나면 고치를 올리지 않는다
+          return;
+        }
+        const want = this.state.explore.character ?? forestExploreCharacter(this.state.explore.level ?? 2);
+        if (want !== char) return;
+        this.fe = fx;
+        this.feChar = char;
+        // 숲에 들어가는 intro가 끝나면 RN 타이머를 연다
+        this.fe.onPhase = (phase) => {
+          if (phase === 'loop') send({ type: 'explore-entered' });
+        };
+        this.layoutForestExploreView();
+      })
+      .finally(() => {
+        this.feLoading = false;
+      });
   }
 
-  private drawExplore(now: number) {
-    const p = this.exploreParts;
-    if (!p || !this.explore.visible) return;
-    const f = p.f;
-    const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * u);
-    // 고치가 수풀 사이를 오간다 (1100ms씩)
-    const leg = Math.floor(now / 1100) % 2;
-    const u = ease((now % 1100) / 1100);
-    const left = 8 * f;
-    const right = 36 * f;
-    const x = leg === 0 ? left + (right - left) * u : right - (right - left) * u;
-    const half = (now % 320) / 160;
-    const bob = -2.5 * quadInOut(half < 1 ? half : 2 - half);
-    p.gochi.setPosition(x + (8 * f), p.boxH - 2 * f - 8 * f + bob);
-    p.gochi.setFlipX(Math.floor(now / 1100) % 2 === 1);
-    // 나무 흔들림
-    p.treeL.setAngle(-1 + 5 * Math.sin((2 * Math.PI * now) / 1040));
-    p.treeR.setAngle(5 * Math.sin((2 * Math.PI * now) / 960 + Math.PI / 2));
-    // 잎 튀기 (240ms 올라가고, 400ms 머물고, 280ms 내려오고, 500ms 쉼)
-    const t = now % 1420;
-    const v = t < 240 ? 1 - (1 - t / 240) ** 2 : t < 640 ? 1 : t < 920 ? 1 - quadInOut((t - 640) / 280) : 0;
-    for (const dot of [p.leaf, p.sand]) {
-      dot.setAlpha(v * 0.85);
-      dot.setScale(0.7 + v * 0.4);
-    }
-    p.leaf.y = 8 * f + 2.5 * f - v * 6;
-    p.sand.y = 12 * f + 2 * f - v * 6;
+  private drawExplore(_now: number, delta: number) {
+    if (!this.fe || !this.explore.visible) return;
+    this.fe.update(delta);
+    const tex = this.textures.get(this.feTexKey) as Phaser.Textures.CanvasTexture;
+    const ctx = tex.getContext();
+    if (!ctx) return;
+    ctx.clearRect(0, 0, FOREST_EXPLORE_CANVAS.w, FOREST_EXPLORE_CANVAS.h);
+    this.fe.draw(ctx);
+    tex.refresh();
+    if (this.fe.phase === 'done') this.stopForestExplore();
   }
 
   // ------------------------------------------------------------------ 프레임
@@ -1412,7 +1671,7 @@ export class IslandScene extends Phaser.Scene {
     if (this.seaClock.tick(delta)) {
       this.stepWater();
     }
-    this.drawExplore(now);
+    this.drawExplore(now, delta);
     this.flushCamera();
 
     const fps = this.fps;

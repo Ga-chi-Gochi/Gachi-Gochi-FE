@@ -23,7 +23,8 @@ export type GameState = {
   hideCreature?: boolean;
   /** 온보딩 스토리: 알 주변에 느낌표 강조 이펙트를 켠다 */
   noticeEgg?: boolean;
-  explore: { level: number } | null;
+  /** level·character 는 모험 보내기에서 고른 고치. 탐험 중에만 숲 애니로 보인다 */
+  explore: { level: number; character?: 'adult' | 'juvenile' } | null;
   wear?: { back: string[]; front: string[]; face?: string; seat?: string };
 };
 
@@ -43,7 +44,9 @@ export type FromGame =
   | { type: 'reveal' }
   | { type: 'done' }
   | { type: 'fps'; frames: number; dur: number; maxGap: number; long: number }
-  | { type: 'log'; msg: string };
+  | { type: 'log'; msg: string }
+  /** intro→loop: 고치가 숲에 들어감 — RN 소요 시간 시작 */
+  | { type: 'explore-entered' };
 
 type RNWebView = { postMessage: (data: string) => void };
 const rn = (window as unknown as { ReactNativeWebView?: RNWebView }).ReactNativeWebView;

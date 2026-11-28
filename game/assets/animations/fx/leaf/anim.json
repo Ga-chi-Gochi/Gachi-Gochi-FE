@@ -1,0 +1,26 @@
+{
+  "id": "fx-leaf",
+  "label": "이펙트 — 나뭇잎 3모양 (0 ／ · 1 ＼ · 2 — 누움) — 숲 색 2개. 장 번호를 바꿔 가며 팔랑 (숲 탐험 재생표가 장 번호를 정함)",
+  "playback": "timeline",
+  "frameWidth": 3,
+  "frameHeight": 2,
+  "frameCount": 3,
+  "totalMs": 360,
+  "sheet": "sheet.png",
+  "shadow": null,
+  "durationsMs": [
+    120,
+    120,
+    120
+  ],
+  "motionPx": [
+    0,
+    0,
+    0
+  ],
+  "liftPx": [
+    0,
+    0,
+    0
+  ]
+}

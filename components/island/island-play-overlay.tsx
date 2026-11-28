@@ -2,9 +2,11 @@
 // 배치 구역은 게임 카메라(확대·이동)에 맞춰 같은 자리에 띄운다.
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 
+import type { SpotlightHole } from '@/components/guide/guide-spotlight';
+import { GuideSpeech } from '@/components/guide/guide-controls';
 import type { IslandAsh, IslandCameraState } from '@/components/island/island-game';
 import { PetCreature } from '@/components/island/pet-creature';
 import { PlaceGuideBanner, PlaceSuccessToast, PlaceZoneTarget } from '@/components/island/place-mode';
@@ -12,20 +14,22 @@ import { PixelText } from '@/components/pixel/pixel-ui';
 import { usePlayState } from '@/components/play-state';
 import { useTutorial } from '@/components/tutorial/tutorial-provider';
 import { getShopItem } from '@/constants/content';
-import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
+import {
+  exploreForestFrameFromCamera,
+  islandWorldBoxToScreen,
+} from '@/components/island/explore-button-target';
+import { ISLAND_STAGE_ART, toIslandStage } from '@/constants/island-stages';
+import {
+  getIslandStage,
+  ISLAND_ZONES,
+  ISLAND_ZONE_SHARE,
+  type IslandZoneId,
+} from '@/constants/island-zones';
+import { EXPLORE_TUTORIAL_EGG_ID } from '@/constants/gochi-eggs';
 import { pixel } from '@/constants/pixel-theme';
-import { EXPLORE_WEST_FRAME } from '@/components/island/explore-button-target';
 import { EXPLORE_ROUTE } from '@/constants/routes';
 import { useResponsive } from '@/hooks/use-responsive';
-import { saveExploreIntroSeen } from '@/lib/explore-intro-state';
-/** 해변 화면 비율 (game/src/scene.ts 와 같다) */
-const ZONE_FRAME: Record<IslandZoneId, { x: number; y: number; w: number; h: number }> = {
-  core: { x: 0.24, y: 0.28, w: 0.52, h: 0.44 },
-  west: { x: 0.0, y: 0.34, w: 0.24, h: 0.36 },
-  east: { x: 0.76, y: 0.34, w: 0.24, h: 0.36 },
-  north: { x: 0.24, y: 0.16, w: 0.52, h: 0.14 },
-  south: { x: 0.24, y: 0.7, w: 0.52, h: 0.12 },
-};
+import { saveExploreRewardIntroSeen } from '@/lib/explore-intro-state';
 
 type IslandPlayOverlayProps = {
   camera: IslandCameraState;
@@ -33,9 +37,17 @@ type IslandPlayOverlayProps = {
   ash: IslandAsh;
   petOpen: boolean;
   onClosePet: () => void;
+  /** 탐험 결과 말풍선 실측 구멍 (튜토리얼 스포트라이트용) */
+  onRewardBubbleHole?: (hole: SpotlightHole | null) => void;
 };
 
-export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPlayOverlayProps) {
+export function IslandPlayOverlay({
+  camera,
+  ash,
+  petOpen,
+  onClosePet,
+  onRewardBubbleHole,
+}: IslandPlayOverlayProps) {
   const { scale } = useResponsive();
   const windowSize = useWindowDimensions();
   // 게임이 알려 준 화면 크기를 쓴다 (섬 좌표의 기준이 같아야 배치 구역이 맞는다)
@@ -53,13 +65,45 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     acknowledgeZoneUnlock,
     exploreForestUnlocked,
     isExploring,
+    isExploreEntering,
     hasExploreReward,
+    claimExploreEgg,
     exploreRemainLabel,
+    exploreProgress,
     petCreature,
   } = usePlayState();
-  const { step: tutorialStep, scope: tutorialScope, goTo: goTutorial, skip: skipTutorial } =
-    useTutorial();
+  /** 숲 진입 후 타이머가 돌 때만 바·초 표시 */
+  const showExploreTimer = isExploring && !isExploreEntering;
+  const exploreRemainRatio = Math.min(1, Math.max(0, 1 - exploreProgress));
+  const {
+    step: tutorialStep,
+    scope: tutorialScope,
+    goTo: goTutorial,
+    skip: skipTutorial,
+  } = useTutorial();
   const [toastName, setToastName] = useState<string | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const rewardBubbleRef = useRef<ComponentRef<typeof View>>(null);
+
+  const reportRewardBubbleHole = () => {
+    if (!onRewardBubbleHole) {
+      return;
+    }
+    rewardBubbleRef.current?.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+      if (measuredWidth <= 0 || measuredHeight <= 0) {
+        onRewardBubbleHole(null);
+        return;
+      }
+      const pad = scale(4);
+      onRewardBubbleHole({
+        left: x - pad,
+        top: y - pad,
+        width: measuredWidth + pad * 2,
+        height: measuredHeight + pad * 2,
+        radius: scale(10),
+      });
+    });
+  };
 
   const placing = Boolean(pendingPlaceItemId);
   const pendingItem = pendingPlaceItemId ? getShopItem(pendingPlaceItemId) : null;
@@ -96,30 +140,38 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
     return () => clearTimeout(timer);
   }, [acknowledgeLastPlaced, lastPlaced]);
 
-  /** 섬 좌표 → 화면 좌표 (게임 카메라: 화면 가운데 기준 확대 후 이동) */
+  /** 월드(아트) 구역 → 화면 좌표. camera.zones 는 Phaser zoneFrame 값 */
   const toScreen = (id: IslandZoneId) => {
-    const f = ZONE_FRAME[id];
-    const box = camera.zones?.[id] ?? { left: f.x * width, top: f.y * height, width: f.w * width, height: f.h * height };
-    return {
-      left: width / 2 + (box.left - width / 2) * camera.zoom + camera.x,
-      top: height / 2 + (box.top - height / 2) * camera.zoom + camera.y,
-      width: box.width * camera.zoom,
-      height: box.height * camera.zoom,
+    const share = ISLAND_ZONE_SHARE[id];
+    const art = ISLAND_STAGE_ART[toIslandStage(getIslandStage(unlockedZones))];
+    const box = camera.zones?.[id] ?? {
+      left: share.x * art.width,
+      top: share.y * art.height,
+      width: share.w * art.width,
+      height: share.h * art.height,
     };
+    // w/2 + (world − w/2)×zoom + x  (world×zoom + x 는 zoom≠1 이면 바다 쪽으로 빗나감)
+    return islandWorldBoxToScreen({ ...camera, w: width, h: height }, box);
   };
 
-  /** 탐험 터치·타이머는 바다보다 섬 육지 쪽으로 당긴 프레임을 쓴다 */
-  const westFrame = (() => {
-    const f = EXPLORE_WEST_FRAME;
-    const left = f.x * width;
-    const top = f.y * height;
-    return {
-      left: width / 2 + (left - width / 2) * camera.zoom + camera.x,
-      top: height / 2 + (top - height / 2) * camera.zoom + camera.y,
-      width: f.w * width * camera.zoom,
-      height: f.h * height * camera.zoom,
-    };
-  })();
+  /** 탐험 터치·타이머: 섬 위 풀숲(forest.png) — west 배치 구역과 별개 */
+  const westFrame = exploreForestFrameFromCamera(camera, width, height);
+
+  useEffect(() => {
+    if (!hasExploreReward) {
+      onRewardBubbleHole?.(null);
+      return;
+    }
+    const frame = requestAnimationFrame(() => reportRewardBubbleHole());
+    return () => cancelAnimationFrame(frame);
+  }, [
+    hasExploreReward,
+    onRewardBubbleHole,
+    westFrame.left,
+    westFrame.top,
+    westFrame.width,
+    westFrame.height,
+  ]);
 
   return (
     <View
@@ -156,62 +208,138 @@ export function IslandPlayOverlay({ camera, ash, petOpen, onClosePet }: IslandPl
       ) : null}
 
       {exploreForestUnlocked && !placing && !petOpen && !zoneUnlockReveal ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={
-            hasExploreReward ? '탐험 보상 받기' : isExploring ? '탐험 현황 보기' : '서쪽 숲 모험 보내기'
-          }
-          onPress={() => {
-            if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
-              goTutorial('explore-course');
-            } else if (tutorialScope === 'explore' && tutorialStep === 'explore-progress') {
-              void saveExploreIntroSeen();
-              if (hasExploreReward) {
-                goTutorial('explore-reward');
-              } else {
-                skipTutorial();
-              }
-            } else if (
-              tutorialScope === 'explore' &&
-              (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
-            ) {
-              if (tutorialStep === 'explore-reward') {
-                goTutorial('explore-reward-button');
-              }
-            }
-            router.push(EXPLORE_ROUTE);
-          }}
-          style={{
-            position: 'absolute',
-            left: westFrame.left,
-            top: westFrame.top,
-            width: westFrame.width,
-            height: westFrame.height,
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: 1 - Math.max(ash.mid, ash.bottom),
-          }}>
-          {isExploring ? (
-            <View
-              pointerEvents="none"
-              style={{
-                paddingHorizontal: scale(8),
-                paddingVertical: scale(6),
-                borderWidth: scale(2),
-                borderColor: pixel.ink,
-                backgroundColor: 'rgba(255,248,230,0.92)',
-                alignItems: 'center',
-                gap: scale(2),
-              }}>
-              <PixelText size={10} color={pixel.ink} center>
-                탐험중
+        isExploring ? (
+          // 탐험 소요 시간 동안 숲 터치 잠금 — 바·초만 표시
+          <View
+            pointerEvents="none"
+            accessibilityLabel="탐험 진행 중"
+            style={{
+              position: 'absolute',
+              left: westFrame.left,
+              top: westFrame.top,
+              width: westFrame.width,
+              height: westFrame.height,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 1 - Math.max(ash.mid, ash.bottom),
+            }}>
+            {showExploreTimer ? (
+              <View
+                style={{
+                  width: Math.min(westFrame.width * 0.72, scale(120)),
+                  alignItems: 'center',
+                  gap: scale(4),
+                }}>
+                <View
+                  style={{
+                    width: '100%',
+                    height: scale(10),
+                    borderWidth: scale(2),
+                    borderColor: pixel.ink,
+                    backgroundColor: 'rgba(255,253,248,0.55)',
+                    overflow: 'hidden',
+                  }}>
+                  <View
+                    style={{
+                      width: `${Math.round(exploreRemainRatio * 100)}%`,
+                      height: '100%',
+                      backgroundColor: pixel.leaf,
+                    }}
+                  />
+                </View>
+                <PixelText size={11} color={pixel.ink} center>
+                  {exploreRemainLabel}
+                </PixelText>
+              </View>
+            ) : null}
+          </View>
+        ) : hasExploreReward ? (
+          // 숲을 가리키는 말풍선 결과창
+          <View
+            ref={rewardBubbleRef}
+            collapsable={false}
+            pointerEvents="box-none"
+            onLayout={reportRewardBubbleHole}
+            style={{
+              position: 'absolute',
+              left: Math.max(scale(8), westFrame.left + westFrame.width / 2 - scale(72)),
+              // 말풍선 본체는 숲 위, 꼬리가 숲 꼭대기를 가리키게
+              top: Math.max(scale(8), westFrame.top - scale(78)),
+              width: Math.min(westFrame.width * 1.05, scale(144)),
+              alignItems: 'center',
+              opacity: 1 - Math.max(ash.mid, ash.bottom),
+              zIndex: 8,
+            }}>
+            <GuideSpeech compact>
+              <PixelText size={11} color={pixel.ink} center>
+                찾아왔수다!
               </PixelText>
-              <PixelText size={12} color={pixel.ink} center>
-                {exploreRemainLabel}
-              </PixelText>
-            </View>
-          ) : null}
-        </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="탐험 보상 받기"
+                disabled={claiming}
+                onPress={() => {
+                  if (claiming) {
+                    return;
+                  }
+                  if (tutorialScope === 'explore' && tutorialStep === 'explore-reward') {
+                    goTutorial('explore-reward-button');
+                    return;
+                  }
+                  setClaiming(true);
+                  void claimExploreEgg(
+                    tutorialScope === 'explore' ? { eggId: EXPLORE_TUTORIAL_EGG_ID } : undefined,
+                  )
+                    .then(() => {
+                      if (
+                        tutorialScope === 'explore' &&
+                        (tutorialStep === 'explore-reward' || tutorialStep === 'explore-reward-button')
+                      ) {
+                        void saveExploreRewardIntroSeen();
+                        skipTutorial();
+                      }
+                    })
+                    .finally(() => setClaiming(false));
+                }}
+                style={{
+                  alignSelf: 'center',
+                  minHeight: scale(28),
+                  paddingHorizontal: scale(10),
+                  paddingVertical: scale(6),
+                  backgroundColor: claiming ? pixel.ash : pixel.tangerine,
+                  borderWidth: scale(2),
+                  borderColor: pixel.ink,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <PixelText size={11} color={pixel.white} center>
+                  {claiming ? '받는 중…' : '받아 봅서'}
+                </PixelText>
+              </Pressable>
+            </GuideSpeech>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="서쪽 숲 모험 보내기"
+            onPress={() => {
+              if (tutorialScope === 'explore' && tutorialStep === 'explore-button') {
+                goTutorial('explore-course');
+              }
+              router.push(EXPLORE_ROUTE);
+            }}
+            style={{
+              position: 'absolute',
+              left: westFrame.left,
+              top: westFrame.top,
+              width: westFrame.width,
+              height: westFrame.height,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: 1 - Math.max(ash.mid, ash.bottom),
+            }}
+          />
+        )
       ) : null}
 
       {zoneUnlockReveal ? (

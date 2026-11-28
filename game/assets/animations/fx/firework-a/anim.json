@@ -1,0 +1,42 @@
+{
+  "id": "fx-firework-a",
+  "label": "이펙트 — 폭죽 A — 흰 십자 → 연두·주황 빛살 → 붉게 바램 (1회, 가운데 기준)",
+  "playback": "once",
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "frameCount": 7,
+  "totalMs": 710,
+  "sheet": "sheet.png",
+  "shadow": null,
+  "pivot": [
+    16,
+    16
+  ],
+  "durationsMs": [
+    70,
+    70,
+    80,
+    90,
+    110,
+    130,
+    160
+  ],
+  "motionPx": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "liftPx": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}

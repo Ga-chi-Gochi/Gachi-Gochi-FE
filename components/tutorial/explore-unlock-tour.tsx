@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 
 import {
-  exploreRewardPopupHole,
+  exploreRewardBubbleHole,
   exploreWestZoneHole,
 } from '@/components/island/explore-button-target';
+import type { IslandCameraState } from '@/components/island/island-game';
 import type { SpotlightHole } from '@/components/guide/guide-spotlight';
 import { usePlayState } from '@/components/play-state';
 import { TutorialOverlay } from '@/components/tutorial/tutorial-overlay';
@@ -23,16 +24,21 @@ const HOME_STEPS = new Set([
 ]);
 
 /**
- * 홈: 해금 팝업 → 서쪽 숲 탭 → (모험 보낸 뒤) 진행 중 → 보상 팝업.
+ * 홈: 해금 팝업 → 서쪽 숲 탭 → (모험 보낸 뒤) 진행 중 → 숲 위 말풍선.
  * 코스·캐릭터·보내기 단계는 /explore 화면에서 이어진다.
  */
 export function ExploreUnlockTour({
   enabled = true,
-  rewardPopupHole = null,
+  westHole = null,
+  rewardBubbleHole = null,
+  camera = null,
 }: {
   enabled?: boolean;
-  /** 홈 위쪽 탐험 완료 팝업 실측 구멍. 없으면 대략 위치로 대체 */
-  rewardPopupHole?: SpotlightHole | null;
+  /** 카메라 기준 서쪽 육지 구멍. 없으면 화면 비율 대략 위치 */
+  westHole?: SpotlightHole | null;
+  /** 숲 위 결과 말풍선 실측 구멍 */
+  rewardBubbleHole?: SpotlightHole | null;
+  camera?: IslandCameraState | null;
 }) {
   const { scale } = useResponsive();
   const { width, height } = useWindowDimensions();
@@ -90,7 +96,7 @@ export function ExploreUnlockTour({
     );
   }
 
-  const westHole = exploreWestZoneHole(width, height);
+  const forestHole = westHole ?? exploreWestZoneHole(width, height);
 
   if (step === 'explore-button') {
     return (
@@ -98,30 +104,31 @@ export function ExploreUnlockTour({
         key="explore-button"
         step={2}
         total={EXPLORE_TOUR_TOTAL}
-        title="서쪽 숲을 눌러 봅서"
-        body="섬 왼쪽 서쪽 숲을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
-        hint="서쪽 숲을 눌러 보세요"
+        title="숲을 눌러 봅서"
+        body="섬 북서쪽 풀숲을 누르면 코스와 캐릭터를 고르는 화면으로 가요."
+        hint="풀숲을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => westHole}
+        hole={() => forestHole}
         onSkip={dismissIntro}
         zIndex={92}
       />
     );
   }
 
-  if (step === 'explore-progress') {
+  // 보상이 준비되면 진행 중 안내보다 '돌아왔수다' 가이드를 먼저 띄운다
+  if (step === 'explore-progress' && !hasExploreReward) {
     return (
       <TutorialOverlay
         key="explore-progress"
         step={6}
         total={EXPLORE_TOUR_TOTAL}
         title="모험이 진행 중이에요"
-        body="서쪽 숲 위에 남은 시간이 보여요. 시간이 끝나면 고치가 돌아와요."
-        hint="숲을 누르거나 다음을 눌러 보세요"
+        body="풀숲 위에 남은 시간이 보여요. 시간이 끝나면 고치가 돌아와요."
+        hint="다음을 눌러 보세요"
         placement="below"
         align="start"
-        hole={() => westHole}
+        hole={() => forestHole}
         primary={{
           label: '다음',
           onPress: finishProgress,
@@ -132,18 +139,21 @@ export function ExploreUnlockTour({
     );
   }
 
-  if (step === 'explore-reward') {
+  if (step === 'explore-reward' || (step === 'explore-progress' && hasExploreReward)) {
     return (
       <TutorialOverlay
         key="explore-reward"
         step={7}
         total={EXPLORE_TOUR_TOTAL}
         title="고치가 돌아왔수다!"
-        body="고치가 숲에서 무언가를 찾아왔어요. 위쪽 안내에서 받아 봅서."
+        body="고치가 숲에서 무언가를 찾아왔어요. 다음을 누르면 숲 위 안내에서 받을 수 있어요."
         placement="center"
         primary={{
           label: '다음',
-          onPress: () => goTo('explore-reward-button'),
+          onPress: () => {
+            void saveExploreIntroSeen();
+            goTo('explore-reward-button');
+          },
         }}
         onSkip={dismissReward}
         zIndex={92}
@@ -151,7 +161,11 @@ export function ExploreUnlockTour({
     );
   }
 
-  const rewardHole = rewardPopupHole ?? exploreRewardPopupHole(scale, width);
+  const bubbleHole =
+    rewardBubbleHole ??
+    (camera
+      ? exploreRewardBubbleHole(scale, camera, width, height)
+      : exploreRewardBubbleHole(scale, { zoom: 1, x: 0, y: 0, w: 0, h: 0 }, width, height));
 
   return (
     <TutorialOverlay
@@ -159,11 +173,11 @@ export function ExploreUnlockTour({
       step={8}
       total={EXPLORE_TOUR_TOTAL}
       title="받아 봅서!"
-      body="위쪽 안내의 받아 봅서를 누르면 고치가 가져온 걸 확인할 수 있어요."
-      hint="위쪽 팝업의 받아 봅서를 눌러 보세요"
+      body="숲 위 안내의 받아 봅서를 누르면 고치가 가져온 걸 확인할 수 있어요."
+      hint="말풍선의 받아 봅서를 눌러 보세요"
       placement="below"
-      align="center"
-      hole={() => rewardHole}
+      align="start"
+      hole={() => bubbleHole}
       onSkip={dismissReward}
       zIndex={92}
     />

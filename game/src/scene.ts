@@ -753,6 +753,7 @@ export class IslandScene extends Phaser.Scene {
   // ------------------------------------------------------------------ 섬 땅 (BeachHome)
   private buildTerrain() {
     const next = toIslandStage(getIslandStage(this.state.zones));
+    const prevStage = this.stage;
     if (next !== this.stage) {
       const [ax0, ay0] = stageArt(this.stage).volcanoAnchor;
       const [ax1, ay1] = stageArt(next).volcanoAnchor;
@@ -765,8 +766,10 @@ export class IslandScene extends Phaser.Scene {
     const key = `v3-stage${this.stage}`;
     if (this.textures.exists(key)) {
       this.terrain.setTexture(key).setPosition(0, 0).setAlpha(1).setScale(1).setVisible(true);
+    } else if (this.textures.exists(`v3-stage${prevStage}`)) {
+      // 새 장 텍스처가 아직이면 이전 섬을 유지 (바다만 보이는 깜빡임 방지)
+      this.terrain.setTexture(`v3-stage${prevStage}`).setVisible(true);
     } else {
-      // 텍스처가 없으면 바다만 남아 섬이 사라진 것처럼 보인다
       this.terrain.setVisible(false);
     }
     this.buildShore();
@@ -865,8 +868,8 @@ export class IslandScene extends Phaser.Scene {
       ex.reveal = true;
       send({ type: 'reveal' });
     }
-    // 완전 덮임(solid)이 끝난 뒤에 지형을 갈아끼운다. 덮는 중에 카메라·스테이지가
-    // 바뀌면 섬이 통째로 안 보이거나 깜빡인다.
+    // 완전 덮임 뒤에 지형을 갈아끼운다. 교체가 끝나기 전엔 시간을 멈춰
+    // 화산재 덮개를 유지한다 (안 그러면 바다만 보이는 ‘로딩’ 깜빡임이 난다).
     const swapAt = Math.max(ASH.swap_ms, ASH.solid.to_ms);
     if (!ex.swapped && ex.t >= swapAt) {
       if (!ex.pending && ex.held < SWAP_WAIT_MS) {
@@ -877,8 +880,13 @@ export class IslandScene extends Phaser.Scene {
         this.stopPanic();
         this.applyState(this.state, true);
         this.applyCamera(true);
+        // 새 지형이 한 프레임 그려진 뒤부터 걷히도록 짧게 덮개를 유지
+        ex.t = swapAt;
+        ex.held = SWAP_WAIT_MS;
       }
     }
+    // 지형 교체 전에는 clear/done 으로 진행하지 않음
+    if (!ex.swapped && ex.t > swapAt) ex.t = swapAt;
     if (ex.t >= P.done) {
       this.ex = null;
       this.restoreIslandView();
@@ -888,8 +896,8 @@ export class IslandScene extends Phaser.Scene {
       return;
     }
     try {
-      this.drawAsh(ex.t);
-      this.sendAsh(this.time.now, this.ashLevel(ex.t));
+      this.drawAsh(ex.t, ex.swapped);
+      this.sendAsh(this.time.now, this.ashLevel(ex.t, ex.swapped));
     } catch (err) {
       console.error(err);
       this.ex = null;
@@ -1019,7 +1027,7 @@ export class IslandScene extends Phaser.Scene {
     return out;
   }
 
-  private drawAsh(t: number) {
+  private drawAsh(t: number, swapped: boolean) {
     let acc = 0;
     let i = ASH.ms.length - 1;
     for (let k = 0; k < ASH.ms.length; k += 1) {
@@ -1043,7 +1051,8 @@ export class IslandScene extends Phaser.Scene {
     const vx1 = cx + vw / 2 + CELL;
     const vy1 = cy + vh / 2 + CELL;
     const P = ASH.phases;
-    const clearing = t >= P.clear;
+    // 지형 교체가 끝난 뒤에만 걷힘 시작 (교체 대기 중 바다가 비치는 것 방지)
+    const clearing = swapped && t >= P.clear;
     const clearU = clearing ? Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear)) : 0;
     // 초반엔 천천히, 후반에 더 걷히게 (샤라락)
     const clearEase = clearU * clearU * (3 - 2 * clearU);
@@ -1098,13 +1107,21 @@ export class IslandScene extends Phaser.Scene {
     const mapX = (localX: number) => mapLocal(localX, 0).x;
     const mapY = (localY: number) => mapLocal(0, localY).y;
 
-    const solid = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
-    this.ashSolid.setVisible(solid);
-    if (solid) this.ashSolid.setAlpha(1).setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
-    const edgeAlpha = clearing ? Math.max(0, 1 - clearEase * 1.15) : 1;
-    const g = this.ashEdge.clear().setVisible(!solid && edgeAlpha > 0.02);
+    // 가득 찬 뒤~지형 교체 전, 그리고 걷힘 중엔 화면 덮개로 빈틈(바다)을 가린다
+    const holdCover = !swapped && t >= P.covered;
+    const solidWindow = t >= ASH.solid.from_ms && t < ASH.solid.to_ms;
+    const veilAlpha = clearing ? Math.max(0, 1 - clearEase) : holdCover || solidWindow ? 1 : 0;
+    const showVeil = veilAlpha > 0.02;
+    this.ashSolid.setVisible(showVeil);
+    if (showVeil) {
+      this.ashSolid.setAlpha(veilAlpha).setPosition(vx0, vy0).setSize(vx1 - vx0, vy1 - vy0);
+    } else {
+      this.ashSolid.setAlpha(1);
+    }
+    const edgeAlpha = clearing ? Math.max(0, 1 - clearEase * 1.15) : showVeil ? 0 : 1;
+    const g = this.ashEdge.clear().setVisible(!showVeil && edgeAlpha > 0.02);
     this.ashEdge.setAlpha(edgeAlpha);
-    if (!solid && edgeAlpha > 0.02) {
+    if (!showVeil && edgeAlpha > 0.02) {
       const color = hex(ASH.solid.color);
       const runs = ASH_RUNS[Math.min(i, ASH_RUNS.length - 1)];
       const clampX = (v: number) => Math.min(vx1, Math.max(vx0, mapX(v)));
@@ -1124,11 +1141,11 @@ export class IslandScene extends Phaser.Scene {
     }
   }
 
-  private ashLevel(t: number) {
+  private ashLevel(t: number, swapped = true) {
     const P = ASH.phases;
     if (t < P.cover) return 0;
     if (t < P.covered) return (t - P.cover) / (P.covered - P.cover);
-    if (t < P.clear) return 1;
+    if (!swapped || t < P.clear) return 1;
     const u = Math.min(1, (t - P.clear) / Math.max(1, P.done - P.clear));
     const ease = u * u * (3 - 2 * u);
     return Math.max(0, 1 - ease);

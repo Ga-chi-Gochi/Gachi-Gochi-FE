@@ -20,7 +20,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 const GAME_HTML = require('@/assets/game/island.html');
 
 /** game:build 후 웹뷰가 옛 HTML 을 붙들지 않게 올린다 */
-const ISLAND_GAME_BUILD = 'forest-explore-20';
+const ISLAND_GAME_BUILD = 'forest-explore-21';
 
 /** 바다 기본 색. 게임이 뜨기 전에도 같은 색이 보이게 한다. */
 export const ISLAND_SEA = '#2ca6a4';

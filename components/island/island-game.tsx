@@ -13,6 +13,7 @@ import { usePlayState } from '@/components/play-state';
 import { getShopItem } from '@/constants/content';
 import { exploreForestCharacter, exploreGochiLevel } from '@/constants/explore';
 import type { IslandZoneId } from '@/constants/island-zones';
+import { wearLayers } from '@/constants/wear-slots';
 import { useResponsive } from '@/hooks/use-responsive';
 
 const GAME_HTML = require('@/assets/game/island.html');
@@ -166,7 +167,7 @@ export function IslandGame({
         type: 'state',
         zones: play.unlockedZones,
         growing: play.zoneUnlockReveal?.zoneId ?? null,
-        level: play.growthStage.level,
+        level: play.growthReveal ? play.growthReveal.from.level : play.growthStage.level,
         factor,
         placed: placed
           .map((entry) => ({ itemId: entry.itemId, zoneId: entry.zoneId, sprite: getShopItem(entry.itemId)?.sprite ?? '' }))
@@ -187,6 +188,7 @@ export function IslandGame({
                 character: exploreForestCharacter(play.exploringGochiId),
               }
             : null,
+        wear: { ...wearLayers(play.equipped), face: play.equipped.face, seat: play.equipped.seat },
       }),
     [
       factor,
@@ -195,8 +197,10 @@ export function IslandGame({
       placed,
       play.exploreForestUnlocked,
       play.exploringGochiId,
+      play.growthReveal,
       play.growthStage.level,
       play.isExploring,
+      play.equipped,
       play.lastPlaced,
       play.pendingPlaceItemId,
       play.unlockedZones,

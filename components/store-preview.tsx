@@ -1,9 +1,11 @@
 import { Image } from 'expo-image';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { PixelRatio, Platform, Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
+import { GyulsaeWear } from '@/components/gyulsae-wear';
 import { PixelChip, PixelText } from '@/components/pixel/pixel-ui';
 import { usePixelNotice } from '@/components/pixel-notice';
 import { usePlayState } from '@/components/play-state';
@@ -13,18 +15,31 @@ import { getShopItem } from '@/constants/content';
 import { ISLAND_STAGE_ART, toIslandStage, type IslandStageId } from '@/constants/island-stages';
 import { ISLAND_ZONES, type IslandZoneId } from '@/constants/island-zones';
 import { pixel } from '@/constants/pixel-theme';
-import { CHARACTER_WEAR, wearStageForLevel, type GyulsaeWearStage } from '@/constants/shop-art';
 import type { StorePreviewTab } from '@/constants/store-items';
+import { WEAR_ART_PIXELS } from '@/constants/wear-art';
 import { useResponsive } from '@/hooks/use-responsive';
+import { snapArt } from '@/lib/pixel-snap';
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
-const GYULSAE_ART_PIXELS = 64;
-const GYULSAE_ART: Record<GyulsaeWearStage, { source: number; shift: number }> = {
-  egg: { source: require('@/assets/pixel/gyulsae-egg.png'), shift: 0.13 },
-  young: { source: require('@/assets/pixel/gyulsae-juvenile.png'), shift: 0.14 },
-  adult: { source: require('@/assets/pixel/gyulsae-adult.png'), shift: 0 },
-};
+const CHARACTER_SHARE = 0.7;
+const GROUND_SHARE = 1 / 3;
+const PREVIEW_SKY = '#CFEAF5';
+const GRASS = { main: '#64B062', edge: '#3F9A5A' };
+const GRASS_TUFTS: [number, number][] = [
+  [8, 4],
+  [21, 9],
+  [33, 3],
+  [70, 5],
+  [83, 10],
+  [92, 3],
+];
+const SHADOW_ROWS: [number, number][] = [
+  [9, 30],
+  [7, 31],
+];
+const SHADOW_COLOR = 'rgba(26,21,32,0.22)';
+const COLLECTION_ROUTE = '/collection' as Href;
 const CELL = 32;
 const SEA_BLOCK_CELLS = 8;
 const SEA_COLOR = '#32b5b3';
@@ -83,48 +98,43 @@ function getIslandFit(stage: IslandStageId, width: number, height: number, paddi
   return { unit, left, top };
 }
 
-function getCrispSize(target: number) {
-  const ratio = PixelRatio.get();
-  const multiple = Math.max(1, Math.round((target * ratio) / GYULSAE_ART_PIXELS));
-  return (multiple * GYULSAE_ART_PIXELS) / ratio;
-}
-
-function StoreCharacterView({
-  size,
-  bottomInset,
-  selectedItemId,
-}: {
-  size: number;
-  bottomInset: number;
-  selectedItemId: string | null;
-}) {
-  const { growthStage } = usePlayState();
-  const crispSize = getCrispSize(size);
-  const stage = wearStageForLevel(growthStage.level);
-  const body = GYULSAE_ART[stage];
-  const wear = selectedItemId ? CHARACTER_WEAR[selectedItemId]?.[stage] : undefined;
-  const layer = { position: 'absolute', width: crispSize, height: crispSize, ...crispStyle } as const;
+function StoreCharacterView({ size, height, selectedItemId }: { size: number; height: number; selectedItemId: string | null }) {
+  const { growthStage, equipped } = usePlayState();
+  const crispSize = snapArt(size, WEAR_ART_PIXELS);
+  const dot = crispSize / WEAR_ART_PIXELS;
+  const groundTop = Math.round(height * (1 - GROUND_SHARE));
   return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingBottom: bottomInset,
-      }}>
-      <View
-        style={{
-          width: crispSize,
-          height: crispSize,
-          transform: [{ translateY: -crispSize * body.shift }],
-        }}>
-        <Image source={body.source} style={layer} contentFit="fill" />
-        {wear ? <Image source={wear} style={layer} contentFit="fill" /> : null}
+    <View style={{ flex: 1, backgroundColor: PREVIEW_SKY }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, top: groundTop, bottom: 0, backgroundColor: GRASS.main }}>
+        <View style={{ height: dot, backgroundColor: GRASS.edge }} />
+        {GRASS_TUFTS.map(([x, y], index) => (
+          <View
+            key={index}
+            style={{ position: 'absolute', left: `${x}%`, top: dot * y, width: dot, height: dot * 2, backgroundColor: GRASS.edge }}
+          />
+        ))}
+      </View>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: crispSize, height: crispSize }}>
+          {SHADOW_ROWS.map(([inset, row]) => (
+            <View
+              key={row}
+              style={{
+                position: 'absolute',
+                left: dot * inset,
+                right: dot * inset,
+                top: dot * row,
+                height: dot,
+                backgroundColor: SHADOW_COLOR,
+              }}
+            />
+          ))}
+          <GyulsaeWear level={growthStage.level} size={crispSize} equipped={equipped} preview={selectedItemId} />
+        </View>
       </View>
     </View>
   );
 }
-
 function StoreIslandView({
   width: initialWidth,
   height: initialHeight,
@@ -349,7 +359,7 @@ export function StorePreview({
       {tab === 'island' ? (
         <StoreIslandView width={previewWidth} height={previewHeight} selectedItemId={selectedItemId} />
       ) : (
-        <StoreCharacterView size={scale(200)} bottomInset={scale(34)} selectedItemId={selectedItemId} />
+        <StoreCharacterView size={previewHeight * CHARACTER_SHARE} height={previewHeight} selectedItemId={selectedItemId} />
       )}
 
       <View
@@ -363,20 +373,11 @@ export function StorePreview({
           justifyContent: 'space-between',
           alignItems: 'flex-end',
         }}>
-        <StoreModeToggle
-          label={tab === 'island' ? '상품 설치 모드' : '상품 착용 모드'}
-          active={modeActive}
-          onPress={onToggleMode}
-        />
+        {tab === 'island' ? <StoreModeToggle label="상품 설치 모드" active={modeActive} onPress={onToggleMode} /> : <View />}
         {tab === 'character' ? (
           <Pressable
             accessibilityRole="button"
-            onPress={() =>
-              notice.show({
-                title: '준비 중',
-                message: '캐릭터 바꾸기는 준비 중이에요.',
-              })
-            }
+            onPress={() => router.push(COLLECTION_ROUTE)}
             style={{
               paddingHorizontal: scale(10),
               paddingVertical: scale(6),

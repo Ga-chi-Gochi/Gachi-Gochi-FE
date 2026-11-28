@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { usePlayState } from '@/components/play-state';
-import type { WalkingReward } from '@/constants/walking-reward';
+import type { WalkingRewardGain } from '@/constants/walking-reward';
 import { sendWalkingRecord, type WalkingDataSource } from '@/lib/walking-api';
 import {
   claimWalkingRewards,
   isMockWalkingSaveFailure,
+  pendingWalkingTiers,
+  readWalkingClaims,
   resetTodayWalkingClaims,
   setMockWalkingSaveFailure,
   todayKey,
@@ -17,37 +19,65 @@ type UseWalkingRewardInput = {
   source: WalkingDataSource;
 };
 
+export type WalkingRewardEvent = WalkingRewardGain & { fromXp: number };
+
 export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRewardInput) {
-  const { addCoins, addXp } = usePlayState();
-  const grantRef = useRef({ addCoins, addXp });
+  const { addCoins, addXp, xp } = usePlayState();
+  const grantRef = useRef({ addCoins, addXp, xp });
+  const claimingRef = useRef(false);
   // 오늘 이미 보상을 받은 단계의 걸음 수 기준값.
   const [claimedSteps, setClaimedSteps] = useState<number[]>([]);
-  // 방금 새로 지급되어 아직 팝업으로 확인하지 않은 보상.
-  const [reward, setReward] = useState<WalkingReward | null>(null);
+  // 방금 새로 지급되어 아직 팝업이나 빵빠레로 확인하지 않은 보상.
+  const [reward, setReward] = useState<WalkingRewardEvent | null>(null);
   const [saveError, setSaveError] = useState(false);
-  // 값을 바꾸면 같은 걸음 수로 지급을 다시 시도한다.
-  const [attempt, setAttempt] = useState(0);
+  const [claiming, setClaiming] = useState(false);
   const [mockSaveFailure, setMockSaveFailureState] = useState(isMockWalkingSaveFailure);
 
   useEffect(() => {
-    grantRef.current = { addCoins, addXp };
-  }, [addCoins, addXp]);
+    grantRef.current = { addCoins, addXp, xp };
+  }, [addCoins, addXp, xp]);
 
   useEffect(() => {
-    claimWalkingRewards(steps)
-      .then((claim) => {
-        setSaveError(false);
-        setClaimedSteps(claim.claimedSteps);
-        const gained = claim.reward;
-        if (!gained) {
-          return;
+    let cancelled = false;
+    readWalkingClaims()
+      .then((snapshot) => {
+        if (!cancelled) {
+          setClaimedSteps(snapshot.claimedSteps);
         }
-        grantRef.current.addCoins(gained.coins);
-        void grantRef.current.addXp(gained.xp);
-        setReward((current) => (current ? { coins: current.coins + gained.coins, xp: current.xp + gained.xp } : gained));
       })
-      .catch(() => setSaveError(true));
-  }, [steps, attempt]);
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [steps]);
+
+  const pendingSteps = useMemo(() => pendingWalkingTiers(steps, claimedSteps).map((tier) => tier.steps), [steps, claimedSteps]);
+
+  const claim = useCallback(async () => {
+    if (claimingRef.current) {
+      return;
+    }
+    claimingRef.current = true;
+    setClaiming(true);
+    try {
+      const result = await claimWalkingRewards(steps);
+      setSaveError(false);
+      setClaimedSteps(result.claimedSteps);
+      const gained = result.reward;
+      if (!gained) {
+        return;
+      }
+      const fromXp = grantRef.current.xp;
+      grantRef.current.addCoins(gained.coins);
+      void grantRef.current.addXp(gained.xp);
+      setReward({ ...gained, fromXp });
+    } catch {
+      setSaveError(true);
+    } finally {
+      claimingRef.current = false;
+      setClaiming(false);
+    }
+  }, [steps]);
 
   // 걸음 기록을 서버로 보낸다. 서버 주소가 없으면 아무것도 보내지 않고, 실패해도 오류를 던지지 않는다.
   // [TODO: 백엔드 연동] 지금은 응답을 쓰지 않고 위의 기기 저장 방식으로만 지급한다.
@@ -60,8 +90,6 @@ export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRe
   }, [steps, distanceMeters, source]);
 
   const dismissReward = useCallback(() => setReward(null), []);
-
-  const retrySave = useCallback(() => setAttempt((current) => current + 1), []);
 
   // 개발용: 오늘 받은 단계 기록만 지운다.
   const resetTodayClaims = useCallback(async () => {
@@ -83,5 +111,17 @@ export function useWalkingReward({ steps, distanceMeters, source }: UseWalkingRe
     setMockSaveFailureState(fails);
   }, []);
 
-  return { claimedSteps, reward, saveError, dismissReward, retrySave, resetTodayClaims, mockSaveFailure, setMockSaveFailure };
+  return {
+    claimedSteps,
+    pendingSteps,
+    claim,
+    claiming,
+    reward,
+    saveError,
+    dismissReward,
+    retrySave: claim,
+    resetTodayClaims,
+    mockSaveFailure,
+    setMockSaveFailure,
+  };
 }

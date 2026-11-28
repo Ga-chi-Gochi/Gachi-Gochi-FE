@@ -25,6 +25,7 @@ export type GameState = {
   noticeEgg?: boolean;
   /** level·character 는 모험 보내기에서 고른 고치. 탐험 중에만 숲 애니로 보인다 */
   explore: { level: number; character?: 'adult' | 'juvenile' } | null;
+  wear?: { back: string[]; front: string[]; face?: string; seat?: string };
 };
 
 export type ZoneBox = { left: number; top: number; width: number; height: number };

@@ -23,6 +23,7 @@ import {
   type IslandZoneId,
 } from '@/constants/island-zones';
 import type { WalkingDrops } from '@/constants/walking-reward';
+import { wearSlotOf, type EquippedWear } from '@/constants/wear-slots';
 import type { BonggingLocationSource } from '@/lib/bongging-certification';
 import { clearLocalGameData } from '@/lib/clear-local-data';
 import {
@@ -116,12 +117,15 @@ type PlayState = {
   pendingCertification: PendingBonggingCertification | null;
   owned: string[];
   placed: PlacedDecor[];
+  equipped: EquippedWear;
   unlockedZones: IslandZoneId[];
   /** 섬에 배치하려는 아이템 (가이드 모드) */
   pendingPlaceItemId: string | null;
   /** 방금 배치되어 드롭 애니를 재생할 아이템 */
   lastPlaced: { itemId: string; zoneId: IslandZoneId } | null;
   buy: (id: string, price: number) => boolean;
+  equip: (itemId: string) => boolean;
+  unequip: (itemId: string) => void;
   startPlacing: (itemId: string) => boolean;
   cancelPlacing: () => void;
   acknowledgeLastPlaced: () => void;
@@ -191,6 +195,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
   const [pendingCertification, setPendingCertification] = useState<PendingBonggingCertification | null>(null);
   const [owned, setOwned] = useState<string[]>([]);
   const [placed, setPlaced] = useState<PlacedDecor[]>([]);
+  const [equipped, setEquipped] = useState<EquippedWear>({});
   const [unlockedZones, setUnlockedZones] = useState<IslandZoneId[]>(['core']);
   const [growthReveal, setGrowthReveal] = useState<GrowthRevealState | null>(null);
   const [zoneUnlockReveal, setZoneUnlockReveal] = useState<ZoneUnlockReveal | null>(null);
@@ -412,6 +417,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       setCoins(island.coins);
       setOwned(island.owned);
       setPlaced(island.placed);
+      setEquipped(island.equipped);
       setUnlockedZones(island.unlockedZones);
       unlockedRef.current = island.unlockedZones;
       xpRef.current = creature.xp;
@@ -621,6 +627,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
     setPendingCertification(null);
     setOwned([]);
     setPlaced([]);
+    setEquipped({});
     setUnlockedZones(['core']);
     setGrowthReveal(null);
     setZoneUnlockReveal(null);
@@ -751,6 +758,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       pendingCertification,
       owned,
       placed,
+      equipped,
       unlockedZones,
       pendingPlaceItemId,
       lastPlaced,
@@ -787,6 +795,26 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
         setOwned(nextOwned);
         void updateIslandState((current) => ({ ...current, coins: nextCoins, owned: nextOwned }));
         return true;
+      },
+      equip: (itemId) => {
+        const slot = wearSlotOf(itemId);
+        if (!slot || !owned.includes(itemId)) {
+          return false;
+        }
+        const next = { ...equipped, [slot]: itemId };
+        setEquipped(next);
+        void updateIslandState((current) => ({ ...current, equipped: next }));
+        return true;
+      },
+      unequip: (itemId) => {
+        const slot = wearSlotOf(itemId);
+        if (!slot || equipped[slot] !== itemId) {
+          return;
+        }
+        const next = { ...equipped };
+        delete next[slot];
+        setEquipped(next);
+        void updateIslandState((current) => ({ ...current, equipped: next }));
       },
       startPlacing: (itemId) => {
         if (!owned.includes(itemId)) {
@@ -887,6 +915,7 @@ export function PlayStateProvider({ children }: { children: ReactNode }) {
       pendingCertification,
       owned,
       placed,
+      equipped,
       unlockedZones,
       pendingPlaceItemId,
       lastPlaced,

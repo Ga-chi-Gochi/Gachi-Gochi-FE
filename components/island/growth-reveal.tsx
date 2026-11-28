@@ -1,12 +1,22 @@
 import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
+import { GalmuriText } from '@/components/gachi-ui/galmuri-text';
+import { GrowthMotion, growthMotionKind } from '@/components/island/growth-motion';
 import { growthSpriteId, PixelSprite } from '@/components/pixel/pixel-sprite';
-import { PixelButton, PixelPanel, PixelText } from '@/components/pixel/pixel-ui';
+import { gachiUi, galmuri } from '@/constants/gachi-ui';
 import { getGrowthRevealCopy, type GrowthStage } from '@/constants/growth';
 import { pixel } from '@/constants/pixel-theme';
 import { useResponsive } from '@/hooks/use-responsive';
+
+const PANEL = { width: 320, side: 24, pad: 16, gap: 10, sprite: 96, button: 44 };
+const COLOR = { ready: '#ffd27a', wait: '#e6dccb' };
+const COPY: Record<number, { title: string; body: string }> = {
+  2: { title: '알이 깨어났수다!', body: '봉그깅하고 걸은 마음이 모여 귤새가 태어났어요.' },
+  3: { title: '쑥쑥 자랐수다!', body: '제주를 돌볼수록 귤새가 더 튼튼해져요.' },
+  4: { title: '가치고치가 되었수다!', body: '함께 지킨 제주만큼 다 자랐어요.\n이제 우리 섬을 마음껏 꾸며 봐요.' },
+};
 
 type GrowthRevealProps = {
   from: GrowthStage;
@@ -15,17 +25,19 @@ type GrowthRevealProps = {
 };
 
 export function GrowthReveal({ from, to, onDone }: GrowthRevealProps) {
-  const { scale } = useResponsive();
-  const [pop] = useState(() => new Animated.Value(0.7));
-  const copy = getGrowthRevealCopy(from, to);
+  const { scale, width } = useResponsive();
+  const copy = COPY[to.level] ?? getGrowthRevealCopy(from, to);
+  const motion = growthMotionKind(from.level, to.level);
+  const [played, setPlayed] = useState(!motion);
+  const border = scale(pixel.border);
+  const panelWidth = Math.min(scale(PANEL.width), width - scale(PANEL.side) * 2);
 
   useEffect(() => {
+    if (motion) return;
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Animated.sequence([
-      Animated.timing(pop, { toValue: 1.12, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(pop, { toValue: 1, duration: 140, useNativeDriver: true }),
-    ]).start();
-  }, [pop]);
+  }, [motion]);
+
+  const line = (height: number) => ({ fontFamily: galmuri.bold, lineHeight: scale(height), alignSelf: 'stretch' as const });
 
   return (
     <View
@@ -36,30 +48,62 @@ export function GrowthReveal({ from, to, onDone }: GrowthRevealProps) {
         right: 0,
         bottom: 0,
         left: 0,
-        backgroundColor: 'rgba(26,21,32,0.72)',
+        backgroundColor: pixel.dim,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: scale(24),
         // 키우기 버튼(z45)·화산재 가드(z80)보다 위에 올려 연타를 막는다
         zIndex: 90,
       }}>
-      <PixelPanel style={{ width: '100%', maxWidth: scale(320), alignItems: 'center', gap: scale(10) }}>
-        <Animated.View style={{ transform: [{ scale: pop }] }}>
-          <PixelSprite id={growthSpriteId(to.level)} size={scale(96)} />
-        </Animated.View>
-        <PixelText size={20} center>
-          {copy.title}
-        </PixelText>
-        <PixelText size={13} color={pixel.muted} center>
-          {copy.body}
-        </PixelText>
-        <PixelText size={12} color={pixel.leaf}>
-          Lv.{from.level} {from.label} → Lv.{to.level} {to.label}
-        </PixelText>
-        <View style={{ alignSelf: 'stretch', marginTop: scale(4) }}>
-          <PixelButton label="계속하기" onPress={onDone} />
+      <View
+        style={{
+          width: panelWidth,
+          backgroundColor: pixel.panel,
+          borderWidth: border,
+          borderColor: pixel.ink,
+          padding: scale(PANEL.pad) - border,
+          alignItems: 'center',
+          gap: scale(PANEL.gap),
+        }}>
+        <View style={{ width: scale(PANEL.sprite), height: scale(PANEL.sprite), alignItems: 'center', justifyContent: 'center' }}>
+          {motion ? (
+            <GrowthMotion
+              kind={motion}
+              size={scale(PANEL.sprite)}
+              onReveal={() => void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)}
+              onDone={() => setPlayed(true)}
+            />
+          ) : (
+            <PixelSprite id={growthSpriteId(to.level)} size={scale(PANEL.sprite)} />
+          )}
         </View>
-      </PixelPanel>
+        <GalmuriText size={16} bold center style={line(20)}>
+          {played ? copy.title : '…!'}
+        </GalmuriText>
+        <GalmuriText size={12} bold center style={[line(16), { opacity: played ? 1 : 0 }]}>
+          {copy.body}
+        </GalmuriText>
+        <GalmuriText size={11} bold color={gachiUi.greenDeep} center style={line(14)}>
+          Lv.{from.level} {from.label} → Lv.{to.level} {to.label}
+        </GalmuriText>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !played }}
+          disabled={!played}
+          onPress={onDone}
+          style={{
+            alignSelf: 'stretch',
+            height: scale(PANEL.button),
+            backgroundColor: played ? COLOR.ready : COLOR.wait,
+            borderWidth: border,
+            borderColor: pixel.ink,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <GalmuriText size={13} bold center style={line(16)}>
+            계속하기
+          </GalmuriText>
+        </Pressable>
+      </View>
     </View>
   );
 }

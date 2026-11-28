@@ -76,6 +76,14 @@ export function volcanoFrame(stage: IslandStageId) {
   return { x: ax - (VOLCANO_ART_W * scale) / 2, y: ay - VOLCANO_ART_H * scale, scale };
 }
 
+export const VOLCANO_SLOT_W = 3 * CELL;
+export const VOLCANO_SLOT_H = 2 * CELL;
+
+export function volcanoSlot(stage: IslandStageId) {
+  const [ax, ay] = stageArt(stage).volcanoAnchor;
+  return { x: ax - VOLCANO_SLOT_W / 2, y: ay - VOLCANO_SLOT_H };
+}
+
 export function craterCloudPoint(stage: IslandStageId) {
   const f = volcanoFrame(stage);
   return { x: stageArt(stage).volcanoAnchor[0], y: f.y + 6 * f.scale };

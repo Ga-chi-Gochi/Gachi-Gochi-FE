@@ -1,21 +1,28 @@
 import { Image } from 'expo-image';
 import { Platform, View } from 'react-native';
 
+import { PixelAligned } from '@/components/pixel-aligned';
 import { PixelSprite } from '@/components/pixel/pixel-sprite';
 import { PixelText } from '@/components/pixel/pixel-ui';
 import type { ShopItem } from '@/constants/content';
 import { pixel } from '@/constants/pixel-theme';
-import { isShopArtId, SHOP_ITEM_ART } from '@/constants/shop-art';
+import { isShopArtId } from '@/constants/shop-art';
 import type { StoreProduct } from '@/constants/store-items';
+import { SHOP_ART_HD } from '@/constants/wear-art';
 import { useResponsive } from '@/hooks/use-responsive';
+import { snapArt } from '@/lib/pixel-snap';
 
 const crispStyle = Platform.OS === 'web' ? ({ imageRendering: 'pixelated' } as const) : undefined;
+const SHOP_ART_PIXELS = 32;
+const CARD_SKY = '#D6EEF8';
 const PRICE_ICON_SIZE = 14;
 
 export function ShopItemSprite({ id, size }: { id: ShopItem['sprite']; size: number }) {
   if (isShopArtId(id)) {
     return (
-      <Image source={SHOP_ITEM_ART[id]} style={{ width: size, height: size, ...crispStyle }} contentFit="contain" />
+      <PixelAligned>
+        <Image source={SHOP_ART_HD[id]} style={{ width: size, height: size, ...crispStyle }} contentFit="contain" />
+      </PixelAligned>
     );
   }
   return <PixelSprite id={id} size={size} />;
@@ -31,11 +38,13 @@ export function StoreProductImage({ product, size }: { product: StoreProduct; si
         height: size,
         borderWidth: scale(2),
         borderColor: pixel.ink,
-        backgroundColor: product.sprite ? pixel.sky : '#C9C5CC',
+        backgroundColor: product.sprite ? CARD_SKY : '#C9C5CC',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      {product.sprite ? <ShopItemSprite id={product.sprite} size={Math.round(size * (art ? 0.86 : 0.62))} /> : null}
+      {product.sprite ? (
+        <ShopItemSprite id={product.sprite} size={art ? snapArt(size * 0.86, SHOP_ART_PIXELS) : Math.round(size * 0.62)} />
+      ) : null}
     </View>
   );
 }
